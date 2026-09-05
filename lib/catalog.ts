@@ -1,0 +1,10 @@
+export type Venue={name:string;type:string;cuisine:string;location:string;description:string;price:string};
+export type Hotel={id:string;name:string;city:string;country:string;brand:string;stars:string;district:string;neighborhood:string;address:string;transit:string;rating:string;price:string;description:string;website:string;sources:string[];venues:Venue[]};
+export type TripItem={id:string;name:string;city:string;type:'hotel'|'dining'|'experience'|'flight';date:string;endDate?:string;guests:number;hotelId?:string};
+export const cities=['Bangkok','Paris','London','Tokyo','New York','Singapore','Hong Kong','Dubai','Shanghai','Istanbul','Macau','Kuala Lumpur'];
+export const featured=['par-peninsula','bkk-mandarin-oriental','lon-savoy'];
+export const photos:Record<string,string>={'par-peninsula':'/images/paris.jpg','bkk-mandarin-oriental':'/images/bangkok.jpg','lon-savoy':'/images/london.jpg'};
+export function safeUrl(value:string){try{const u=new URL(value);return ['http:','https:'].includes(u.protocol)?u.href:undefined}catch{return undefined}}
+export function findHotels(hotels:Hotel[],query:string,city:string,sort:string){const q=query.trim().toLocaleLowerCase();const list=hotels.filter(h=>(city==='All destinations'||h.city===city)&&(!q||[h.name,h.city,h.country,h.brand,h.district,...h.venues.flatMap(v=>[v.name,v.cuisine,v.type])].join(' ').toLocaleLowerCase().includes(q)));return list.sort((a,b)=>sort==='Most dining options'?b.venues.length-a.venues.length:sort==='Name A–Z'?a.name.localeCompare(b.name):((featured.indexOf(a.id)+1||100)-(featured.indexOf(b.id)+1||100))||a.name.localeCompare(b.name))}
+export function validDates(start:string,end:string,today:string){return !!start&&!!end&&start>=today&&end>start}
+export function flightUrl(from:string,to:string,start:string,end:string,guests:number,cabin:string,oneWay:boolean){return 'https://www.google.com/travel/flights?q='+encodeURIComponent(`${oneWay?'one way':'round trip'} flights from ${from.trim()} to ${to.trim()} on ${start}${oneWay?'':` returning ${end}`} ${guests} adults ${cabin}`)}
