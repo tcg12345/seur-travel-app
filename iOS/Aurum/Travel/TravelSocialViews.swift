@@ -134,8 +134,7 @@ struct TravelAccountPage: View {
                             }
                         }
                     }
-                    .background(Color.cardSurface, in: .rect(cornerRadius: 24))
-                    .overlay { RoundedRectangle(cornerRadius: 24).strokeBorder(Color.bronze.opacity(0.14), lineWidth: 1) }
+                    .cardSurface(cornerRadius: 24)
                     .disabled(loading)
                     if let message {
                         Label(message, systemImage: "exclamationmark.circle").font(.subheadline).foregroundStyle(.red)
@@ -233,7 +232,7 @@ struct TravelFriendsView: View {
                 Button("Connect my account") { account = true }.buttonStyle(.glassProminent).frame(maxWidth: .infinity)
             } else {
                 HStack { SectionHeading(title: "Your inner circle"); Spacer(); Button { Task { await refresh() } } label: { Image(systemName: "arrow.clockwise") }.disabled(refreshing) }
-                HStack { TextField("Friend’s username", text: $handle).textInputAutocapitalization(.never).autocorrectionDisabled(); Button("Invite") { Task { do { try await api.requestFriend(handle); handle = ""; await refresh() } catch { self.error = error.localizedDescription } } }.disabled(handle.isEmpty) }.padding(16).background(.background, in: .rect(cornerRadius: 18))
+                HStack { TextField("Friend’s username", text: $handle).textInputAutocapitalization(.never).autocorrectionDisabled(); Button("Invite") { Task { do { try await api.requestFriend(handle); handle = ""; await refresh() } catch { self.error = error.localizedDescription } } }.disabled(handle.isEmpty) }.padding(16).cardSurface(cornerRadius: 18)
                 ForEach(friends) { friend in
                     HStack {
                         Image(systemName: "person.crop.circle").font(.title2).foregroundStyle(Color.bronze)
@@ -241,13 +240,13 @@ struct TravelFriendsView: View {
                         Spacer()
                         if friend.status == "pending" && friend.incoming { Button("Accept") { Task { do { try await api.respondFriend(friend.id, accept: true); await refresh() } catch { self.error = error.localizedDescription } } }.font(.caption) }
                         Menu { Button(friend.status == "accepted" ? "Remove friend" : "Decline / cancel request", role: .destructive) { Task { do { try await api.respondFriend(friend.id, accept: false); await refresh() } catch { self.error = error.localizedDescription } } } } label: { Image(systemName: "ellipsis") }
-                    }.padding(15).background(.background, in: .rect(cornerRadius: 20))
+                    }.padding(15).cardSurface(cornerRadius: 20)
                 }
                 HStack { SectionHeading(title: "Conversations"); Spacer(); Button { group = true } label: { Image(systemName: "square.and.pencil") }.accessibilityLabel("New conversation") }
-                ForEach(chats) { chat in NavigationLink { TravelChatView(conversation: chat) } label: { HStack { Label(chat.name, systemImage: "bubble.left.and.bubble.right"); Spacer(); Image(systemName: "chevron.right") }.font(.subheadline).padding(18).background(.background, in: .rect(cornerRadius: 20)) } }
+                ForEach(chats) { chat in NavigationLink { TravelChatView(conversation: chat) } label: { HStack { Label(chat.name, systemImage: "bubble.left.and.bubble.right"); Spacer(); Image(systemName: "chevron.right") }.font(.subheadline).padding(18).cardSurface(cornerRadius: 20) } }
                 SectionHeading(title: "Through a friend’s eyes", subtitle: "Shared trips, from day-by-day plans to favourite memories.")
                 if feed.isEmpty { Text("Your friends’ shared journeys will appear here.").font(.subheadline).foregroundStyle(.secondary) }
-                ForEach(feed) { remote in NavigationLink { SharedJourneyPreview(remote: remote) } label: { VStack(alignment: .leading, spacing: 9) { Eyebrow(text: "By \(remote.owner.name)"); Text(remote.document.title).font(.system(.title3, design: .serif)).foregroundStyle(.primary); Text(remote.document.routeLabel).font(.caption).foregroundStyle(.secondary); Label("Open & import a copy", systemImage: "arrow.up.right").font(.caption) }.frame(maxWidth: .infinity, alignment: .leading).padding(21).background(.background, in: .rect(cornerRadius: 23)) }.buttonStyle(PressStyle()) }
+                ForEach(feed) { remote in NavigationLink { SharedJourneyPreview(remote: remote) } label: { VStack(alignment: .leading, spacing: 9) { Eyebrow(text: "By \(remote.owner.name)"); Text(remote.document.title).font(.system(.title3, design: .serif)).foregroundStyle(.primary); Text(remote.document.routeLabel).font(.caption).foregroundStyle(.secondary); Label("Open & import a copy", systemImage: "arrow.up.right").font(.caption) }.frame(maxWidth: .infinity, alignment: .leading).padding(21).cardSurface(cornerRadius: 23) }.buttonStyle(PressStyle()) }
             }
             if let error { Text(error).font(.subheadline).foregroundStyle(.red) }
         }.task { if !api.isSignedIn { try? await api.refresh() }; if api.isSignedIn { await refresh() } }
@@ -332,7 +331,7 @@ private struct TravelMessageBubble: View {
             if let id = message.documentID { Button { open(id) } label: { Label("Open shared journey", systemImage: "map").font(.subheadline) } }
             Text(message.timestamp).font(.caption2).foregroundStyle(.secondary)
         }.padding(18).frame(maxWidth: .infinity, alignment: .leading)
-            .background(isOwn ? Color.bronze.opacity(0.10) : Color.cardSurface, in: .rect(cornerRadius: 22))
+            .cardSurface(cornerRadius: 22, emphasized: isOwn)
     }
 }
 

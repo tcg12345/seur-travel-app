@@ -138,7 +138,7 @@ struct OnboardingView: View {
             HStack(spacing: 16) {
                 Image(systemName: "fork.knife.circle").font(.system(size: 46, weight: .ultraLight)).foregroundStyle(Color.bronze)
                 VStack(alignment: .leading, spacing: 7) { Text("The hotel is only half the story.").font(.system(.title3, design: .serif)); Text("Discover the restaurants, bars and cafés that make a stay worth savoring.").font(.caption).foregroundStyle(.secondary) }
-            }.padding(20).background(Color.bronze.opacity(0.08), in: .rect(cornerRadius: 25))
+            }.padding(20).cardSurface(cornerRadius: 25, emphasized: true)
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                 ForEach(OnboardingStore.cuisines, id: \.self) { cuisine in
                     let selected = onboarding.profile.cuisines.contains(cuisine)
@@ -197,7 +197,7 @@ extension View {
     }
     func onboardingChoice(_ selected: Bool) -> some View {
         self.foregroundStyle(.primary).frame(maxWidth: .infinity, alignment: .leading)
-            .background(selected ? Color.bronze.opacity(0.08) : Color.cardSurface, in: .rect(cornerRadius: 23))
+            .cardSurface(cornerRadius: 23, emphasized: selected)
             .overlay { RoundedRectangle(cornerRadius: 23).strokeBorder(selected ? Color.bronze : .clear, lineWidth: 1.4) }
             .contentShape(.rect(cornerRadius: 23))
     }

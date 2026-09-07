@@ -34,7 +34,7 @@ struct TravelHubView: View {
                             } else {
                                 Button { newJourney = true } label: { Label("Create trip", systemImage: "plus").padding(.vertical, 10) }.buttonStyle(.glassProminent).accessibilityIdentifier("travel-create")
                             }
-                        }.frame(maxWidth: .infinity).padding(.vertical, 30).padding(.horizontal, 15).background(.background, in: .rect(cornerRadius: 28))
+                        }.frame(maxWidth: .infinity).padding(.vertical, 30).padding(.horizontal, 15).cardSurface(cornerRadius: 28)
                     } else {
                         LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 14), count: grid ? 2 : 1), spacing: 16) {
                             ForEach(documents) { document in
@@ -43,7 +43,7 @@ struct TravelHubView: View {
                         }
                     }
                     if !store.plans.isEmpty {
-                        NavigationLink { TripsView() } label: { Label("Earlier saved plans · \(store.plans.count)", systemImage: "tray.full").font(.subheadline).frame(maxWidth: .infinity).padding(18).background(.background, in: .rect(cornerRadius: 22)) }
+                        NavigationLink { TripsView() } label: { Label("Earlier saved plans · \(store.plans.count)", systemImage: "tray.full").font(.subheadline).frame(maxWidth: .infinity).padding(18).cardSurface(cornerRadius: 22) }
                     }
                 }
             }.padding(22)
@@ -83,7 +83,7 @@ private struct JourneyCard: View {
                     Spacer(); Image(systemName: "arrow.up.right").foregroundStyle(Color.bronze)
                 }
             }.padding(19)
-        }.background(.background, in: .rect(cornerRadius: 27)).clipShape(.rect(cornerRadius: 27))
+        }.cardSurface(cornerRadius: 27).clipShape(.rect(cornerRadius: 27))
     }
 }
 
@@ -269,7 +269,7 @@ struct JourneyDetailView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     SectionHeading(title: "Give your plans a place", subtitle: "Add route stops to organise events by day. You can already save bookings and log visits.")
                     Button("Add destinations", systemImage: "mappin.and.ellipse") { editInfo = true }.buttonStyle(.glass).accessibilityIdentifier("trip-add-route")
-                }.padding(20).background(Color.cardSurface, in: .rect(cornerRadius: 24))
+                }.padding(20).cardSurface(cornerRadius: 24)
             }
             if mode != "Map" && (!d.hotels.isEmpty || !d.flights.isEmpty) { bookingSection(d) }
             if mode == "Map" { JourneyMapView(places: d.mapPlaces).frame(height: 380).clipShape(.rect(cornerRadius: 26)) }
@@ -278,7 +278,7 @@ struct JourneyDetailView: View {
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 95))], spacing: 10) {
                         ForEach(d.days) { day in
                             Button { selectedDay = selectedDay == day.id ? nil : day.id } label: {
-                                VStack(spacing: 6) { Text(day.label).font(.subheadline.weight(.medium)); Text(day.city).font(.caption2).lineLimit(1); Text("\(d.events.filter { $0.stopID == day.stopID && $0.day == day.localDay }.count) plans").font(.caption2).foregroundStyle(.secondary) }.frame(maxWidth: .infinity).padding(13).background(selectedDay == day.id ? Color.bronze.opacity(0.17) : Color.cardSurface, in: .rect(cornerRadius: 17))
+                                VStack(spacing: 6) { Text(day.label).font(.subheadline.weight(.medium)); Text(day.city).font(.caption2).lineLimit(1); Text("\(d.events.filter { $0.stopID == day.stopID && $0.day == day.localDay }.count) plans").font(.caption2).foregroundStyle(.secondary) }.frame(maxWidth: .infinity).padding(13).cardSurface(cornerRadius: 17, emphasized: selectedDay == day.id)
                             }.buttonStyle(.plain)
                         }
                     }
@@ -294,7 +294,7 @@ struct JourneyDetailView: View {
                                     Text(item.allDay == true ? "All day" : item.timeLabel).font(.caption.weight(.semibold).monospacedDigit()).foregroundStyle(Color.bronze).frame(width: 42).padding(.top, 3)
                                     VStack(alignment: .leading, spacing: 7) { Text(item.displayTitle).font(.system(.headline, design: .serif)).foregroundStyle(.primary); Text(item.categoryTitle + (item.endTimeLabel.map { " · Until " + $0 } ?? "")).font(.caption).foregroundStyle(.secondary); if !item.isPlaceVisit && !item.place.name.isEmpty { Text(item.place.name).font(.caption).foregroundStyle(.secondary) }; if let attendees = item.attendees, !attendees.isEmpty { Text(attendees).font(.caption).foregroundStyle(.secondary) }; if !item.description.isEmpty { Text(item.description).font(.caption).foregroundStyle(.secondary).lineLimit(2) }; if let cost = item.cost { Text(cost.formatted).font(.caption).foregroundStyle(Color.bronze) } }.frame(maxWidth: .infinity, alignment: .leading)
                                     Image(systemName: item.symbol).foregroundStyle(Color.bronze)
-                                }.padding(18).modifier(TripItemSurface(cornerRadius: 22))
+                                }.padding(18).cardSurface(cornerRadius: 22)
                             }.buttonStyle(PressStyle()).accessibilityIdentifier("agenda-event-\(day.localDay)")
                             .contextMenu {
                                 if item.isPlaceVisit {
@@ -312,7 +312,7 @@ struct JourneyDetailView: View {
                 Divider()
                 priceRows(d.totals, label: "Total planned cost")
                 DisclosureGroup("How totals work") { Text("Repeated events count once per day. Currencies stay separate. Only added prices count.").font(.caption).foregroundStyle(.secondary) }.font(.caption)
-            }.padding(21).modifier(TripItemSurface(cornerRadius: 25))
+            }.padding(21).cardSurface(cornerRadius: 25)
         }
     }
     private func bookingSection(_ d: JourneyDocument) -> some View {
@@ -327,7 +327,7 @@ struct JourneyDetailView: View {
         VStack(alignment: .leading, spacing: 8) { Text(label).font(.subheadline.weight(.medium)); if totals.isEmpty { Text("No prices added").font(.caption).foregroundStyle(.secondary) }; ForEach(totals.keys.sorted(), id: \.self) { currency in HStack { Text(currency).foregroundStyle(.secondary); Spacer(); Text(TravelMoney(amount: totals[currency]!, currency: currency).formatted) }.font(.subheadline) } }
     }
     private func bookingRow(_ name: String, subtitle: String, symbol: String, cost: TravelMoney?) -> some View {
-        HStack(spacing: 16) { Image(systemName: symbol).font(.title2.weight(.light)).foregroundStyle(Color.bronze); VStack(alignment: .leading, spacing: 7) { Text(name).font(.system(.headline, design: .serif)).foregroundStyle(.primary); Text(subtitle).font(.caption).foregroundStyle(.secondary); if let cost { Text(cost.formatted).font(.caption).foregroundStyle(Color.bronze) } }.frame(maxWidth: .infinity, alignment: .leading); Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary) }.padding(19).modifier(TripItemSurface(cornerRadius: 23))
+        HStack(spacing: 16) { Image(systemName: symbol).font(.title2.weight(.light)).foregroundStyle(Color.bronze); VStack(alignment: .leading, spacing: 7) { Text(name).font(.system(.headline, design: .serif)).foregroundStyle(.primary); Text(subtitle).font(.caption).foregroundStyle(.secondary); if let cost { Text(cost.formatted).font(.caption).foregroundStyle(Color.bronze) } }.frame(maxWidth: .infinity, alignment: .leading); Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary) }.padding(19).cardSurface(cornerRadius: 23)
     }
     private func journal(_ d: JourneyDocument) -> some View {
         VStack(alignment: .leading, spacing: 22) {
@@ -352,7 +352,7 @@ struct JourneyDetailView: View {
                             Text("Choose a place you visited and add its details.").font(.caption).foregroundStyle(.secondary)
                         }.frame(maxWidth: .infinity, alignment: .leading)
                         Image(systemName: "chevron.right").font(.caption).foregroundStyle(Color.bronze)
-                    }.padding(16).modifier(TripItemSurface(cornerRadius: 20))
+                    }.padding(16).cardSurface(cornerRadius: 20)
                 }.buttonStyle(PressStyle()).accessibilityIdentifier("trip-journal-planned")
             }
             if !d.places.isEmpty { HStack {
@@ -376,7 +376,7 @@ struct JourneyDetailView: View {
                                 Spacer(minLength: 0)
                                 Image(systemName: "chevron.right")
                             }.font(.caption.weight(.semibold)).foregroundStyle(Color.bronze)
-                        }.frame(maxWidth: .infinity, alignment: .leading).padding(18).modifier(TripItemSurface(cornerRadius: 23))
+                        }.frame(maxWidth: .infinity, alignment: .leading).padding(18).cardSurface(cornerRadius: 23)
                     }.buttonStyle(PressStyle()).accessibilityIdentifier("journal-entry-" + place.id.uuidString)
                 }
             }
@@ -431,25 +431,6 @@ private struct JournalPlanPlacesView: View {
                     .environment(\.tripEditorEmbedded, true)
             }
         }
-    }
-}
-
-/// Trip records need a distinct surface over the warm canvas, especially in dark mode.
-private struct TripItemSurface: ViewModifier {
-    @Environment(\.colorScheme) private var colorScheme
-    @Environment(\.colorSchemeContrast) private var contrast
-    var cornerRadius: CGFloat
-    func body(content: Content) -> some View {
-        let dark = colorScheme == .dark
-        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-        content
-            .background(dark ? Color(red: 0.18, green: 0.17, blue: 0.16) : .white, in: shape)
-            .overlay {
-                shape.strokeBorder(
-                    dark ? Color.bronze.opacity(contrast == .increased ? 0.65 : 0.30) : Color.primary.opacity(contrast == .increased ? 0.25 : 0.07),
-                    lineWidth: 1
-                ).allowsHitTesting(false)
-            }
     }
 }
 
@@ -516,7 +497,7 @@ struct ItineraryItemChooser: View {
             VStack(alignment: .leading, spacing: 14) {
                 Image(systemName: symbol).font(.title3).foregroundStyle(Color.bronze)
                 Text(title).font(.subheadline.weight(.medium)).foregroundStyle(.primary).fixedSize(horizontal: false, vertical: true)
-            }.frame(maxWidth: .infinity, minHeight: 64, alignment: .topLeading).padding(16).background(Color.cardSurface, in: .rect(cornerRadius: 21))
+            }.frame(maxWidth: .infinity, minHeight: 64, alignment: .topLeading).padding(16).cardSurface(cornerRadius: 21)
         }.buttonStyle(PressStyle()).accessibilityIdentifier("add-plan-" + value)
     }
 }

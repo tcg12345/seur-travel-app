@@ -84,15 +84,15 @@ struct ActivityIdeasView: View {
                 VStack(alignment: .leading, spacing: 22) {
                     Eyebrow(text: "Your AI travel editor")
                     Editorial("A little inspiration.\nA very personal day.", size: 33)
-                    LocationAutocompleteField("Destination", text: $city, identifier: "ideas-destination").padding(16).background(.background, in: .rect(cornerRadius: 18))
-                    TextField("What do you love?", text: $interests, axis: .vertical).lineLimit(3...6).padding(15).background(.background, in: .rect(cornerRadius: 18))
+                    LocationAutocompleteField("Destination", text: $city, identifier: "ideas-destination").padding(16).cardSurface(cornerRadius: 18)
+                    TextField("What do you love?", text: $interests, axis: .vertical).lineLimit(3...6).padding(15).cardSurface(cornerRadius: 18)
                     Button { Task { loading = true; error = nil; defer { loading = false }; do { response = try await api.recommendations(city: city, interests: interests) } catch { self.error = error.localizedDescription } } } label: { Label(loading ? "Gathering ideas…" : "Find my inspiration", systemImage: "sparkles").frame(maxWidth: .infinity).padding(.vertical, 11) }.buttonStyle(.glassProminent).disabled(loading || city.isEmpty)
                     if let error { Text(error).font(.subheadline).foregroundStyle(.red) }
                     if let response {
                         Text(response.text).font(.body).lineSpacing(5)
                         ForEach(response.places) { place in
                             Button { guard let document = library.documents.first(where: { $0.id == documentID }), let stop = document.stops.first(where: { $0.name.localizedCaseInsensitiveContains(city) }) ?? document.stops.first else { return }; event = JourneyEvent(stopID: stop.id, place: place) } label: {
-                                HStack { VStack(alignment: .leading, spacing: 6) { Text(place.name).font(.system(.headline, design: .serif)); Text(place.address).font(.caption).foregroundStyle(.secondary) }; Spacer(); Image(systemName: "plus.circle") }.padding(18).background(.background, in: .rect(cornerRadius: 22))
+                                HStack { VStack(alignment: .leading, spacing: 6) { Text(place.name).font(.system(.headline, design: .serif)); Text(place.address).font(.caption).foregroundStyle(.secondary) }; Spacer(); Image(systemName: "plus.circle") }.padding(18).cardSurface(cornerRadius: 22)
                             }.buttonStyle(.plain)
                         }
                         Text("AI suggestions use provider search results. Review the place and choose its day/time before adding. Confirm hours and availability with the venue.").font(.caption).foregroundStyle(.secondary)

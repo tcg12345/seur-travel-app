@@ -54,7 +54,7 @@ struct DiscoverView: View {
                 Image(systemName: "globe.europe.africa").font(.system(size: 32, weight: .ultraLight)).foregroundStyle(Color.bronze)
                 VStack(alignment: .leading, spacing: 6) { Text("Explore a city").font(.system(.title3, design: .serif)).foregroundStyle(.primary); Text("Great tables, little detours & everything between.").font(.caption).foregroundStyle(.secondary) }
                 Spacer(); Image(systemName: "arrow.up.right").foregroundStyle(Color.bronze)
-            }.padding(20).background(Color.cardSurface, in: .rect(cornerRadius: 26))
+            }.padding(20).cardSurface(cornerRadius: 26)
         }.buttonStyle(PressStyle()).accessibilityIdentifier("explore-cities")
     }
     private var personalStartingPoint: some View {
@@ -71,7 +71,7 @@ struct DiscoverView: View {
             if !onboarding.profile.interests.isEmpty {
                 Text(onboarding.profile.interests.sorted().joined(separator: " · ")).font(.caption).foregroundStyle(.secondary)
             }
-        }.padding(20).background(Color.bronze.opacity(0.06), in: .rect(cornerRadius: 24))
+        }.padding(20).cardSurface(cornerRadius: 24, emphasized: true)
     }
     private var categoryPicker: some View {
         ScrollView(.horizontal) {
@@ -155,7 +155,7 @@ struct DiscoverView: View {
                 Text(hotel.shortName).font(.system(.title3, design: .serif)).foregroundStyle(.primary)
                 Label("\(hotel.venues.count) dining options", systemImage: "fork.knife").font(.caption).foregroundStyle(.secondary)
             }.padding(16)
-        }.frame(width: 252).background(.background).clipShape(.rect(cornerRadius: 24))
+        }.frame(width: 252).cardSurface(cornerRadius: 24).clipShape(.rect(cornerRadius: 24))
     }
     private var destinationSection: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -179,7 +179,7 @@ struct DiscoverView: View {
                 ForEach(["French", "Japanese", "Chinese", "Italian", "Thai", "Indian"], id: \.self) { cuisine in
                     Button { store.cuisine = cuisine; store.selectedTab = 3 } label: {
                         HStack { Text(cuisine); Spacer(); Image(systemName: "arrow.up.right") }.font(.subheadline).padding(19)
-                            .background(.background, in: .rect(cornerRadius: 19))
+                            .cardSurface(cornerRadius: 19)
                     }.buttonStyle(PressStyle())
                 }
             }
@@ -188,7 +188,7 @@ struct DiscoverView: View {
                     Image(systemName: "fork.knife.circle").font(.largeTitle).fontWeight(.ultraLight)
                     VStack(alignment: .leading, spacing: 5) { Text("More tables, more possibilities").font(.headline); Text("Explore hotels with the widest dining selection.").font(.caption).foregroundStyle(.secondary) }
                     Spacer(); Image(systemName: "chevron.right").font(.caption)
-                }.padding(20).background(Color.bronze.opacity(0.08), in: .rect(cornerRadius: 24))
+                }.padding(20).cardSurface(cornerRadius: 24, emphasized: true)
             }.buttonStyle(PressStyle())
             collectionNote
         }
@@ -212,7 +212,7 @@ struct SearchView: View {
         let results = store.results
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 13) {
-                NavigationLink { CityExplorerView() } label: { Label("Explore any city", systemImage: "globe.europe.africa").font(.subheadline).frame(maxWidth: .infinity, alignment: .leading).padding(17).background(Color.cardSurface, in: .rect(cornerRadius: 22)) }.buttonStyle(PressStyle()).accessibilityIdentifier("search-explore-cities")
+                NavigationLink { CityExplorerView() } label: { Label("Explore any city", systemImage: "globe.europe.africa").font(.subheadline).frame(maxWidth: .infinity, alignment: .leading).padding(17).cardSurface(cornerRadius: 22) }.buttonStyle(PressStyle()).accessibilityIdentifier("search-explore-cities")
                 HStack {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(store.city == "Everywhere" ? "THE COLLECTION" : store.city.uppercased()).font(.caption).tracking(2).foregroundStyle(Color.bronze)

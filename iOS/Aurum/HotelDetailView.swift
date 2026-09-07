@@ -23,7 +23,7 @@ struct HotelDetailView: View {
                         detailStat(hotel.stars + " star", "Hotel category")
                         Divider().frame(height: 35)
                         detailStat(hotel.price.hasPrefix("$") ? hotel.price : "Luxury", "Price band")
-                    }.padding(.vertical, 18).background(.background, in: .rect(cornerRadius: 22))
+                    }.padding(.vertical, 18).cardSurface(cornerRadius: 22)
                     Text(hotel.description).font(.body).foregroundStyle(.secondary).lineSpacing(5)
                     HStack(alignment: .top) {
                         SectionHeading(title: "A stay with great taste.", subtitle: "Restaurants, bars & places to linger.")
@@ -45,7 +45,7 @@ struct HotelDetailView: View {
                             }.buttonStyle(.plain).accessibilityIdentifier("venue-\(index)")
                             if index < hotel.venues.count - 1 { Divider().padding(.leading, 69) }
                         }
-                    }.background(.background, in: .rect(cornerRadius: 24))
+                    }.cardSurface(cornerRadius: 24)
                     SectionHeading(title: "The neighborhood")
                     VStack(alignment: .leading, spacing: 14) {
                         Label(hotel.address, systemImage: "mappin.and.ellipse")
@@ -152,7 +152,7 @@ struct StayPlanner: View {
             DatePicker("Check-out", selection: $dates.end, in: dates.start..., displayedComponents: .date).padding(18)
             Divider().padding(.horizontal, 18)
             Stepper("\(dates.guests) adults", value: $dates.guests, in: 1...9).padding(18)
-        }.background(.background, in: .rect(cornerRadius: 23))
+        }.cardSurface(cornerRadius: 23)
     }
 }
 
@@ -218,7 +218,7 @@ struct ComparisonView: View {
                                     }.buttonStyle(.plain)
                                 }
                             }.padding(18)
-                        }.frame(width: 270).background(.background, in: .rect(cornerRadius: 28))
+                        }.frame(width: 270).cardSurface(cornerRadius: 28)
                     }
                 }.padding(20)
             }.background(Color.canvas).navigationTitle("Compare the tables").navigationBarTitleDisplayMode(.inline)

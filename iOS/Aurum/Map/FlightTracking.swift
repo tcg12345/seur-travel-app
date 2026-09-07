@@ -562,7 +562,7 @@ struct FlightAddView: View {
                             HStack(alignment: .firstTextBaseline, spacing: 14) {
                                 Text(airline?.code ?? "").font(.largeTitle.weight(.semibold)).foregroundStyle(Color.bronze)
                                 TextField("178", text: $number).font(.largeTitle.weight(.semibold).monospacedDigit()).textInputAutocapitalization(.characters).autocorrectionDisabled().keyboardType(.asciiCapable).focused($focused, equals: .number).submitLabel(.continue).onSubmit { if validNumber { advance(.date) } }.accessibilityIdentifier("flight-number-query")
-                            }.padding(22).background(Color.cardSurface, in: .rect(cornerRadius: 24))
+                            }.padding(22).cardSurface(cornerRadius: 24)
                             Text("The digits after your airline code, as shown on your booking.").font(.subheadline).foregroundStyle(.secondary)
                             nextButton("Continue", enabled: validNumber) { advance(.date) }
                         }
@@ -575,7 +575,7 @@ struct FlightAddView: View {
                     case .date:
                         page(title: "When do you fly?", subtitle: searchLabel, progress: 3) {
                             DatePicker("Departure date", selection: $day, displayedComponents: .date).datePickerStyle(.graphical).accessibilityIdentifier("flight-search-date")
-                                .padding(12).background(Color.cardSurface, in: .rect(cornerRadius: 24))
+                                .padding(12).cardSurface(cornerRadius: 24)
                                 .onChange(of: day) { advance(.results) }
                             Text("Use the departure airport’s local date.").font(.subheadline).foregroundStyle(.secondary)
                             nextButton("Find flight", enabled: true, identifier: "flight-find") { advance(.results) }
@@ -619,7 +619,7 @@ struct FlightAddView: View {
                 Image(systemName: "magnifyingglass").foregroundStyle(Color.bronze)
                 TextField("Airline name or code", text: $airlineText).autocorrectionDisabled().submitLabel(.continue).accessibilityIdentifier("flight-airline-query")
                     .onSubmit { let matches = FlightAirline.matches(airlineText); if matches.count == 1, let first = matches.first { selectAirline(first) } }
-            }.padding(18).background(Color.cardSurface, in: .rect(cornerRadius: 20))
+            }.padding(18).cardSurface(cornerRadius: 20)
             VStack(spacing: 0) {
                 ForEach(FlightAirline.matches(airlineText)) { value in
                     Button { selectAirline(value) } label: {
@@ -647,7 +647,7 @@ struct FlightAddView: View {
     private func airportField(departure: Bool) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             LocationAutocompleteField(departure ? "Departure airport or code" : "Arrival airport or code", text: departure ? $origin : $destination, kind: .airport, identifier: departure ? "flight-route-origin" : "flight-route-destination", onSelect: { result in resolveAirport(result, departure: departure) })
-                .padding(18).background(Color.cardSurface, in: .rect(cornerRadius: 20))
+                .padding(18).cardSurface(cornerRadius: 20)
                 .onSubmit { if departure && Self.airportCode(origin) != nil { advance(.destination) }; if !departure && validRoute { advance(.date) } }
             if let error { Label(error, systemImage: "exclamationmark.circle").font(.subheadline).foregroundStyle(.secondary) }
         }

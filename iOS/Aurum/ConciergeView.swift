@@ -206,7 +206,7 @@ struct ConciergeView: View {
                             Spacer()
                             Image(systemName: "arrow.up.left").font(.caption).foregroundStyle(.secondary)
                         }.padding(.horizontal, 17).padding(.vertical, 18)
-                            .background(.background.opacity(0.8), in: .rect(cornerRadius: 20))
+                            .cardSurface(cornerRadius: 20)
                     }.buttonStyle(PressStyle()).accessibilityIdentifier("concierge-prompt-\(symbol)")
                 }
             }
@@ -264,7 +264,7 @@ struct ConciergeView: View {
                 Label("\(hotel.venues.count) dining options", systemImage: "fork.knife").font(.caption).foregroundStyle(.secondary)
             }.frame(maxWidth: .infinity, alignment: .leading)
             Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
-        }.padding(13).background(.background, in: .rect(cornerRadius: 23))
+        }.padding(13).cardSurface(cornerRadius: 23)
     }
     private var typingIndicator: some View {
         HStack(spacing: 10) {

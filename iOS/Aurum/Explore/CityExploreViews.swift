@@ -19,7 +19,7 @@ struct CityExplorerView: View {
                     Label("Where shall we wander?", systemImage: "globe.europe.africa").font(.subheadline.weight(.medium)).foregroundStyle(Color.bronze)
                     LocationAutocompleteField("Search any city in the world", text: $query, kind: .city, identifier: "explore-city-query", onSelect: { selection in
                         if let city = ExploreCity(selection) { selected = city; error = nil } else { error = "Choose a city suggestion so we can find places around it." }
-                    }).padding(15).background(Color.cardSurface, in: .rect(cornerRadius: 17))
+                    }).padding(15).cardSurface(cornerRadius: 17)
                     Text("Start typing and choose a city. You’re free to explore beyond our hotel collection.").font(.caption).foregroundStyle(.secondary)
                     if let error { Text(error).font(.caption).foregroundStyle(.red) }
                 }.padding(.vertical, 4)
@@ -27,7 +27,7 @@ struct CityExplorerView: View {
                     SectionHeading(title: "Pick up where you left off")
                     ScrollView(.horizontal) {
                         HStack(spacing: 12) { ForEach(store.recentExploreCities.prefix(8)) { city in
-                            Button { selected = city } label: { VStack(alignment: .leading, spacing: 7) { Text(city.name).font(.system(.title3, design: .serif)); Text(city.country).font(.caption).foregroundStyle(.secondary) }.frame(minWidth: 125, alignment: .leading).padding(18).background(Color.cardSurface, in: .rect(cornerRadius: 22)) }.buttonStyle(PressStyle())
+                            Button { selected = city } label: { VStack(alignment: .leading, spacing: 7) { Text(city.name).font(.system(.title3, design: .serif)); Text(city.country).font(.caption).foregroundStyle(.secondary) }.frame(minWidth: 125, alignment: .leading).padding(18).cardSurface(cornerRadius: 22) }.buttonStyle(PressStyle())
                         } }
                     }.scrollIndicators(.hidden)
                 }
@@ -38,7 +38,7 @@ struct CityExplorerView: View {
                             VStack(alignment: .leading, spacing: 18) {
                                 HStack { Image(systemName: "building.2").font(.title2.weight(.ultraLight)); Spacer(); Image(systemName: "arrow.up.right").font(.caption) }.foregroundStyle(Color.bronze)
                                 VStack(alignment: .leading, spacing: 6) { Text(city.name).font(.system(.title3, design: .serif)).foregroundStyle(.primary); Text(city.country).font(.caption).foregroundStyle(.secondary) }
-                            }.frame(maxWidth: .infinity, minHeight: 92, alignment: .leading).padding(18).background(Color.cardSurface, in: .rect(cornerRadius: 24))
+                            }.frame(maxWidth: .infinity, minHeight: 92, alignment: .leading).padding(18).cardSurface(cornerRadius: 24)
                         }.buttonStyle(PressStyle()).accessibilityIdentifier("explore-city-" + city.name)
                     }
                 }
@@ -149,7 +149,7 @@ struct CityGuideView: View {
                 Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
                 TextField("Search places in \(city.name)", text: $query).submitLabel(.search).autocorrectionDisabled().accessibilityIdentifier("city-place-query")
                 if !query.isEmpty { Button { query = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary) }.accessibilityLabel("Clear city search") }
-            }.padding(15).background(Color.cardSurface, in: .rect(cornerRadius: 18))
+            }.padding(15).cardSurface(cornerRadius: 18)
             HStack {
                 Button { showInterests = true } label: {
                     Label(interest.title, systemImage: interest.symbol)
@@ -250,7 +250,7 @@ struct ExplorePlaceRow: View {
                 if let add { Button(action: add) { Image(systemName: "plus").frame(width: 34, height: 34) }.buttonStyle(.glass).accessibilityLabel("Add " + place.record.name + " to a trip") }
             }.foregroundStyle(Color.bronze)
         }.padding(.horizontal, inset ? 17 : 0).padding(.vertical, 14)
-            .background { if inset { RoundedRectangle(cornerRadius: 24).fill(Color.cardSurface) } }
+            .cardSurface(cornerRadius: 24, enabled: inset)
     }
 }
 
@@ -271,7 +271,7 @@ struct CityDiningCollectionView: View {
                 Image(systemName: "magnifyingglass").foregroundStyle(Color.bronze)
                 TextField("Restaurant, hotel, or cuisine", text: $query).autocorrectionDisabled().submitLabel(.search).accessibilityIdentifier("city-collection-query")
                 if !query.isEmpty { Button { query = "" } label: { Image(systemName: "xmark.circle.fill") }.accessibilityLabel("Clear collection search") }
-            }.padding(17).background(Color.cardSurface, in: .rect(cornerRadius: 22))
+            }.padding(17).cardSurface(cornerRadius: 22)
             Picker("Cuisine", selection: $cuisine) { Text("All cuisines").tag("All cuisines"); ForEach(cuisines, id: \.self) { Text($0).tag($0) } }.tint(.bronze)
             Text("\(filtered.count) venues in the hotel dining collection").font(.caption).foregroundStyle(.secondary)
             ForEach(filtered.prefix(limit)) { place in ExplorePlaceRow(place: place, add: { adding = place }) }
@@ -319,7 +319,7 @@ struct ExplorePlaceDetailView: View {
                     if locating { Label("Finding the hotel’s map position…", systemImage: "location.magnifyingglass").font(.caption).foregroundStyle(.secondary) }
                     if place.record.hasCoordinate { Label(place.isCollection ? "Mapped at the hotel’s address" : "Ready for your trip map", systemImage: "checkmark.circle.fill").font(.caption).foregroundStyle(Color.bronze) }
                     else if !locating { Text("A precise map pin isn’t available yet. Directions can search for this address in Maps.").font(.caption).foregroundStyle(.secondary) }
-                }.padding(22).background(Color.cardSurface, in: .rect(cornerRadius: 26))
+                }.padding(22).cardSurface(cornerRadius: 26)
                 if let hotel { VStack(alignment: .leading, spacing: 14) { SectionHeading(title: "Make a stay of it"); NavigationLink { HotelDetailView(hotel: hotel) } label: { HotelRow(hotel: hotel) }.buttonStyle(PressStyle()) } }
                 VStack(alignment: .leading, spacing: 10) {
                     Text(place.record.source).font(.caption.weight(.medium)).foregroundStyle(Color.bronze)
@@ -376,10 +376,10 @@ struct ExploreAddToTripView: View {
                     Picker("Add as", selection: $journal) { Text(place.record.category == .hotel ? "Hotel stay" : "Plan a visit").tag(false); Text("Log a visit").tag(true) }.pickerStyle(.segmented).accessibilityIdentifier("explore-trip-mode")
                     Text(journal ? "Keep a memory, add photos and rate your visit." : place.record.category == .hotel ? "Choose a trip, then add your stay dates and booking details." : "Choose a trip, then set the day, time and any little details.").font(.subheadline).foregroundStyle(.secondary)
                     if locating { HStack { ProgressView(); Text("Locating the hotel address…").font(.caption) } }
-                    TextField("Find an existing trip", text: $query).padding(16).background(Color.cardSurface, in: .rect(cornerRadius: 19)).accessibilityIdentifier("explore-trip-query")
+                    TextField("Find an existing trip", text: $query).padding(16).cardSurface(cornerRadius: 19).accessibilityIdentifier("explore-trip-query")
                     ForEach(trips) { trip in
                         Button { choose(trip.id) } label: {
-                            HStack(spacing: 15) { Image(systemName: "suitcase.rolling").font(.title2.weight(.light)).foregroundStyle(Color.bronze); VStack(alignment: .leading, spacing: 7) { Text(trip.title).font(.system(.headline, design: .serif)).foregroundStyle(.primary); Text(trip.routeLabel.isEmpty ? "Destination to come" : trip.routeLabel).font(.caption).foregroundStyle(.secondary); if let start = trip.startDate { Text(TravelDay.label(start) + (trip.endDate.map { " – " + TravelDay.label($0) } ?? "")).font(.caption2).foregroundStyle(Color.bronze) } }; Spacer(); Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary) }.padding(19).background(Color.cardSurface, in: .rect(cornerRadius: 23))
+                            HStack(spacing: 15) { Image(systemName: "suitcase.rolling").font(.title2.weight(.light)).foregroundStyle(Color.bronze); VStack(alignment: .leading, spacing: 7) { Text(trip.title).font(.system(.headline, design: .serif)).foregroundStyle(.primary); Text(trip.routeLabel.isEmpty ? "Destination to come" : trip.routeLabel).font(.caption).foregroundStyle(.secondary); if let start = trip.startDate { Text(TravelDay.label(start) + (trip.endDate.map { " – " + TravelDay.label($0) } ?? "")).font(.caption2).foregroundStyle(Color.bronze) } }; Spacer(); Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary) }.padding(19).cardSurface(cornerRadius: 23)
                         }.buttonStyle(PressStyle()).disabled(locating).accessibilityIdentifier("explore-trip-" + trip.id.uuidString)
                     }
                     if trips.isEmpty { Text(library.documents.isEmpty ? "Create your first trip, then choose when you’ll visit." : "No trips match that search.").font(.subheadline).foregroundStyle(.secondary) }
@@ -436,10 +436,10 @@ struct SavedExplorePlacesView: View {
                     Image(systemName: "magnifyingglass").foregroundStyle(Color.bronze)
                     TextField("Place, city, or hotel", text: $query).autocorrectionDisabled().submitLabel(.search).accessibilityIdentifier("saved-discoveries-query")
                     if !query.isEmpty { Button { query = "" } label: { Image(systemName: "xmark.circle.fill") }.accessibilityLabel("Clear saved search") }
-                }.padding(17).background(Color.cardSurface, in: .rect(cornerRadius: 22))
+                }.padding(17).cardSurface(cornerRadius: 22)
                 if !store.savedExploreCities.isEmpty {
                     SectionHeading(title: "Cities on your mind")
-                    ScrollView(.horizontal) { HStack(spacing: 12) { ForEach(store.savedExploreCities) { city in NavigationLink { CityGuideView(city: city) } label: { VStack(alignment: .leading, spacing: 8) { Image(systemName: "globe").foregroundStyle(Color.bronze); Text(city.name).font(.system(.title3, design: .serif)).foregroundStyle(.primary); Text(city.country).font(.caption).foregroundStyle(.secondary) }.padding(18).background(Color.cardSurface, in: .rect(cornerRadius: 22)) }.buttonStyle(PressStyle()) } } }.scrollIndicators(.hidden)
+                    ScrollView(.horizontal) { HStack(spacing: 12) { ForEach(store.savedExploreCities) { city in NavigationLink { CityGuideView(city: city) } label: { VStack(alignment: .leading, spacing: 8) { Image(systemName: "globe").foregroundStyle(Color.bronze); Text(city.name).font(.system(.title3, design: .serif)).foregroundStyle(.primary); Text(city.country).font(.caption).foregroundStyle(.secondary) }.padding(18).cardSurface(cornerRadius: 22) }.buttonStyle(PressStyle()) } } }.scrollIndicators(.hidden)
                 }
                 HStack { SectionHeading(title: "Saved discoveries"); Menu { Button("All interests") { category = nil }; ForEach(PlaceCategory.allCases) { value in Button(value.title) { category = value } } } label: { Image(systemName: "line.3.horizontal.decrease").frame(width: 40, height: 40) }.buttonStyle(.glass).accessibilityLabel("Filter saved discoveries") }
                 if let category { Text(category.title).font(.caption).foregroundStyle(Color.bronze) }

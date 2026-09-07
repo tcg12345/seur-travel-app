@@ -15,7 +15,7 @@ struct FlightForm: View {
                 routeField("FROM", text: $search.origin, symbol: "airplane.departure")
                 HStack { Rectangle().fill(Color.secondary.opacity(0.15)).frame(height: 1); Button { let previous = search.origin; search.origin = search.destination; search.destination = previous } label: { Image(systemName: "arrow.up.arrow.down").frame(width: 36, height: 36) }.buttonStyle(.glass).accessibilityLabel("Swap airports") }.padding(.horizontal, 20)
                 routeField("TO", text: $search.destination, symbol: "airplane.arrival")
-            }.background(.background, in: .rect(cornerRadius: 25))
+            }.cardSurface(cornerRadius: 25)
             VStack(spacing: 16) {
                 DatePicker("Departure", selection: $search.dates.start, in: Date.now..., displayedComponents: .date)
                 if !search.oneWay { Divider(); DatePicker("Return", selection: $search.dates.end, in: search.dates.start..., displayedComponents: .date) }
@@ -23,7 +23,7 @@ struct FlightForm: View {
                 Picker("Cabin", selection: $search.cabin) { ForEach(["Economy", "Premium economy", "Business", "First class"], id: \.self) { Text($0) } }
                 Divider()
                 Stepper("\(search.dates.guests) adults", value: $search.dates.guests, in: 1...9)
-            }.padding(20).background(.background, in: .rect(cornerRadius: 25))
+            }.padding(20).cardSurface(cornerRadius: 25)
             Button {
                 error = search.error
                 if let url = search.url { browser = BrowserDestination(url: url) }
@@ -70,7 +70,7 @@ struct ExperiencesView: View {
                     Button {
                         if store.addPlan(name: name, city: city, kind: "Experience", hotelID: nil, dates: store.dates) { planned.insert(city + name) }
                     } label: { Label(planned.contains(city + name) ? "Idea added" : "Add idea to my trip", systemImage: planned.contains(city + name) ? "checkmark" : "plus").font(.caption) }.disabled(planned.contains(city + name))
-                }.padding(25).background(.background, in: .rect(cornerRadius: 28))
+                }.padding(25).cardSurface(cornerRadius: 28)
             }
             Text("Ideas to explore, not confirmed departures. Check current activities and book with GetYourGuide. Trip ideas use your current travel dates; edit them in Trips.").font(.footnote).foregroundStyle(.secondary)
         }.sheet(item: $browser) { InAppBrowser(url: $0.url).ignoresSafeArea() }
@@ -89,7 +89,7 @@ struct SavedView: View {
                     Button("Find your first stay") { store.selectedTab = 0 }.buttonStyle(.glassProminent).frame(maxWidth: .infinity)
                 }
                 NavigationLink { SavedExplorePlacesView() } label: {
-                    HStack(spacing: 15) { Image(systemName: "globe.europe.africa").font(.title2.weight(.light)); VStack(alignment: .leading, spacing: 5) { Text("Your city collection").font(.system(.title3, design: .serif)); Text("\(store.savedDiscoveries.count) discoveries · \(store.savedExploreCities.count) cities").font(.caption).foregroundStyle(.secondary) }; Spacer(); Image(systemName: "chevron.right").font(.caption) }.padding(20).background(Color.cardSurface, in: .rect(cornerRadius: 24))
+                    HStack(spacing: 15) { Image(systemName: "globe.europe.africa").font(.title2.weight(.light)); VStack(alignment: .leading, spacing: 5) { Text("Your city collection").font(.system(.title3, design: .serif)); Text("\(store.savedDiscoveries.count) discoveries · \(store.savedExploreCities.count) cities").font(.caption).foregroundStyle(.secondary) }; Spacer(); Image(systemName: "chevron.right").font(.caption) }.padding(20).cardSurface(cornerRadius: 24)
                 }.buttonStyle(PressStyle()).accessibilityIdentifier("saved-city-collection")
                 ForEach(store.savedHotels) { hotel in
                     HStack(alignment: .center) {
@@ -108,7 +108,7 @@ struct SavedView: View {
                                     Text("\(place.hotel.shortName) · \(place.hotel.city)").font(.caption).foregroundStyle(.secondary)
                                 }.frame(maxWidth: .infinity, alignment: .leading)
                                 Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary)
-                            }.padding(16).background(.background, in: .rect(cornerRadius: 23))
+                            }.padding(16).cardSurface(cornerRadius: 23)
                         }.buttonStyle(PressStyle())
                     }
                 }
@@ -147,7 +147,7 @@ struct TripsView: View {
                                 Button("Edit") { editing = plan }.font(.caption)
                                 Button { removing = plan } label: { Image(systemName: "trash").frame(width: 32, height: 35) }.accessibilityLabel("Remove \(plan.name)")
                             }
-                        }.padding(18).background(.background, in: .rect(cornerRadius: 23))
+                        }.padding(18).cardSurface(cornerRadius: 23)
                     }
                 }
                 Text("Your itinerary is saved on this device. Plans are not reservations; complete bookings directly with providers.").font(.footnote).foregroundStyle(.secondary).lineSpacing(4)
@@ -202,13 +202,13 @@ struct ProfileView: View {
                         NavigationLink { TravelAccountPage(register: false) } label: { Label("Sign in", systemImage: "person.crop.circle").frame(maxWidth: .infinity, minHeight: 44) }.buttonStyle(.glassProminent).accessibilityIdentifier("profile-sign-in")
                         NavigationLink { TravelAccountPage(register: true) } label: { Text("Create account").frame(maxWidth: .infinity, minHeight: 44) }.accessibilityIdentifier("profile-create-account")
                     }
-                }.padding(22).background(.background, in: .rect(cornerRadius: 25))
+                }.padding(22).cardSurface(cornerRadius: 25)
                 VStack(spacing: 20) {
                     LabeledContent("The collection", value: "1,513 hotels")
                     LabeledContent("At the table", value: "5,755 dining entries")
                     LabeledContent("A world of possibilities", value: "12 cities")
                     Picker("Appearance", selection: $appearance) { Text("System").tag("System"); Text("Light").tag("Light"); Text("Dark").tag("Dark") }
-                }.font(.subheadline).padding(22).background(.background, in: .rect(cornerRadius: 25))
+                }.font(.subheadline).padding(22).cardSurface(cornerRadius: 25)
                 VStack(alignment: .leading, spacing: 16) {
                     Button { preferences = true } label: { Label("Your travel preferences", systemImage: "slider.horizontal.3").frame(maxWidth: .infinity, alignment: .leading) }.accessibilityIdentifier("profile-preferences")
                     Divider()
@@ -218,7 +218,7 @@ struct ProfileView: View {
                     if onboarding.profile.previewPlan != nil {
                         Button("Clear membership preview", role: .destructive) { onboarding.selectPreview(nil) }.font(.caption)
                     }
-                }.padding(22).background(.background, in: .rect(cornerRadius: 25))
+                }.padding(22).cardSurface(cornerRadius: 25)
                 Text("Hotel favorites and earlier plans stay on this device. Hotel, flight, and activity bookings are completed with external providers. Travel itineraries and journals can be saved to your connected backend and shared with friends. Seur does not process payments.").font(.footnote).foregroundStyle(.secondary).lineSpacing(4)
                 Text("Hotel and dining details come from the supplied collection. Featured hotel photography: WBP Stars, Polycor, and Architectural Digest India. Images belong to their respective owners.").font(.caption).foregroundStyle(.secondary)
                 Text("Made for the journey.").font(.system(.title3, design: .serif)).foregroundStyle(Color.bronze).padding(.top, 12)

@@ -131,7 +131,7 @@ struct RestaurantDetailView: View {
             detailRow("The setting", value: available(venue.location) ? venue.location : "Inside \(hotel.shortName)", icon: "door.left.hand.open")
             Divider()
             detailRow("Opening hours", value: "Confirm with the hotel", icon: "clock")
-        }.padding(21).background(.background, in: .rect(cornerRadius: 24))
+        }.padding(21).cardSurface(cornerRadius: 24)
     }
     private func detailRow(_ title: String, value: String, icon: String) -> some View {
         HStack(alignment: .top, spacing: 14) {
@@ -152,7 +152,7 @@ struct RestaurantDetailView: View {
                     Text("Ask your concierge · Demo").font(.caption).foregroundStyle(.secondary)
                 }.frame(maxWidth: .infinity, alignment: .leading)
                 Image(systemName: "arrow.up.right").foregroundStyle(Color.bronze)
-            }.padding(21).background(Color.bronze.opacity(0.07), in: .rect(cornerRadius: 24))
+            }.padding(21).cardSurface(cornerRadius: 24, emphasized: true)
         }.buttonStyle(PressStyle()).disabled(store.concierge.isReplying).accessibilityIdentifier("restaurant-concierge")
     }
     private var visitCard: some View {
