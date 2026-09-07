@@ -34,6 +34,9 @@ final class AurumUITests: XCTestCase {
         app.tabBars.buttons["Map"].firstMatch.tap()
         let expand = app.buttons["map-panel-expand"]; XCTAssertTrue(expand.waitForExistence(timeout: 8))
         let compactY = expand.frame.minY; capture("68 Native map sheet compact")
+        app.buttons["map-section-Trips"].tap(); capture("84 Compact trips panel")
+        app.buttons["map-section-Flights"].tap(); capture("85 Compact flights panel")
+        app.buttons["map-section-Explore"].tap()
         XCTAssertGreaterThanOrEqual(app.otherElements["map-panel-surface"].frame.maxY, app.frame.maxY - 1)
         expand.tap()
         let raised = NSPredicate { _, _ in expand.frame.minY < compactY - 200 }
@@ -46,7 +49,7 @@ final class AurumUITests: XCTestCase {
         let bar = app.tabBars.firstMatch
         XCTAssertTrue(bar.waitForExistence(timeout: 5)); XCTAssertTrue(bar.buttons["Travel"].isHittable)
         bar.buttons["Travel"].tap()
-        XCTAssertTrue(app.buttons["travel-create"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["travel-create"].waitForExistence(timeout: 5)); capture("83 Minimal travel dashboard")
         app.tabBars.buttons["Map"].firstMatch.tap(); XCTAssertTrue(expand.waitForExistence(timeout: 5))
         let origin = app.coordinate(withNormalizedOffset: .zero)
         let handle = origin.withOffset(CGVector(dx: app.frame.midX, dy: expand.frame.minY - 10))

@@ -190,13 +190,23 @@ struct FlightDetailPanel: View {
 struct FlightDataInfoView: View {
     @Environment(\.dismiss) private var dismiss
     var body: some View {
-        NavigationStack { ScrollView { VStack(alignment: .leading, spacing: 24) {
-            Eyebrow(text: "Flight intelligence"); Editorial("A clearer picture\nof your journey.", size: 35)
-            Text("Your saved flights and routes work immediately. Connected flight data adds updated departure and arrival times, delays, gates, terminals, aircraft details and reported positions when available.")
-            Text("Historical access adds a recent delay sample. Availability varies by airline, airport and subscription. Seur does not reproduce Flighty’s proprietary predictions.").foregroundStyle(.secondary)
-            Link("Explore FlightAware AeroAPI", destination: URL(string: "https://www.flightaware.com/commercial/aeroapi/")!).buttonStyle(.glass)
-            Text("The app’s operator connects the provider securely through Seur’s backend. No flight API secret belongs in the iPhone app. Background alerts and Live Activities require an additional notification service.").font(.subheadline).foregroundStyle(.secondary)
-        }.padding(24) }.background(Color.canvas).navigationTitle("Live flight data").navigationBarTitleDisplayMode(.inline).toolbar { Button("Done") { dismiss() } } }
+        NavigationStack {
+            Form {
+                Section("Live status") {
+                    Text("Arrival times, delays, gates and aircraft details update when provided by the airline or tracking service.")
+                }
+                Section("On the map") {
+                    Label("Dashed route · planned flight", systemImage: "point.topleft.down.to.point.bottomright.curvepath")
+                    Label("Aircraft marker · reported position", systemImage: "airplane")
+                }
+                Section("Delay history") {
+                    Text("Recent departures can show a delay sample. Coverage depends on the airline and available flight data.")
+                }
+                Section { Link("FlightAware", destination: URL(string: "https://www.flightaware.com/commercial/aeroapi/")!) }
+            }.scrollContentBackground(.hidden).background(Color.canvas)
+                .navigationTitle("Flight information").navigationBarTitleDisplayMode(.inline)
+                .toolbar { Button("Done") { dismiss() } }
+        }
     }
 }
 

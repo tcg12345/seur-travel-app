@@ -113,7 +113,7 @@ struct WorldMapView: View {
             Menu {
                 Button(satellite ? "Standard map" : "Satellite globe", systemImage: "map") { satellite.toggle() }
                 Button("Show the globe", systemImage: "globe") { globe() }
-                Button("Flight data", systemImage: "info.circle") { mode = "Flights"; panelVisible = true }
+                Button("Flight information", systemImage: "info.circle") { flightInfo = true }
             } label: { Image(systemName: "square.3.layers.3d").frame(width: 44, height: 44) }.buttonStyle(.glass).accessibilityLabel("Map display options")
         }
     }
@@ -142,6 +142,7 @@ struct WorldMapView: View {
                 Image(systemName: detent == .large ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right").font(.caption.weight(.medium)).frame(width: 32, height: 44)
             }.accessibilityLabel(detent == .large ? "Collapse map panel" : "Expand map panel").accessibilityIdentifier("map-panel-expand")
             Menu {
+                Button("Flight information", systemImage: "info.circle") { flightInfo = true }
                 Button("Close map panel", systemImage: "xmark") { panelVisible = false }.accessibilityIdentifier("map-panel-close")
                 Button("Show the globe", systemImage: "globe") { globe() }
             } label: { Image(systemName: "ellipsis").frame(width: 28, height: 44) }.accessibilityLabel("Panel options").accessibilityIdentifier("map-panel-options")
@@ -171,13 +172,13 @@ struct WorldMapView: View {
                 Spacer()
                 Button { let city = ExploreCity(name: selectedCity?.name ?? "Map area", country: selectedCity?.country ?? "", latitude: center.latitude, longitude: center.longitude); Task { await browse(city) }; resizePanel(.medium) } label: { Label("Search area", systemImage: "scope").font(.subheadline) }.accessibilityIdentifier("map-search-area")
             }.padding(.vertical, 4)
-            if let selectedCity { NavigationLink { CityGuideView(city: selectedCity).toolbar(.visible, for: .navigationBar) } label: { HStack { VStack(alignment: .leading, spacing: 5) { Text(selectedCity.name).font(.system(.title2, design: .serif)); Text("Open the full city guide").font(.caption) }; Spacer(); Image(systemName: "arrow.up.right") }.padding(17).background(Color.cardSurface, in: .rect(cornerRadius: 21)) }.accessibilityIdentifier("map-city-guide") }
+            if let selectedCity { NavigationLink { CityGuideView(city: selectedCity).toolbar(.visible, for: .navigationBar) } label: { HStack { VStack(alignment: .leading, spacing: 5) { Text(selectedCity.name).font(.system(.title2, design: .serif)); Text("City guide").font(.caption) }; Spacer(); Image(systemName: "arrow.up.right") }.padding(17).background(Color.cardSurface, in: .rect(cornerRadius: 21)) }.accessibilityIdentifier("map-city-guide") }
             if let selected = selectedPlace { ExplorePlaceRow(place: selected, add: { adding = selected }) }
-            if search.loading { ProgressView("Finding places around the map…") }
+            if search.loading { ProgressView("Finding places…") }
             if let error = search.sections.first(where: { $0.error != nil })?.error { Text(error).font(.caption).foregroundStyle(.secondary) }
-            if searchArea != nil && !search.loading && search.places.isEmpty { Text("No matches in this area. Move closer to a city or try another interest.").font(.subheadline).foregroundStyle(.secondary) }
+            if searchArea != nil && !search.loading && search.places.isEmpty { Text("No places found. Try another area.").font(.subheadline).foregroundStyle(.secondary) }
             ForEach(search.places) { place in ExplorePlaceRow(place: place, add: { adding = place }) }
-            if searchArea == nil { Text("Spin the globe, choose a city pin, or search anywhere. Zoom in and search the area to discover places.").font(.subheadline).foregroundStyle(.secondary); NavigationLink("Browse city guides") { CityExplorerView().toolbar(.visible, for: .navigationBar) } }
+            if searchArea == nil { NavigationLink { CityExplorerView().toolbar(.visible, for: .navigationBar) } label: { HStack { Label("City guides", systemImage: "globe.europe.africa"); Spacer(); Image(systemName: "chevron.right").font(.caption) }.font(.subheadline).padding(.vertical, 8) } }
         }
     }
     private var selectedPlace: ExplorePlace? { guard let selection, selection.hasPrefix("place:") else { return nil }; return places.first { "place:" + $0.id == selection } }
@@ -191,26 +192,19 @@ struct WorldMapView: View {
                 ForEach(flights.filter { $0.tripID == trip.id }) { flight in flightRow(flight) }
             } else {
                 ForEach(library.documents) { document in Button { tripID = document.id; focus(document); resizePanel(.medium) } label: { HStack { Image(systemName: "suitcase.rolling").font(.title2); VStack(alignment: .leading, spacing: 6) { Text(document.title).font(.system(.headline, design: .serif)); Text(document.routeLabel).font(.caption).foregroundStyle(.secondary) }; Spacer(); Image(systemName: "arrow.up.right") }.padding(17).background(Color.cardSurface, in: .rect(cornerRadius: 22)) }.buttonStyle(.plain).accessibilityIdentifier("map-trip-" + document.id.uuidString) }
-                if library.documents.isEmpty { Text("The places you plan and the journeys you remember, together on one map.").font(.subheadline).foregroundStyle(.secondary); Button("Create a trip") { newTrip = true }.buttonStyle(.glass) }
+                if library.documents.isEmpty { HStack { Label("No trips yet", systemImage: "suitcase.rolling").foregroundStyle(.secondary); Spacer(); Button { newTrip = true } label: { Label("Create trip", systemImage: "plus") }.buttonStyle(.glassProminent) }.font(.subheadline).padding(.vertical, 8) }
             }
-            Text("Only saved locations with valid coordinates appear as pins. Open a trip to add or update its locations.").font(.caption2).foregroundStyle(.secondary)
         }
     }
     private var flightsPanel: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(alignment: .center) {
-                VStack(alignment: .leading, spacing: 4) { Text("Your flights").font(.system(.title2, design: .serif)); Text("\(flights.count) saved · every journey in view").font(.caption).foregroundStyle(.secondary) }
+                Label(flights.isEmpty ? "No flights yet" : "\(flights.count) \(flights.count == 1 ? "flight" : "flights")", systemImage: "airplane").font(.subheadline).foregroundStyle(.secondary)
                 Spacer()
-                Button { addingFlight = true } label: { Image(systemName: "plus").font(.title3.weight(.medium)).frame(width: 46, height: 46) }.buttonStyle(.glassProminent).accessibilityLabel("Add flight").accessibilityIdentifier("map-add-flight")
-            }
-            if flights.isEmpty {
-                Text("Follow a flight, with or without a trip.").font(.subheadline).foregroundStyle(.secondary)
-                Button("Find your flight") { addingFlight = true }.buttonStyle(.glass)
+                Button { addingFlight = true } label: { Label("Add flight", systemImage: "plus").font(.subheadline) }.buttonStyle(.glassProminent).accessibilityLabel("Add flight").accessibilityIdentifier("map-add-flight")
             }
             if let error = api.savedFlightsError { Text(error).font(.caption).foregroundStyle(.secondary); Button("Try again") { Task { await api.loadSavedFlights() } } }
             ForEach(flights) { flight in flightRow(flight) }
-            Button("About live flight information") { flightInfo = true }.font(.caption)
-            Text("Dashed lines are planned direct routes. Aircraft markers appear only after a position is reported by the connected provider.").font(.caption2).foregroundStyle(.secondary)
         }
     }
     private func flightRow(_ value: MapFlight) -> some View {

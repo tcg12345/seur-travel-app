@@ -185,3 +185,10 @@ The SwiftUI source uses native iOS 26 Liquid Glass APIs and system controls. The
 - A live Google-attribution assertion was invalid for a signed-out guest: the existing cloud autocomplete endpoint requires sign-in, so guest search uses the Apple Maps fallback. The provider-independent live UI flow passed in `/tmp/SeurTripEditorsQA3.xcresult`, selecting The Savoy in London, resolving its address/coordinates, saving the stay and opening its trip map. This brings focused UI coverage to nine passing flows. No provider authorization behavior changed.
 - Native restaurant, hotel and expanded meeting screenshots were visually reviewed. Debug simulator and physical-iPhone Release builds passed. Both existing iPhone 17 Pro simulators were updated and launched without test flags or erasing data. Real-device performance was not measured.
 - No backend schema, account behavior, ticket purchasing or subscription billing changed.
+
+
+## Map and Travel copy refinement — September 7, 2026
+
+- Removed introductory paragraphs, duplicate flight actions, coordinate explanations and promotional Travel headings. Map empty states use a short label plus one action; flight explanations are available through the options menu. Travel hides unused filters when the library is empty and provides a clear-filters action for no matches. Booking/budget headings and the add chooser are shorter.
+- The existing native sheet/tab-navigation UI check passed in `/tmp/SeurDeclutterQA.xcresult`, including compact/expanded placement, dragging, tab-bar stability, return to Travel and closing the panel. Screenshots of Travel and each map section were visually reviewed. No new behavioral tests were added for this copy/layout change.
+- Final Debug simulator and physical-iPhone Release builds passed. Both existing user simulators were updated without erasing data.
