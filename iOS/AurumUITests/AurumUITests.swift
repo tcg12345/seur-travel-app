@@ -16,11 +16,11 @@ final class AurumUITests: XCTestCase {
         app.terminate(); app.launchArguments = ["--ui-testing", "--map-testing", "--location-testing", "--city-testing", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryL"]; app.launch()
         app.tabBars.buttons["Map"].firstMatch.tap()
         let content = app.buttons["map-section-Flights"]; XCTAssertTrue(content.waitForExistence(timeout: 8)); capture("63 Globe map")
-        app.buttons["map-panel-expand"].tap(); app.buttons["map-section-Flights"].tap()
+        resizeMapPanel(expanded: true); app.buttons["map-section-Flights"].tap()
         let flight = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "map-flight-")).firstMatch
         XCTAssertTrue(flight.waitForExistence(timeout: 5)); flight.tap()
         XCTAssertTrue(app.staticTexts["map-flight-title"].waitForExistence(timeout: 5)); capture("64 Flight route panel")
-        app.buttons["map-panel-expand"].tap()
+        resizeMapPanel(expanded: true)
         XCTAssertTrue(app.staticTexts["UI test · Delayed"].waitForExistence(timeout: 5)); capture("65 Flight intelligence")
         let performance = app.buttons["flight-performance"]; reveal(performance); performance.tap()
         let history = app.buttons["Load delay history"]; reveal(history); history.tap()
@@ -33,19 +33,19 @@ final class AurumUITests: XCTestCase {
     func testNativeMapSheetExpandsAndReturnsToTabBar() {
         let originalBarY = app.tabBars.firstMatch.frame.minY
         app.tabBars.buttons["Map"].firstMatch.tap()
-        let expand = app.buttons["map-panel-expand"]; XCTAssertTrue(expand.waitForExistence(timeout: 8))
+        let expand = app.buttons["map-section-Explore"]; XCTAssertTrue(expand.waitForExistence(timeout: 8))
         let compactY = expand.frame.minY; capture("68 Native map sheet compact")
         app.buttons["map-section-Trips"].tap(); capture("84 Compact trips panel")
         app.buttons["map-section-Flights"].tap(); capture("85 Compact flights panel")
         app.buttons["map-section-Explore"].tap()
         XCTAssertGreaterThanOrEqual(app.otherElements["map-panel-surface"].frame.maxY, app.frame.maxY - 1)
-        expand.tap()
+        resizeMapPanel(expanded: true)
         let raised = NSPredicate { _, _ in expand.frame.minY < compactY - 200 }
         expectation(for: raised, evaluatedWith: expand); waitForExpectations(timeout: 8)
         capture("69 Native map sheet expanded")
         XCTAssertGreaterThanOrEqual(app.otherElements["map-panel-surface"].frame.maxY, app.frame.maxY - 1)
         XCTAssertEqual(app.tabBars.firstMatch.frame.minY, originalBarY, accuracy: 2)
-        expand.tap()
+        resizeMapPanel(expanded: false)
         expectation(for: NSPredicate { _, _ in expand.frame.minY > compactY - 50 }, evaluatedWith: expand); waitForExpectations(timeout: 8)
         let bar = app.tabBars.firstMatch
         XCTAssertTrue(bar.waitForExistence(timeout: 5)); XCTAssertTrue(bar.buttons["Travel"].isHittable)
@@ -57,17 +57,19 @@ final class AurumUITests: XCTestCase {
         handle.press(forDuration: 0.15, thenDragTo: origin.withOffset(CGVector(dx: app.frame.midX, dy: 180)))
         expectation(for: raised, evaluatedWith: expand); waitForExpectations(timeout: 8)
         capture("70 Native dragged sheet with navigation")
-        app.buttons["map-panel-options"].tap(); app.buttons["map-panel-close"].tap()
-        XCTAssertTrue(app.buttons["map-show-panel"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["map-panel-expand"].exists)
+        XCTAssertFalse(app.buttons["map-panel-options"].exists)
+        resizeMapPanel(expanded: false)
+        expectation(for: NSPredicate { _, _ in expand.frame.minY > compactY - 50 }, evaluatedWith: expand); waitForExpectations(timeout: 8)
     }
     func testMapSectionSwitchKeepsLayoutAndSearch() {
         app.terminate(); app.launchArguments = ["--ui-testing", "--map-testing", "--location-testing", "--city-testing", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryL"]; app.launch()
         app.tabBars.buttons["Map"].tap()
-        let expand = app.buttons["map-panel-expand"]
+        let expand = app.buttons["map-section-Explore"]
         XCTAssertTrue(expand.waitForExistence(timeout: 8))
         let tabY = app.tabBars.firstMatch.frame.minY
         for expanded in [false, true] {
-            if expanded { expand.tap(); RunLoop.current.run(until: Date().addingTimeInterval(0.7)) }
+            if expanded { resizeMapPanel(expanded: true); RunLoop.current.run(until: Date().addingTimeInterval(0.7)) }
             let headerY = expand.frame.minY
             for _ in 0..<2 {
                 for section in ["Trips", "Flights", "Explore"] {
@@ -96,7 +98,7 @@ final class AurumUITests: XCTestCase {
         app.terminate(); app.launchArguments = ["--ui-testing", "--map-testing", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryL"]; app.launch()
         let originalBar = app.tabBars.firstMatch.frame
         app.tabBars.buttons["Map"].tap()
-        let expand = app.buttons["map-panel-expand"]; XCTAssertTrue(expand.waitForExistence(timeout: 8))
+        let expand = app.buttons["map-section-Explore"]; XCTAssertTrue(expand.waitForExistence(timeout: 8))
         let compactY = expand.frame.minY
         app.buttons["map-section-Flights"].tap()
         XCTAssertEqual(expand.frame.minY, compactY, accuracy: 2)
@@ -136,7 +138,7 @@ final class AurumUITests: XCTestCase {
         saved.tap()
         XCTAssertTrue(app.staticTexts["map-flight-title"].waitForExistence(timeout: 8))
         capture("94 Redesigned flight overview")
-        app.buttons["map-panel-expand"].tap()
+        resizeMapPanel(expanded: true)
         let footer = app.staticTexts["flight-detail-footer"]
         for _ in 0..<10 {
             app.scrollViews["map-panel-scroll"].swipeUp(velocity: .slow)
@@ -170,7 +172,7 @@ final class AurumUITests: XCTestCase {
         let section = app.buttons["map-section-Flights"]; XCTAssertTrue(section.waitForExistence(timeout: 8)); section.tap()
         XCTAssertLessThan(section.frame.height, 65, "Navigation labels must not wrap at accessibility sizes")
         XCTAssertLessThan(app.buttons["map-add-flight"].frame.height, 65, "The add action must remain compact")
-        app.buttons["map-panel-expand"].tap()
+        resizeMapPanel(expanded: true)
         let add = app.buttons["map-add-flight"]; XCTAssertTrue(add.waitForExistence(timeout: 5)); add.tap()
         let airline = app.textFields["flight-airline-query"]; XCTAssertTrue(airline.waitForExistence(timeout: 5)); airline.tap(); airline.typeText("BA")
         let british = app.buttons["flight-airline-BA"]; reveal(british); british.tap()
@@ -192,11 +194,16 @@ final class AurumUITests: XCTestCase {
     }
     func testGlobeCitySearchAndGuide() {
         app.terminate(); app.launchArguments = ["--ui-testing", "--location-testing", "--city-testing"]; app.launch()
-        app.tabBars.buttons["Map"].firstMatch.tap(); XCTAssertTrue(app.buttons["map-panel-expand"].waitForExistence(timeout: 8))
+        app.tabBars.buttons["Map"].firstMatch.tap(); XCTAssertTrue(app.buttons["map-section-Explore"].waitForExistence(timeout: 8))
         let city = app.textFields["world-city-search"]; XCTAssertTrue(city.waitForExistence(timeout: 5)); city.tap(); city.typeText("Lis")
         let suggestion = app.buttons["world-city-search-suggestion-0"]; XCTAssertTrue(suggestion.waitForExistence(timeout: 5)); suggestion.tap()
         let guide = app.buttons["map-city-guide"]; reveal(guide); XCTAssertTrue(guide.waitForExistence(timeout: 5)); guide.tap()
         XCTAssertTrue(app.buttons["city-save"].waitForExistence(timeout: 5)); capture("67 Map to city guide")
+    }
+    private func resizeMapPanel(expanded: Bool) {
+        let handle = app.descendants(matching: .any).matching(identifier: "map-panel-handle").firstMatch
+        XCTAssertTrue(handle.waitForExistence(timeout: 5))
+        handle.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).press(forDuration: 0.15, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: expanded ? 0.10 : 0.86)))
     }
     func capture(_ name: String) {
         RunLoop.current.run(until: Date().addingTimeInterval(0.4)) // Let native transitions settle before visual capture.

@@ -219,3 +219,8 @@ The SwiftUI source uses native iOS 26 Liquid Glass APIs and system controls. The
 - All 49 existing/updated unit checks passed in `/tmp/SeurFlightFlowQA.xcresult`, including the new duration test. The additional countdown test and the full flight-number/route/direct-save UI flow passed in `/tmp/SeurCompactFlights.xcresult`. Detail/history navigation and large-text input/back/close checks passed in `/tmp/SeurFlightCompactDetails.xcresult`. Screenshots were reviewed. Early iOS 26.4 runs had simulator launch/input failures; final UI verification used an isolated iOS 26.5 simulator. The large-text test restores normal text sizing when it finishes.
 - Final signed Debug simulator and compile-only physical-iPhone Release builds passed. Both existing user simulators were updated and launched without testing flags, preserving `com.aurumapp.travel`, accounts and local trips. Normal-size previews are in `iOS/Preview/98-compact-flight-detail.png`, `99-expanded-flight-detail.png` and `100-compact-flight-rows.png` (ignored local artifacts).
 - No backend schema or provider integration changed. Live flight calls used existing deterministic test fixtures during UI verification; real-device animation performance was not measured.
+
+## Map header cleanup — September 7, 2026
+
+- Removed the bottom sheet's expand button and three-dot actions menu. Dragging the sheet and its accessible height adjustment remain available. Updated existing UI checks to resize through the handle.
+- The simulator build and existing expand/collapse/tab-navigation regression passed in `/tmp/SeurMapHeaderQA.xcresult`, including assertions that both removed buttons are absent. Both existing simulator installations were updated without changing their app identifiers or saved data.

@@ -144,14 +144,6 @@ struct WorldMapView: View {
                 }.animation(reduceMotion ? nil : .smooth(duration: 0.22), value: mode)
                 Spacer(minLength: 0)
             }
-            Button { resizePanel(detent == .large ? .height(260) : .large) } label: {
-                Image(systemName: detent == .large ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right").font(.caption.weight(.medium)).frame(width: 32, height: 44)
-            }.accessibilityLabel(detent == .large ? "Collapse map panel" : "Expand map panel").accessibilityIdentifier("map-panel-expand")
-            Menu {
-                Button("Flight information", systemImage: "info.circle") { flightInfo = true }
-                Button("Close map panel", systemImage: "xmark") { panelVisible = false }.accessibilityIdentifier("map-panel-close")
-                Button("Show the globe", systemImage: "globe") { globe() }
-            } label: { Image(systemName: "ellipsis").frame(width: 28, height: 44) }.accessibilityLabel("Panel options").accessibilityIdentifier("map-panel-options")
         }.lineLimit(1).dynamicTypeSize(...DynamicTypeSize.xxxLarge).padding(.horizontal, 16).padding(.bottom, 12)
     }
     private var panelContent: some View {
@@ -301,7 +293,7 @@ private struct PersistentMapPanel<Header: View, Content: View>: View {
             VStack(spacing: 0) {
                 VStack(spacing: 0) {
                     Capsule().fill(.secondary.opacity(0.25)).frame(width: 32, height: 4).padding(.top, 10).padding(.bottom, 7)
-                        .accessibilityLabel("Map panel height").accessibilityAdjustableAction { direction in withAnimation(spring) { detent = direction == .increment ? .large : .height(260) } }
+                        .accessibilityIdentifier("map-panel-handle").accessibilityLabel("Map panel height").accessibilityAdjustableAction { direction in withAnimation(spring) { detent = direction == .increment ? .large : .height(260) } }
                     header()
                 }.contentShape(Rectangle()).simultaneousGesture(DragGesture(minimumDistance: 8, coordinateSpace: .global)
                     .onChanged { value in if abs(value.translation.height) > abs(value.translation.width) { change(value.translation.height) } }
