@@ -1,4 +1,4 @@
-# Aurum for iOS
+# Seur for iOS
 
 A native SwiftUI travel app for **iOS 26 and later**, designed around hotel dining and the supplied Aurum iOS reference. This is an Xcode iOS application, not a website or WebView wrapper.
 
@@ -11,6 +11,8 @@ A native SwiftUI travel app for **iOS 26 and later**, designed around hotel dini
 The app works in Simulator without an Apple developer account. To install on your physical iPhone, choose your Apple development team under **Aurum → Signing & Capabilities**, then select your connected iPhone. TestFlight and App Store distribution require signing and provisioning through your Apple Developer account.
 
 There are no external Swift packages. Offline travel planning works immediately. The Supabase backend enables accounts, friends, cloud copies, private photos, provider search and sharing; see [the cloud setup](../supabase/README.md). The app defaults to the deployed HTTPS service.
+
+The installed app is named **Seur**. The existing Xcode project/scheme and bundle identifier are retained so upgrades preserve local trips and Keychain sessions. [Brand assets and generation prompt](Brand/README.md).
 
 ## Native design and motion
 
@@ -39,7 +41,7 @@ There are no external Swift packages. Offline travel planning works immediately.
 
 ## Booking boundaries
 
-Aurum does not process payments, hold inventory, create supplier reservations, or confirm bookings. Hotel and dining dates are planning preferences; confirm them on the hotel website. Live flight and experience inventory is shown by the external provider. Saved hotels and earlier draft plans stay on the device. Travel trips support explicit cloud upload and private-copy import through the backend. Experience cards are ideas/search categories, not confirmed tours.
+Seur does not process payments, hold inventory, create supplier reservations, or confirm bookings. Hotel and dining dates are planning preferences; confirm them on the hotel website. Live flight and experience inventory is shown by the external provider. Saved hotels and earlier draft plans stay on the device. Travel trips support explicit cloud upload and private-copy import through the backend. Experience cards are ideas/search categories, not confirmed tours.
 
 Native flight booking with detailed cabin comparisons and matched seat photos is the user's intended next direction. See [FlightBookingRoadmap.md](FlightBookingRoadmap.md) for the saved requirements, provider candidates and rollout sequence. FlightAware powers tracking separately from future ticketing.
 

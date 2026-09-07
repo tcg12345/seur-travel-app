@@ -35,8 +35,8 @@ struct DiscoverView: View {
         .toolbar {
             ToolbarItem(placement: .principal) {
                 HStack(spacing: 8) {
-                    Image(systemName: "a.circle").font(.system(size: 18, weight: .ultraLight)).foregroundStyle(Color.bronze)
-                    Text("AURUM").font(.system(size: 14, weight: .medium, design: .serif)).tracking(4)
+                    SeurLogo(size: 30)
+                    Text("SEUR").font(.system(size: 14, weight: .medium, design: .serif)).tracking(4)
                 }.accessibilityElement(children: .combine)
             }
             ToolbarItem(placement: .topBarTrailing) {

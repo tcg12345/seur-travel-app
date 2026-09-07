@@ -46,8 +46,8 @@ struct OnboardingView: View {
                 LinearGradient(colors: [.black.opacity(0.25), .black.opacity(0.35), .black.opacity(0.92)], startPoint: .top, endPoint: .bottom).ignoresSafeArea()
                 VStack(alignment: .leading, spacing: 0) {
                     HStack(spacing: 10) {
-                        Image(systemName: "a.circle").font(.system(size: 25, weight: .ultraLight))
-                        Text("AURUM").font(.system(size: 15, weight: .medium)).tracking(6)
+                        SeurLogo(size: 38)
+                        Text("SEUR").font(.system(size: 15, weight: .medium)).tracking(6)
                         Spacer()
                         Text("TRAVEL, CONSIDERED").font(.system(size: 8, weight: .semibold)).tracking(1.5)
                     }.padding(.top, 20)
@@ -88,7 +88,7 @@ struct OnboardingView: View {
                 Button { move(to: step - 1) } label: { Image(systemName: "arrow.left").frame(width: 42, height: 42) }
                     .buttonStyle(.glass).buttonBorderShape(.circle).accessibilityLabel("Previous step").accessibilityIdentifier("onboarding-back")
                 Spacer()
-                Text("YOUR AURUM").font(.caption2.weight(.semibold)).tracking(3).foregroundStyle(Color.bronze).dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+                Text("YOUR SEUR").font(.caption2.weight(.semibold)).tracking(3).foregroundStyle(Color.bronze).dynamicTypeSize(...DynamicTypeSize.xxxLarge)
                 Spacer()
                 Button(review ? "Done" : "Skip") { if review { dismiss() } else { move(to: 4) } }.font(.subheadline).frame(minWidth: 42, minHeight: 44).accessibilityIdentifier("onboarding-skip")
             }.padding(.horizontal, 24).padding(.top, 8)
@@ -226,7 +226,7 @@ private struct OnboardingAccountView: View {
                     .buttonStyle(.glass).buttonBorderShape(.circle).accessibilityLabel("Previous step")
                     .accessibilityIdentifier("onboarding-account-back").disabled(submitting)
                 Spacer()
-                Text("YOUR AURUM").font(.caption2.weight(.semibold)).tracking(3).foregroundStyle(Color.bronze)
+                Text("YOUR SEUR").font(.caption2.weight(.semibold)).tracking(3).foregroundStyle(Color.bronze)
                 Spacer()
                 Image(systemName: "lock.shield").foregroundStyle(Color.bronze).frame(width: 42, height: 42).accessibilityHidden(true)
             }.dynamicTypeSize(...DynamicTypeSize.xxxLarge).padding(.horizontal, 24).padding(.top, 8)

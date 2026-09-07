@@ -47,7 +47,7 @@ struct RestaurantDetailView: View {
                         SectionHeading(title: "Make a stay of it", subtitle: "One address. More to discover.")
                         NavigationLink { HotelDetailView(hotel: hotel) } label: { HotelRow(hotel: hotel) }.buttonStyle(PressStyle())
                     }
-                    Text("From the Aurum hotel collection. Menus, opening hours and availability are confirmed by the hotel.")
+                    Text("From the Seur hotel collection. Menus, opening hours and availability are confirmed by the hotel.")
                         .font(.caption).foregroundStyle(.secondary).lineSpacing(3).padding(.bottom, 12)
                 }.padding(24).background(Color.canvas, in: UnevenRoundedRectangle(topLeadingRadius: 32, topTrailingRadius: 32)).padding(.top, -28)
             }

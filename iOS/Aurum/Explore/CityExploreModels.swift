@@ -88,7 +88,7 @@ struct ExplorePlace: Codable, Hashable, Identifiable {
         }
         return sorted.flatMap { hotel in hotel.venues.map { venue in
             let category: PlaceCategory = venue.type.foldedCityText.contains("bar") ? .bar : venue.type.foldedCityText.contains("cafe") ? .cafe : .restaurant
-            return Self(record: PlaceRecord(id: RestaurantPlace(hotel: hotel, venue: venue).id, name: venue.name, category: category, city: city.name, address: hotel.address.usefulCollectionText, website: hotel.website, source: "Aurum hotel collection", overview: venue.description.usefulCollectionText), city: city, hotelID: hotel.id, venueID: venue.id, hotelName: hotel.name, cuisine: venue.cuisine.usefulCollectionText, priceBand: venue.price.usefulCollectionText, venueLocation: venue.location.usefulCollectionText)
+            return Self(record: PlaceRecord(id: RestaurantPlace(hotel: hotel, venue: venue).id, name: venue.name, category: category, city: city.name, address: hotel.address.usefulCollectionText, website: hotel.website, source: "Seur hotel collection", overview: venue.description.usefulCollectionText), city: city, hotelID: hotel.id, venueID: venue.id, hotelName: hotel.name, cuisine: venue.cuisine.usefulCollectionText, priceBand: venue.price.usefulCollectionText, venueLocation: venue.location.usefulCollectionText)
         } }
     }
 }

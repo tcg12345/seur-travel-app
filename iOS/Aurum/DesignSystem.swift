@@ -7,6 +7,16 @@ extension Color {
     static let cardSurface = Color(uiColor: .secondarySystemGroupedBackground)
 }
 
+/// The shared Seur flight-ribbon mark. Uses the same artwork as the home-screen icon.
+struct SeurLogo: View {
+    var size: CGFloat = 32
+    var body: some View {
+        Image("SeurLogo").resizable().scaledToFit().frame(width: size, height: size)
+            .clipShape(.rect(cornerRadius: size * 0.23))
+            .accessibilityLabel("Seur").accessibilityIdentifier("seur-logo")
+    }
+}
+
 struct Editorial: View {
     let text: String
     @ScaledMetric var size: CGFloat

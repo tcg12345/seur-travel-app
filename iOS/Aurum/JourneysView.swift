@@ -192,9 +192,9 @@ struct ProfileView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
-                    Image(systemName: "a.circle").font(.system(size: 56, weight: .ultraLight)).foregroundStyle(Color.bronze)
+                    SeurLogo(size: 76)
                     Editorial("Travel,\nthoughtfully.", size: 38)
-                    Text("Your personal Aurum workspace").font(.subheadline).foregroundStyle(.secondary)
+                    Text("Your personal Seur workspace").font(.subheadline).foregroundStyle(.secondary)
                     VStack(spacing: 20) {
                         LabeledContent("The collection", value: "1,513 hotels")
                         LabeledContent("At the table", value: "5,755 dining entries")
@@ -205,13 +205,13 @@ struct ProfileView: View {
                         Button { preferences = true } label: { Label("Your travel preferences", systemImage: "slider.horizontal.3").frame(maxWidth: .infinity, alignment: .leading) }.accessibilityIdentifier("profile-preferences")
                         Divider()
                         Button { membership = true } label: {
-                            HStack { Label("Aurum Reserve", systemImage: "sparkles"); Spacer(); Text(onboarding.profile.previewPlan.map { $0.title + " preview" } ?? "Explore preview").font(.caption).foregroundStyle(.secondary) }
+                            HStack { Label("Seur Reserve", systemImage: "sparkles"); Spacer(); Text(onboarding.profile.previewPlan.map { $0.title + " preview" } ?? "Explore preview").font(.caption).foregroundStyle(.secondary) }
                         }.accessibilityIdentifier("profile-membership")
                         if onboarding.profile.previewPlan != nil {
                             Button("Clear membership preview", role: .destructive) { onboarding.selectPreview(nil) }.font(.caption)
                         }
                     }.padding(22).background(.background, in: .rect(cornerRadius: 25))
-                    Text("Hotel favorites and earlier plans stay on this device. Hotel, flight, and activity bookings are completed with external providers. Travel itineraries and journals can be saved to your connected backend and shared with friends. Aurum does not process payments.").font(.footnote).foregroundStyle(.secondary).lineSpacing(4)
+                    Text("Hotel favorites and earlier plans stay on this device. Hotel, flight, and activity bookings are completed with external providers. Travel itineraries and journals can be saved to your connected backend and shared with friends. Seur does not process payments.").font(.footnote).foregroundStyle(.secondary).lineSpacing(4)
                     Text("Hotel and dining details come from the supplied collection. Featured hotel photography: WBP Stars, Polycor, and Architectural Digest India. Images belong to their respective owners.").font(.caption).foregroundStyle(.secondary)
                     Text("Made for the journey.").font(.system(.title3, design: .serif)).foregroundStyle(Color.bronze).padding(.top, 12)
                 }.padding(25)

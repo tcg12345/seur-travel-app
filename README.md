@@ -1,6 +1,6 @@
-# Aurum
+# Seur
 
-The native **iOS 26 SwiftUI app** is now in [`iOS/`](iOS/README.md). Open `iOS/Aurum.xcodeproj` in Xcode. It uses Apple Liquid Glass, native zoom navigation, haptic feedback, and the bundled hotel/dining catalog.
+The native **Seur iOS 26 SwiftUI app** is now in [`iOS/`](iOS/README.md). Open `iOS/Aurum.xcodeproj` in Xcode. It uses Apple Liquid Glass, native zoom navigation, haptic feedback, and the bundled hotel/dining catalog.
 
 The native app includes unified trip planning and journals, worldwide city discovery, a globe with trip and flight routes, and optional live FlightAware tracking. The [Supabase backend](supabase/README.md) runs accounts, cloud trips, private photos, friends, conversations, sharing and provider integrations. The native app connects directly to its HTTPS Edge Function. Keys are stored in Supabase secrets; `backend/` retains the earlier Python implementation for reference.
 

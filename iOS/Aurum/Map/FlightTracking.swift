@@ -193,9 +193,9 @@ struct FlightDataInfoView: View {
         NavigationStack { ScrollView { VStack(alignment: .leading, spacing: 24) {
             Eyebrow(text: "Flight intelligence"); Editorial("A clearer picture\nof your journey.", size: 35)
             Text("Your saved flights and routes work immediately. Connected flight data adds updated departure and arrival times, delays, gates, terminals, aircraft details and reported positions when available.")
-            Text("Historical access adds a recent delay sample. Availability varies by airline, airport and subscription. Aurum does not reproduce Flighty’s proprietary predictions.").foregroundStyle(.secondary)
+            Text("Historical access adds a recent delay sample. Availability varies by airline, airport and subscription. Seur does not reproduce Flighty’s proprietary predictions.").foregroundStyle(.secondary)
             Link("Explore FlightAware AeroAPI", destination: URL(string: "https://www.flightaware.com/commercial/aeroapi/")!).buttonStyle(.glass)
-            Text("The app’s operator connects the provider securely through Aurum’s backend. No flight API secret belongs in the iPhone app. Background alerts and Live Activities require an additional notification service.").font(.subheadline).foregroundStyle(.secondary)
+            Text("The app’s operator connects the provider securely through Seur’s backend. No flight API secret belongs in the iPhone app. Background alerts and Live Activities require an additional notification service.").font(.subheadline).foregroundStyle(.secondary)
         }.padding(24) }.background(Color.canvas).navigationTitle("Live flight data").navigationBarTitleDisplayMode(.inline).toolbar { Button("Done") { dismiss() } } }
     }
 }

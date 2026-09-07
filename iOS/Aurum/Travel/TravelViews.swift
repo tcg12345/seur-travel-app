@@ -58,7 +58,7 @@ struct TravelHubView: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
                         Button("New trip", systemImage: "plus") { section = "Trips"; newJourney = true }
-                        Button("Import Aurum JSON", systemImage: "square.and.arrow.down") { importing = true }
+                        Button("Import Seur JSON", systemImage: "square.and.arrow.down") { importing = true }
                     } label: { Image(systemName: "plus") }.accessibilityIdentifier("travel-new-menu")
                 }
             }

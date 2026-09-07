@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
+<key>CFBundleName</key><string>Seur</string>
 <key>NSAppTransportSecurity</key><dict><key>NSAllowsLocalNetworking</key><true/><key>NSExceptionDomains</key><dict><key>localhost</key><dict><key>NSExceptionAllowsInsecureHTTPLoads</key><true/></dict></dict></dict>
-<key>NSLocalNetworkUsageDescription</key><string>Connect to your Aurum development backend on your local network.</string>
+<key>NSLocalNetworkUsageDescription</key><string>Connect to your Seur development backend on your local network.</string>
 </dict></plist>

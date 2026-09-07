@@ -66,7 +66,7 @@
 		B941FFDDBFA04FFC50847F9C /* DiscoverView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoverView.swift; sourceTree = "<group>"; };
 		BAE6B937772308D1F0321F01 /* JourneysView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JourneysView.swift; sourceTree = "<group>"; };
 		C4095E227B53697430FABAA3 /* AurumTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; path = AurumTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		E6FC57C251E9E1BEC1D3C0D2 /* Aurum.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; path = Aurum.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		E6FC57C251E9E1BEC1D3C0D2 /* Seur.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; path = Seur.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		F6A6ABC622C8A615B5E97F17 /* DesignSystem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignSystem.swift; sourceTree = "<group>"; };
 		ACCC00000000000000000002 /* ConciergeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConciergeView.swift; sourceTree = "<group>"; };
 		ADDD00000000000000000002 /* RestaurantDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RestaurantDetailView.swift; sourceTree = "<group>"; };
@@ -175,7 +175,7 @@
 		FBDC4F23F93125BBEEAE800C = {
 			isa = PBXGroup;
 			children = (
-				E6FC57C251E9E1BEC1D3C0D2 /* Aurum.app */,
+				E6FC57C251E9E1BEC1D3C0D2 /* Seur.app */,
 				C4095E227B53697430FABAA3 /* AurumTests.xctest */,
 				8A6ED015D34B3A3BEC57D504 /* AurumUITests.xctest */,
 			);
@@ -215,7 +215,7 @@
 			);
 			name = Aurum;
 			productName = Aurum;
-			productReference = E6FC57C251E9E1BEC1D3C0D2 /* Aurum.app */;
+			productReference = E6FC57C251E9E1BEC1D3C0D2 /* Seur.app */;
 			productType = "com.apple.product-type.application";
 		};
 		CD0C069CCD4D9EE4568BC8B3 /* AurumUITests */ = {
@@ -372,7 +372,7 @@
 				ENABLE_TESTABILITY = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CADisableMinimumFrameDurationOnPhone = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = Aurum;
+				INFOPLIST_KEY_CFBundleDisplayName = Seur;
 				INFOPLIST_FILE = Aurum/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -381,7 +381,8 @@
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.aurumapp.travel;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = Seur;
+				PRODUCT_MODULE_NAME = Aurum;
 				SDKROOT = iphoneos;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited)";
@@ -406,7 +407,7 @@
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Aurum.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Aurum";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Seur.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Seur";
 			};
 			name = Debug;
 		};
@@ -438,7 +439,7 @@
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Aurum.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Aurum";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Seur.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Seur";
 			};
 			name = Release;
 		};
@@ -483,7 +484,7 @@
 				ENABLE_TESTABILITY = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CADisableMinimumFrameDurationOnPhone = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = Aurum;
+				INFOPLIST_KEY_CFBundleDisplayName = Seur;
 				INFOPLIST_FILE = Aurum/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -492,7 +493,8 @@
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.aurumapp.travel;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = Seur;
+				PRODUCT_MODULE_NAME = Aurum;
 				SDKROOT = iphoneos;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";

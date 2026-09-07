@@ -156,7 +156,7 @@ struct CityGuideView: View {
     }
     private var diningCollection: some View {
         VStack(alignment: .leading, spacing: 17) {
-            HStack(alignment: .top) { VStack(alignment: .leading, spacing: 9) { Eyebrow(text: "The Aurum dining collection").accessibilityIdentifier("city-dining-collection"); Editorial("Extraordinary tables.\nExceptional addresses.", size: 29) }; Spacer(); Image(systemName: "fork.knife.circle").font(.system(size: 36, weight: .ultraLight)).foregroundStyle(Color.bronze) }
+            HStack(alignment: .top) { VStack(alignment: .leading, spacing: 9) { Eyebrow(text: "The Seur dining collection").accessibilityIdentifier("city-dining-collection"); Editorial("Extraordinary tables.\nExceptional addresses.", size: 29) }; Spacer(); Image(systemName: "fork.knife.circle").font(.system(size: 36, weight: .ultraLight)).foregroundStyle(Color.bronze) }
             Text("\(collection.count) dining venues at \(Set(collection.compactMap(\.hotelID)).count) hotels in \(city.name).").font(.subheadline).foregroundStyle(.secondary)
             ScrollView(.horizontal) {
                 HStack(spacing: 12) { ForEach(collection.prefix(12)) { place in

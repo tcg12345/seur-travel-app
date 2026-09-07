@@ -234,7 +234,7 @@ struct RatedRestaurantImportView: View {
         for hotel in store.hotels { for venue in hotel.venues {
             let key = RestaurantPlace(hotel: hotel, venue: venue).id
             if let visit = store.restaurantVisits[key], visit.rating > 0 {
-                places.append(RatedPlace(place: PlaceRecord(id: key, name: venue.name, category: .restaurant, city: hotel.city, address: hotel.address, website: hotel.website, source: "Aurum collection"), overall: Double(visit.rating) * 2, notes: visit.note))
+                places.append(RatedPlace(place: PlaceRecord(id: key, name: venue.name, category: .restaurant, city: hotel.city, address: hotel.address, website: hotel.website, source: "Seur collection"), overall: Double(visit.rating) * 2, notes: visit.note))
             }
         } }
         return places.filter { seen.insert($0.place.id).inserted }
