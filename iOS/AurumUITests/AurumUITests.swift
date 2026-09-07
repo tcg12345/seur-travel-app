@@ -47,10 +47,29 @@ final class AurumUITests: XCTestCase {
         let scroll = app.scrollViews["map-panel-scroll"].firstMatch
         scroll.swipeUp(); scroll.swipeUp()
         reveal(app.buttons["flight-performance"]); XCTAssertTrue(app.buttons["flight-performance"].exists)
+        let contentY = app.buttons["flight-performance"].frame.minY
         resizeMapPanel(expanded: false)
         XCTAssertEqual(surface.frame.width, compactWidth, accuracy: 2)
         resizeMapPanel(expanded: true)
         XCTAssertEqual(surface.frame.width, app.frame.width, accuracy: 2)
+        XCTAssertEqual(app.buttons["flight-performance"].frame.minY, contentY, accuracy: 3, "Resizing must preserve the content scroll position")
+        XCTAssertEqual(app.scrollViews.matching(identifier: "map-panel-scroll").count, 1)
+    }
+    func testMapPanelContentPanHandsOffWithoutMovingMap() {
+        app.terminate(); app.launchArguments = ["--ui-testing", "--map-testing", "--location-testing", "--city-testing"]; app.launch()
+        app.tabBars.buttons["Map"].tap()
+        XCTAssertTrue(app.buttons["map-section-Flights"].waitForExistence(timeout: 8))
+        resizeMapPanel(expanded: true); app.buttons["map-section-Flights"].tap()
+        let surface = app.otherElements["map-panel-surface"].firstMatch
+        // Pull within the scroll content, not the handle: the native pan owns this path.
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.40))
+            .press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.90)))
+        XCTAssertEqual(surface.frame.width, app.frame.width - 24, accuracy: 2)
+        let scroll = app.scrollViews["map-panel-scroll"].firstMatch
+        let start = scroll.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: scroll.frame.width * 0.5, dy: 55))
+        start.press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.12)))
+        XCTAssertEqual(surface.frame.width, app.frame.width, accuracy: 2)
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "map-flight-")).firstMatch.isHittable)
         XCTAssertEqual(app.scrollViews.matching(identifier: "map-panel-scroll").count, 1)
     }
     func testOrganizedFlightDetailSectionsAndTimingLabels() {

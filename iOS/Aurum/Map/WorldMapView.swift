@@ -430,6 +430,24 @@ struct MapPanelLayout {
     }
 }
 
+/// Keeps a drag anchored to the visible sheet, including an interrupted spring.
+struct MapPanelDrag {
+    private(set) var origin: CGFloat?
+    private(set) var height: CGFloat?
+    mutating func update(distance: CGFloat, presentedHeight: CGFloat, bounds: ClosedRange<CGFloat>) {
+        let start = origin ?? presentedHeight
+        let next = min(bounds.upperBound, max(bounds.lowerBound, start - distance))
+        // Rebase at the limits so reversing an overshoot responds immediately.
+        origin = next + distance
+        height = next
+    }
+    mutating func finish() { origin = nil; height = nil }
+}
+
+private final class MapPanelPresentation {
+    var height: CGFloat?
+}
+
 /// This panel belongs to the map, so the original system tab bar never moves or changes owners.
 /// Drag state stays here, keeping continuous gesture updates out of the map renderer.
 // Content stops at the tab-bar safe area, while the same sheet material continues
@@ -441,7 +459,8 @@ private struct PersistentMapPanel<Header: View, Content: View>: View {
     var flightDetail: Bool
     @ViewBuilder var header: () -> Header
     @ViewBuilder var content: () -> Content
-    @State private var translation: CGFloat = 0
+    @State private var drag = MapPanelDrag()
+    @State private var presentation = MapPanelPresentation()
     private var spring: Animation? { reduceMotion ? nil : .spring(response: 0.38, dampingFraction: 0.88) }
     var body: some View {
         GeometryReader { geo in
@@ -450,18 +469,21 @@ private struct PersistentMapPanel<Header: View, Content: View>: View {
             let compact = layout.compact
             let medium = layout.medium
             let resting = layout.height(for: detent)
-            let height = min(maximum, max(compact, resting - translation))
+            let height = drag.height ?? resting
             let progress = layout.expansion(for: height)
             let shape = UnevenRoundedRectangle(topLeadingRadius: 30 - progress * 6, bottomLeadingRadius: 30 * (1 - progress), bottomTrailingRadius: 30 * (1 - progress), topTrailingRadius: 30 - progress * 6)
             let change: (CGFloat) -> Void = { distance in
                 // Follow the finger directly; only settling into a detent springs.
                 var transaction = Transaction(); transaction.disablesAnimations = true
-                withTransaction(transaction) { translation = distance }
+                withTransaction(transaction) {
+                    drag.update(distance: distance, presentedHeight: presentation.height ?? resting, bounds: compact...maximum)
+                }
             }
             let end: (CGFloat, CGFloat) -> Void = { distance, velocity in
-                let projected = resting - distance - velocity * 0.18
+                guard let draggedHeight = drag.height else { return }
+                let projected = draggedHeight - velocity * 0.18
                 let target = [compact, medium, maximum].min(by: { abs($0 - projected) < abs($1 - projected) }) ?? compact
-                withAnimation(spring) { translation = 0; detent = target == maximum ? .large : target == medium ? .medium : .height(260) }
+                withAnimation(spring) { drag.finish(); detent = target == maximum ? .large : target == medium ? .medium : .height(260) }
             }
             VStack(spacing: 0) {
                 VStack(spacing: 0) {
@@ -469,7 +491,7 @@ private struct PersistentMapPanel<Header: View, Content: View>: View {
                         .accessibilityIdentifier("map-panel-handle").accessibilityLabel("Map panel height").accessibilityAdjustableAction { direction in withAnimation(spring) { detent = direction == .increment ? .large : .height(260) } }
                     header()
                 }.contentShape(Rectangle()).simultaneousGesture(DragGesture(minimumDistance: 8, coordinateSpace: .global)
-                    .onChanged { value in if abs(value.translation.height) > abs(value.translation.width) { change(value.translation.height) } }
+                    .onChanged { value in if drag.height != nil || abs(value.translation.height) > abs(value.translation.width) { change(value.translation.height) } }
                     .onEnded { value in end(value.translation.height, value.velocity.height) })
                 // Keep one scroll view and one gesture bridge across sections. Replacing
                 // a scroll view inside a crossfade duplicates its scroll-edge material.
@@ -478,13 +500,13 @@ private struct PersistentMapPanel<Header: View, Content: View>: View {
                         VStack(spacing: 0) {
                             Color.clear.frame(height: 0).id("map-panel-top")
                             content()
-                        }.background(MapScrollBridge(expanded: detent == .large, onDrag: change, onEnd: end).frame(width: 0, height: 0))
-                    }.scrollDismissesKeyboard(.interactively).scrollBounceBehavior(.always)
+                        }.background(MapScrollBridge(expanded: detent == .large, sheetDragging: drag.height != nil, contentID: contentID, onDrag: change, onEnd: end).frame(width: 0, height: 0))
+                    }.scrollDismissesKeyboard(.interactively)
                         .accessibilityIdentifier("map-panel-scroll")
                         .onChange(of: contentID) {
                             var transaction = Transaction(); transaction.disablesAnimations = true
                             withTransaction(transaction) {
-                                translation = 0
+                                drag.finish()
                                 proxy.scrollTo("map-panel-top", anchor: .top)
                             }
                         }
@@ -494,6 +516,7 @@ private struct PersistentMapPanel<Header: View, Content: View>: View {
             // changes during dragging, avoiding per-frame layout of long details.
             .frame(height: maximum, alignment: .top)
             .frame(height: height, alignment: .top)
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { presentation.height = $0 }
             .clipShape(.rect(topLeadingRadius: 30 - progress * 6, topTrailingRadius: 30 - progress * 6))
             .background(alignment: .top) {
                 // A large refractive glass surface distorts moving map tiles.
@@ -507,7 +530,6 @@ private struct PersistentMapPanel<Header: View, Content: View>: View {
             // The surface expands to the edges while content keeps stable side insets.
             .padding(.horizontal, 12)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-            .animation(spring, value: detent)
         }
     }
 }
@@ -517,13 +539,15 @@ private struct PersistentMapPanel<Header: View, Content: View>: View {
 // until a downward pull reaches the top. Buttons retain native cancellation behavior.
 private struct MapScrollBridge: UIViewRepresentable {
     var expanded: Bool
+    var sheetDragging: Bool
+    var contentID: String
     var onDrag: (CGFloat) -> Void
     var onEnd: (CGFloat, CGFloat) -> Void
     func makeCoordinator() -> Coordinator { Coordinator(parent: self) }
     func makeUIView(context: Context) -> Probe {
         let probe = Probe(); probe.attach = { [weak coordinator = context.coordinator] view in coordinator?.attach(from: view) }; return probe
     }
-    func updateUIView(_ view: Probe, context: Context) { context.coordinator.parent = self }
+    func updateUIView(_ view: Probe, context: Context) { context.coordinator.update(self) }
     static func dismantleUIView(_ view: Probe, coordinator: Coordinator) { coordinator.detach() }
     final class Probe: UIView {
         var attach: ((UIView) -> Void)?
@@ -536,7 +560,41 @@ private struct MapScrollBridge: UIViewRepresentable {
         private var movingSheet = false
         private var finishedSheetPan = false
         private var origin: CGFloat = 0
+        private var heldOffset: CGFloat?
+        private var pinning = false
         init(parent: MapScrollBridge) { self.parent = parent }
+        private var holdsContent: Bool { movingSheet || finishedSheetPan || !parent.expanded || parent.sheetDragging }
+        func update(_ parent: MapScrollBridge) {
+            let contentChanged = self.parent.contentID != parent.contentID
+            self.parent = parent
+            guard let scroll else { return }
+            if parent.sheetDragging { finishedSheetPan = false }
+            if contentChanged {
+                movingSheet = false; finishedSheetPan = false; origin = 0
+                heldOffset = -scroll.adjustedContentInset.top
+                scroll.setContentOffset(CGPoint(x: 0, y: -scroll.adjustedContentInset.top), animated: false)
+            }
+            if holdsContent {
+                if heldOffset == nil {
+                    heldOffset = max(-scroll.adjustedContentInset.top, scroll.contentOffset.y)
+                    // Stop an existing fling once, before a header drag takes over.
+                    if scroll.isDecelerating { scroll.setContentOffset(scroll.contentOffset, animated: false) }
+                }
+                pinContent(scroll)
+            } else { heldOffset = nil }
+            // Keep the native pan available even when a short list fits the
+            // expanded viewport. Pinning absorbs bounce while the sheet owns it.
+            scroll.bounces = true
+        }
+        private func pinContent(_ scroll: UIScrollView) {
+            guard holdsContent, !pinning else { return }
+            let offset = heldOffset ?? max(-scroll.adjustedContentInset.top, scroll.contentOffset.y)
+            heldOffset = offset
+            guard abs(scroll.contentOffset.y - offset) > 0.1 else { return }
+            pinning = true
+            scroll.contentOffset.y = offset
+            pinning = false
+        }
         func attach(from view: UIView) {
             var ancestor = view.superview
             while let current = ancestor {
@@ -545,18 +603,20 @@ private struct MapScrollBridge: UIViewRepresentable {
                     candidate.alwaysBounceVertical = true
                     candidate.panGestureRecognizer.addTarget(self, action: #selector(pan(_:)))
                     observation = candidate.observe(\.contentOffset, options: [.new]) { [weak self] scroll, _ in
-                        guard let self, scroll.isDragging || scroll.isDecelerating else { return }
-                        if self.movingSheet || self.finishedSheetPan || !self.parent.expanded {
-                            let top = -scroll.adjustedContentInset.top
-                            if abs(scroll.contentOffset.y - top) > 0.1 { scroll.contentOffset.y = top }
-                        }
+                        self?.pinContent(scroll)
                     }
+                    update(parent)
                     return
                 }
                 ancestor = current.superview
             }
         }
-        func detach() { observation = nil; scroll?.panGestureRecognizer.removeTarget(self, action: #selector(pan(_:))); scroll = nil }
+        func detach() {
+            observation = nil
+            scroll?.panGestureRecognizer.removeTarget(self, action: #selector(pan(_:)))
+            scroll?.bounces = true
+            scroll = nil; heldOffset = nil; movingSheet = false; finishedSheetPan = false
+        }
         @objc private func pan(_ gesture: UIPanGestureRecognizer) {
             guard let scroll else { return }
             let dy = gesture.translation(in: scroll.window).y
@@ -564,12 +624,29 @@ private struct MapScrollBridge: UIViewRepresentable {
             let top = -scroll.adjustedContentInset.top
             switch gesture.state {
             case .began:
-                finishedSheetPan = false; origin = 0; movingSheet = !parent.expanded || (scroll.contentOffset.y <= top + 1 && velocity.y > 0)
+                finishedSheetPan = false; origin = 0
+                movingSheet = !parent.expanded || (scroll.contentOffset.y <= top + 1 && velocity.y > 0)
+                heldOffset = movingSheet ? max(top, scroll.contentOffset.y) : nil
+                update(parent)
             case .changed:
-                if !movingSheet && scroll.contentOffset.y <= top + 1 && velocity.y > 0 { movingSheet = true; origin = dy }
-                if movingSheet { scroll.contentOffset.y = top; parent.onDrag(dy - origin) }
+                if !movingSheet && scroll.contentOffset.y <= top + 1 && velocity.y > 0 {
+                    movingSheet = true; origin = dy; heldOffset = top
+                    update(parent)
+                }
+                if movingSheet { pinContent(scroll); parent.onDrag(dy - origin) }
             case .ended, .cancelled:
-                if movingSheet { finishedSheetPan = true; scroll.setContentOffset(CGPoint(x: 0, y: top), animated: false); parent.onEnd(dy - origin, gesture.state == .cancelled ? 0 : velocity.y) }
+                if movingSheet {
+                    finishedSheetPan = true
+                    pinContent(scroll)
+                    parent.onEnd(dy - origin, gesture.state == .cancelled ? 0 : velocity.y)
+                    // UIScrollView decides its deceleration after pan targets run.
+                    // Cancel that unused momentum on the next turn, after ownership
+                    // has gone to the sheet spring, rather than fighting each frame.
+                    DispatchQueue.main.async { [weak self] in
+                        guard let self, self.finishedSheetPan, let scroll = self.scroll, let offset = self.heldOffset else { return }
+                        scroll.setContentOffset(CGPoint(x: scroll.contentOffset.x, y: offset), animated: false)
+                    }
+                }
                 movingSheet = false
             default: break
             }

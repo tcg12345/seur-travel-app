@@ -420,3 +420,10 @@ The SwiftUI source uses native iOS 26 Liquid Glass APIs and system controls. The
 - One native timetable unit test and one terminal-driven UI flow passed with zero failures, covering stage order, taxi calculations/missing values, local times, field round trips, timetable navigation, performance disclosure and returning to Flights. Ten Supabase contract tests and seven Python flight-provider tests passed. No browser or manual screenshots were used.
 - Deployed travel-api; remote source verification confirmed both runway-estimate fields, and the status endpoint returned valid JSON. Verification did not request paid flight data.
 - Final signed iPhone build succeeded and installed successfully on Tyler’s connected iPhone 16 Pro. Map sheet geometry and gesture implementation were unchanged.
+
+## Map sheet gesture handoff refinement — September 7, 2026
+
+- Sheet drags now anchor to measured visible height instead of the previous detent target. Drag limits rebase immediately when reversing direction; horizontal header gestures no longer trigger a detent change. Removed the blanket detent animation in favor of explicit settling animations.
+- The scroll bridge holds the current content position during resizing and cancels unused scroll momentum after the sheet takes ownership. Section/detail navigation resets its scroll state deliberately. Native vertical pans remain enabled for short content; an initial attempt to disable bounce blocked short-list expansion and was corrected before installation.
+- Final terminal test run passed all four targeted checks: interrupted-drag/boundary state coverage, expanding/collapsing through short-list content, preserving scrolled flight detail position across header resizing, and stable map camera/viewport/tab-bar position across all three map sections. No browser or screenshot review was used. These checks verify gesture behavior and geometry, not physical-device frame-rate performance.
+- Final signed iPhone build succeeded and installed on Tyler’s connected iPhone 16 Pro. No backend or paid provider requests were introduced.

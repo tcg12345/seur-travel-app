@@ -624,6 +624,26 @@ import MapKit
             XCTAssertLessThan(layout.medium, layout.maximum)
         }
     }
+    func testMapPanelDragRebasesInterruptedSettlingAndOvershoot() {
+        var drag = MapPanelDrag()
+        // The old target can be 752 while its visible spring is still at 510.
+        drag.update(distance: 12, presentedHeight: 510, bounds: 260...752)
+        XCTAssertEqual(drag.height, 498)
+        drag.update(distance: 32, presentedHeight: 498, bounds: 260...752)
+        XCTAssertEqual(drag.height, 478)
+        drag.update(distance: -500, presentedHeight: 478, bounds: 260...752)
+        XCTAssertEqual(drag.height, 752)
+        drag.update(distance: -490, presentedHeight: 752, bounds: 260...752)
+        XCTAssertEqual(drag.height, 742, "Reversal must respond without crossing the overshoot again")
+        drag.update(distance: 600, presentedHeight: 742, bounds: 260...752)
+        XCTAssertEqual(drag.height, 260)
+        drag.update(distance: 590, presentedHeight: 260, bounds: 260...752)
+        XCTAssertEqual(drag.height, 270)
+        drag.finish()
+        XCTAssertNil(drag.height); XCTAssertNil(drag.origin)
+        drag.update(distance: -20, presentedHeight: 340, bounds: 260...752)
+        XCTAssertEqual(drag.height, 360)
+    }
     func testDetailedFlightTimetableUsesRealStagesAndSafeTaxiDurations() throws {
         var flight = FlightMapFixtures.snapshot
         flight.scheduledOff = "2026-09-06T22:10:00Z"; flight.estimatedOff = "2026-09-06T22:57:00Z"
