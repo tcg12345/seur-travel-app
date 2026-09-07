@@ -1,0 +1,138 @@
+# Validation — September 5, 2026
+
+- Xcode 26.6; iOS 26.5 SDK.
+- Native simulator build succeeded for iPhone 17 Pro (iOS 26.5).
+- Native Release build succeeded for physical iOS devices with code signing disabled. Physical-device installation and performance have not been tested.
+- All 6 XCTest unit tests passed: catalog integrity, search/sorting, saved-place persistence, itinerary persistence and validation, safe provider links/flight queries, and comparison limits.
+- All 4 XCUITest flows passed: hotel → save → plan → saved places → itinerary; catalog search and empty state; dining planning; invalid flight route.
+- The hotel-to-itinerary UI test was repeated and passed after the final detail-screen layout adjustment.
+- Native screenshots were inspected for Discover (light/dark), hotel details, stay planning, and dining planning. Screenshots and a 16-second simulator walkthrough are in `Preview/` in the working directory.
+- Native glass and system transitions were exercised in Simulator. Frame-rate and haptic output have not been measured on physical hardware.
+- Booking-provider payments, live inventory, and reservation confirmation are external to the app and were not exercised by tests.
+
+The SwiftUI source uses native iOS 26 Liquid Glass APIs and system controls. The app itself is not rendered in a web view. SFSafariViewController is used only when opening booking providers or source pages.
+
+## Concierge update
+
+- Simulator build and selected test run passed: all 9 unit tests plus the new concierge UI test.
+- Concierge tests verify actual catalog IDs/city/cuisine matching, contextual follow-up, reservation limitations, real itinerary summaries, flight handoff, empty input, duplicate-submit prevention, and cancellation on reset.
+- Native UI test verifies opening Concierge, sending a suggested prompt, navigating a recommended hotel, sending a typed city follow-up, preserving messages across tabs, and clearing the conversation.
+- Welcome and recommendation screenshots were visually inspected in the iPhone 17 Pro simulator.
+- After the final recommendation and layout refinements, the contextual matching unit test and full concierge UI flow were rerun and passed.
+
+## Restaurant detail update
+
+- Full restaurant pages open through native push navigation from hotel dining rows, comparison lists and saved restaurants.
+- Simulator build and physical-device Release build both succeeded; device build used code signing disabled.
+- All 11 unit tests and both selected restaurant UI tests passed with zero failures.
+- New coverage verifies restaurant identifiers are scoped by hotel, bookmarks and private ratings/notes persist, clearing notes works, the contextual concierge uses the selected venue, dining plans can be added from the detail page, and saved restaurants reopen after relaunch.
+- All 5,755 catalog restaurant identifiers were checked for uniqueness.
+- Detail and scrolled visit/location screenshots were visually reviewed on iPhone 17 Pro, iOS 26.5. Preview files: `10-restaurant-detail.png`, `11-restaurant-visit-location.png`, and `06-dining-planner.png`.
+- Restaurant photographs, public ratings, live opening hours, phone numbers and map coordinates are absent from the starter catalog. Hotel exterior imagery is explicitly labeled; Apple Maps uses a place search. No live table booking is performed.
+
+## Travel workspace — September 6, 2026
+
+- Full signed iPhone 17 Pro / iOS 26.5 test run passed: **21 unit tests and 9 UI tests, zero failures**. The final build also passed after refining local-save error reporting and clearing stale map coordinates when airport text is edited.
+- New model tests cover calendar boundaries, multi-city schedules, repeated-day events, currency-separated totals, itinerary-to-journal imports, map coordinates including airports, persistent reload, corrupt-file preservation, invalid JSON imports, score validation, CSV escaping/formula protection and long multipage PDF exports.
+- New UI flows cover itinerary creation, events on multiple days, agenda/calendar navigation, saving personal ratings and native account registration against the isolated local backend. Account sessions use Keychain and require an ad-hoc-signed simulator build.
+- Backend suite passed: **16 tests**, covering authentication, ownership, friend requests, groups, direct sharing, redacted booking details, revocable links, private/public transitions, stale-copy conflicts, validation, escaped shared pages, unavailable providers and AI candidate-ID constraints.
+- Native dashboard, agenda, calendar, rating editor, trip journal and account screenshots were inspected. Read-only shared-trip HTML was visually checked at desktop and iPhone width. Browser QA used synthetic test accounts and a separate temporary database.
+- Simulator and physical-device Release builds succeeded. Physical-device installation, performance and production hosting have not been tested.
+- Tripadvisor and OpenAI adapters use server-side credentials. No keys were supplied/configured and no live paid-provider request was exercised. Apple Maps handles native city/airport/place lookup without Amadeus; flight comparison opens Google Flights and transfers search-route details to a manual booking-record form.
+- The local development backend runs at `http://localhost:8787`. Public links remain unavailable until an HTTPS backend URL is deployed and configured. Cloud copies are explicit uploads; downloads/imports create separate private copies.
+- Source archives exclude credentials, local databases, test accounts, build products and Xcode user settings.
+
+## Onboarding and Reserve preview — September 6, 2026
+
+- Final selected test run passed: **24 unit tests and 5 UI tests, zero failures**. UI coverage includes full personalization, mid-flow relaunch, back navigation, monthly preview selection, cancellation, confirmation, restoration, editing preferences, skipping without membership and largest accessibility text size. Existing Discover/stay planning and Travel/repeated-day itinerary flows also passed.
+- First regression attempt encountered two simulator interaction failures. The final combined run passed both flows after allowing native transitions to settle before screenshot capture.
+- Welcome, interests, cuisines, destinations, membership choices, confirmation, success and accessibility screenshots were reviewed. The welcome image fills the safe areas and both plans are visible before benefits on a standard iPhone viewport.
+- Simulator and physical-iPhone Release builds succeeded. No real device installation or App Store purchase was performed.
+- Onboarding and membership preview require no API keys or server. No StoreKit/payment code is connected. Confirming a plan only saves a local preview; skipping leaves all current features available.
+- Final screenshots are in `Preview/21-onboarding-welcome.png` through `Preview/30-preferences-accessibility-text.png`. Source packages include `Onboarding.md` and the three new native onboarding files.
+
+## Location autocomplete — September 6, 2026
+
+- Final run passed: **28 unit tests and 6 UI tests, zero failures**. Coverage includes debounce cancellation, changing/clearing queries, local country/time-zone matching, selection metadata, trip destination persistence, itinerary country filling, flight airports, rated-place addresses and existing repeated-day event entry.
+- A live Apple Maps UI test successfully typed Paris, displayed geographically distinct suggestions, selected Paris, France and resolved the field. This live test requires internet access. Other dedicated selection tests use explicit DEBUG-only fixtures in the isolated UI-test launch mode; fixtures are unavailable in Release builds.
+- An initial test caught duplicate TextField binding writes clearing the newly selected country's value. Ignoring unchanged writes fixed this; the final stop, place and flight selection flows passed.
+- Screenshots of the live suggestions, resolved destination, itinerary stop and place details were reviewed. The fields preserve manual input when suggestions fail and cancel requests on blur/disappearance.
+- Simulator and physical-iPhone Release builds succeeded. The native autocomplete requires no Amadeus key, backend key or device location permission. Tripadvisor's debounced provider search remains dependent on backend configuration.
+
+## Expanded itinerary events — September 6, 2026
+
+- Added 16 selectable itinerary item types with native grouped cards, plus existing hotel/flight records and AI ideas.
+- 31 iOS unit tests passed, including legacy JSON decoding, venue-free meeting persistence, repeated occurrences, overnight timing, all-day ordering, validation, trip-import exclusions, map titles, and all four exports (`/tmp/aurum-events-tests.xcresult`).
+- The existing restaurant/repeated-day UI regression passed in that run. The new meeting/custom-event UI test passed in `/tmp/aurum-events-verified.xcresult`: create, duration, repeat, reopen, change one occurrence to all-day, custom event, and persistence after relaunch. Initial UI automation required corrections to target the switch thumb and scroll to lazy-grid items before reading their frames.
+- 18 backend tests passed, including new event roundtrip, read-only shared HTML with escaped title/guests, all-day/overnight rendering and invalid event details.
+- Final simulator and physical-iPhone Release builds succeeded. Preview screenshots 38–42 were exported and reviewed.
+- The local backend was restarted and its status endpoint responded. External API keys and a public sharing host are still unconfigured; this change does not activate those integrations.
+
+## Unified trips — September 6, 2026
+
+- Travel now has one Trips list. Each record provides Plan and Journal sections with all event, route, hotel/flight, AI, rating, photo, map, filtering, import, export and sharing tools available.
+- Existing itinerary/trip tags remain readable without rewriting the library on load. Saving preserves IDs and every content/audience field while adopting the unified journey tag. Routes are optional until scheduling events.
+- 34 iOS unit tests passed in `/tmp/aurum-unified-tests.xcresult`, including legacy record preservation, mixed plan/journal exports for every legacy kind, combined maps and additive journal import without overwriting ratings/photos.
+- Five UI flows passed across `/tmp/aurum-unified-tests.xcresult` and `/tmp/aurum-unified-verified.xcresult`: custom meetings, repeated restaurant plans, destination autocomplete, personal ratings and one combined trip from journal entry through route/dinner planning and reload. The combined test needed explicit keyboard readiness and scrolling to offscreen lazy-grid journal cards; saved data was correct throughout those UI-test adjustments.
+- 20 backend tests passed, including unified/legacy records containing both plans and ratings, public access/redaction, combined read-only HTML, and starting without a route before adding events.
+- Simulator and physical-iPhone Release builds succeeded. Screenshots 43–45 were exported and visually reviewed. Local backend restarted successfully; external provider keys and public hosting remain unconfigured.
+
+## Simplified Create Trip — September 6, 2026
+
+- Creation asks only for a destination with autocomplete, departure date and return date. No title/description inputs, optional-dates toggle, timing mode, night count or route management section appears during creation.
+- A destination-based name and dated first route stop are generated automatically, including selected country and map coordinates. Return dates remain after departure and within the existing 365-night route limit. Full trip editing remains available after creation.
+- The isolated UI test passed in `/tmp/aurum-simple-create-complete.xcresult`: required location, minimal inputs, autocomplete selection, creation, automatic route, generated title and saved country in the route editor. The existing repeated-day event flow also passed in `/tmp/aurum-simple-create.xcresult`.
+- Initial UI runs required scoping route text to the editor and correcting accessibility assertions; an isolated simulator was used for final verification. Screenshots 46–47 were exported and the minimal form visually reviewed.
+- Simulator and physical-iPhone Release builds succeeded. Existing data models and backend were unchanged.
+
+## Working add-to-trip flow and Google Places — September 6, 2026
+
+- Replaced the chooser-to-sibling-sheet handoff with a mounted chooser that owns its editor sheet. All 19 add options opened successfully; Save returns to the trip and Cancel returns to the chooser. Hotels/flights are first in the menu, saved bookings appear before agenda events, and bookings count toward total plans.
+- Existing trips with destination/dates but no route now prepare their first stop from those saved choices. Undated trips receive a minimal location/date step and resume their originally selected editor. Both paths passed UI tests without losing existing records.
+- **37 iOS unit tests passed** in `/tmp/aurum-add-legacy-verified.xcresult`, including all event kinds saved/reloaded with mapped venues, legacy-route preparation, stale Google autocomplete response cancellation and existing travel regressions.
+- **Six distinct UI flows passed** across `/tmp/aurum-add-verification.xcresult` and `/tmp/aurum-add-legacy-verified.xcresult`: every add option, saved hotel/restaurant/activity/meeting/flight records and map after relaunch, live Google suggestions with Apple location resolution, repeated/custom event editing, and the two legacy route cases.
+- **22 backend tests passed**, covering autocomplete authentication, direct-loopback development access, rate limits, input validation, normalization and secret handling alongside existing accounts/sharing tests. Request-scoped SQLite connections now close deterministically; Google requests use a short timeout and native autocomplete falls back to Apple Maps on failure.
+- The supplied Google credential lives only in ignored `backend/.env`. Google predictions are displayed with attribution without a map; the selected query is independently resolved in Apple Maps for saved details and native map coordinates. Live Savoy search and resolution succeeded. Tripadvisor/AI keys and public hosting remain unconfigured.
+- Final iPhone Release compilation succeeded. Visuals of the add menu, hotel form, autocomplete and saved map were inspected. UI fixtures intentionally use shared coordinates; live search verification uses real provider results.
+- Final live hotel search/save/map verification also passed in `/tmp/aurum-add-final-live.xcresult` after the layout refinements. Preview files 48–54 document the new flow.
+- Single-place maps start at neighborhood scale and refresh their camera when mapped records change; users can still zoom freely.
+- The final neighborhood map was visually rechecked after the passing live UI test in `/tmp/aurum-add-map-polish.xcresult`.
+
+## Secondary place-search popup — September 6, 2026
+
+- Reproduced the reported auto-dismissal by tapping “Find a restaurant or place” in `/tmp/aurum-search-sheet-repro.xcresult`; the popup disappeared before its query field could be used. Earlier autocomplete coverage exercised the inline field, not this secondary button.
+- Moved the search state and sheet ownership out of the reusable Form section to each editor’s NavigationStack. Restaurants/activities, hotel bookings and journal places share the same root-level presenter and retain their category when applying a selection.
+- Flight search and both airport-search popups passed their new regression in `/tmp/aurum-search-sheet-fixed.xcresult`. The first extended place test needed its scrolling corrected to return to an offscreen search row after selecting another day; that was a test-navigation failure before opening search.
+- Physical-iPhone Release compilation passed. No backend, provider credentials, persistence model or booking behavior changed.
+- The final four-form place-popup test passed in `/tmp/aurum-search-sheet-verified.xcresult`: popup remains visible, autocomplete selection fills the draft and map coordinates, reopen/cancel retains the selection, an extra selected event day is preserved, and restaurant/hotel/activity/journal records save successfully. Preview 55 shows the stable popup.
+
+## Worldwide city exploration — September 6, 2026
+
+- Added unrestricted city autocomplete and individual city guides, thirteen interests, live place searches, list/map views, sorting, website/saved filters, wider-area searches, local city/place bookmarks and trip integration. The twelve CSV cities remain optional shortcuts with prominent hotel dining collections.
+- **43 iOS unit tests passed** in `/tmp/aurum-city-verified.xcresult`, including geography-aware CSV matching, catalog metadata, persistent bookmarks synchronized with legacy restaurant favorites, partial provider failures, cache reuse, stale-response rejection, filters and every place category preserving trip map coordinates.
+- The live non-catalog Lisbon test passed in that run: actual Apple Maps city suggestions, 25 museum results, a real museum detail page and contact/map information. A direct MapKit probe identified combined category phrases as no-match errors; short category queries scoped to the selected city fixed live browsing. No-match responses now show an empty state rather than a network failure.
+- The city map/saved-filter/search-empty-state UI flow passed in `/tmp/aurum-city-complete.xcresult`. Initial assertions needed to target the correct accessibility element and native search presentation. The collection and saved lists now use always-visible inline search fields, avoiding hidden search controls in this navigation context. Collection identifiers are applied to the heading rather than inherited by every child button.
+- The final physical-iPhone Release build passed in `/tmp/aurum-city-release-final.log`. Existing Swift 6 migration warnings in onboarding remain; the project uses Swift 5 language mode. No physical-device installation was performed.
+- Live provider coverage is not exhaustive. The CSV does not contain restaurant coordinates; independent exact-hotel resolution supplies hotel-address pins where available. Unresolved addresses are disclosed and not assigned invented pins. Public ratings, opening hours, imagery and prices are shown only when present in source data.
+- No backend schema, credentials, payment or supplier-booking integration changed. City exploration uses native MapKit without an API key or location permission. Source archives exclude `.env`, databases, test data and build products.
+- The final dining collection and complete save/plan/hotel/journal UI tests both passed in `/tmp/aurum-city-delivery.xcresult`. The collection was searched by hotel, a restaurant was opened/bookmarked, and a non-catalog discovery was saved, scheduled, rated and reloaded alongside a hotel stay. The saved trip map retained the discovery. Across the final successful runs, **four distinct city UI flows passed**.
+- Preview screenshots 56–62 cover the worldwide guide, Paris dining collection, discovery details, saved collection, real Lisbon museums and map/saved filters. The regular simulator build is installed without UI-test flags; existing user data is preserved.
+
+## Globe, flight information and persistent map panel — September 6, 2026
+
+- Map replaces Saved in the original system tab bar. The top bookmark keeps existing saved collections accessible. The map supports worldwide discovery, trip locations, great-circle flight routes and flight details.
+- The final map panel is integrated into the page, behind the original tab bar. It does not present a second navigation bar or hide/recreate the original one. Tab-bar minimization is disabled for consistent positioning. Entering Map resets the panel to its compact position without an entrance animation.
+- Drag state is isolated from the map renderer and uses global gesture coordinates to prevent feedback as the panel moves. Compact glass, intermediate and full-width opaque layouts use spring settling and honor Reduce Motion. Scrolling is native; resizing uses the handle/header or chevron.
+- **46 iOS unit tests passed** in `/tmp/aurum-map-native-complete.xcresult`, including airport-local times, unknown delay values, valid/date-line routes and clearing prior-flight position/history. **29 backend tests passed** in `/tmp/aurum-map-backend-final.log`, including normalized responses, caching, history entitlement, date validation and endpoint authentication.
+- The final flight and navigation UI flows passed in `/tmp/aurum-map-navigation-verified.xcresult`: flight selection/details/history, trip selection, Saved navigation, expansion/collapse, unchanged original tab-bar height, switching to Travel and back, header dragging and closing the panel. Frame checks read actual CGRect values rather than unsupported predicate key paths.
+- The final city UI flow passed in `/tmp/aurum-map-city-final.xcresult`: start typing in the compact panel, automatic expansion, autocomplete selection and opening the city guide. Across these runs, three distinct Map UI flows passed.
+- Final physical-iPhone Release compilation passed in `/tmp/aurum-map-release-delivery.log`. Screenshots were inspected for the globe, both route endpoints, flight information/history and compact/expanded/dragged panels. This is simulator interaction validation, not physical-device frame-rate profiling.
+- At the time of the Map UI validation, FlightAware was not configured. Status, history and position adapters were fixture-tested; normal launches showed saved schedules and explained unavailable live data. See the subsequent live connection check below. No APNs/Live Activities service is implemented.
+- A fresh normal Debug build passed in `/tmp/aurum-map-simulator-delivery.log` and was installed/launched on the user's iPhone 17 Pro iOS 26.5 simulator (`5420F443-F08A-4876-87F1-117B659584D0`) without test flags or test plugins. Existing app data was preserved. The temporary Globe QA simulator was deleted; other simulators were left intact. Updated source archives pass ZIP integrity checks and exclude `.env`, databases and build products.
+
+## FlightAware connection and saved booking direction — September 6, 2026
+
+- Saved the user's intention to continue native booking and detailed cabin-product comparisons in `FlightBookingRoadmap.md`. No native ticketing or real payment flow was added in this step.
+- Configured the supplied FlightAware credential in the ignored, mode-0600 local backend `.env` and restarted the local development server. Credentials are not embedded in iOS source or committed to Git.
+- `/v1/status` reports flight tracking enabled and history disabled. One bounded current-date BA178 lookup through `/v1/flights/status` returned a real JFK–LHR flight record, including scheduled departure, estimated arrival and B772 aircraft type. This validates the credential and status integration; live position, history entitlements and commercial-use permissions have not been verified. No historical query was made.
+- All **29 backend tests passed** again with `python3 -m unittest discover -s backend -p 'test_*.py' -v`. This step changes backend configuration and documentation; the previously validated native binary remains installed.

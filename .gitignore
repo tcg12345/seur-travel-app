@@ -38,3 +38,11 @@ next-env.d.ts
 /work/
 
 *.tsbuildinfo
+
+# Xcode local output
+DerivedData/
+*.xcuserstate
+xcuserdata/
+*.xcresult/
+iOS/Preview/
+iOS/Distribution/

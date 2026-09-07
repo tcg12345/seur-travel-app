@@ -1,5 +1,15 @@
 # Aurum
 
+The native **iOS 26 SwiftUI app** is now in [`iOS/`](iOS/README.md). Open `iOS/Aurum.xcodeproj` in Xcode. It uses Apple Liquid Glass, native zoom navigation, haptic feedback, and the bundled hotel/dining catalog.
+
+The native app includes unified trip planning and journals, worldwide city discovery, a globe with trip and flight routes, and optional live FlightAware tracking. The [Python backend](backend/README.md) supports accounts, friends, cloud sharing and server-side provider integrations. Keys and local databases are excluded from Git; configure your own server environment from `backend/.env.example`.
+
+The user wants to continue developing native flight booking with detailed cabin comparisons and seat photos. The agreed direction, provider candidates and next steps are saved in the [flight booking roadmap](iOS/FlightBookingRoadmap.md). Real ticketing and subscription payments are not enabled.
+
+See [iOS validation](iOS/Validation.md) for build and test evidence. The earlier web version is retained below as a separate implementation; the following features and boundaries describe that web version.
+
+## Earlier web app
+
 A responsive luxury travel discovery app centered on hotel dining. Built with React, Vinext, TypeScript, and the Sites runtime.
 
 ## Included

@@ -1,0 +1,36 @@
+# Your world — Map
+
+Map replaces the Saved tab. The globe connects worldwide city discovery, saved trips, and flight booking records. The bookmark at the top opens all existing saved collections.
+
+## Using the map
+
+- Spin and zoom the native Apple Maps globe. The display menu switches between satellite globe and standard map, or resets the camera.
+- Explore: search any city, open its guide, choose an interest, or search around the current map center. Found places can be saved or added to an existing trip.
+- Trips: choose a trip to see its mapped destinations, plans, hotel stays, airports and journal places. Open the full trip from its card.
+- Flights: view saved flights and their direct great-circle airport routes, then tap a card or airport marker for details. Lines represent planned routes, not actual tracks. Invalid or missing coordinates are never replaced by invented positions.
+- The map panel starts at the bottom edge behind the original system navigation bar, floats inset at its compact height, and expands through medium to full height. Drag its handle/header or use the chevron. The original navigation bar stays in place; switching tabs requires no sheet dismissal or replacement bar. Map opens with the panel already lowered, without an entrance animation. You can also close the sheet and use “Explore your world” to reopen it. The exposed map remains interactive. The panel uses native Liquid Glass and scrolling, with isolated drag state and spring settling; it is an integrated panel rather than a modal sheet.
+
+## Flight information
+
+Saved schedules and booking details work without a provider. The connected view supports scheduled, estimated and actual departure/arrival times; delays; cancellation/diversion status; gates and terminals; baggage claim; aircraft type and registration; a requested aircraft position; and a recent completed-flight delay sample. Missing provider fields stay unavailable. Airport times use their local time zones.
+
+Status refreshes every 90 seconds while the flight detail view is active in the foreground, with a manual refresh button. Position and history load on request. The backend caches status/position for 60 seconds and history for an hour. Cache timestamps reflect the actual provider fetch. Multiple departures returned for the same flight number require selecting the correct leg.
+
+### Required connection
+
+1. Obtain a FlightAware AeroAPI v4 account/key with permission for your intended use.
+2. Put `FLIGHTAWARE_API_KEY=...` in the ignored `backend/.env`, or your deployed server's secret environment. Never put it in the iOS app.
+3. If the plan includes historical queries, set `FLIGHTAWARE_HISTORY_ENABLED=true`.
+4. Restart the backend. For a physical iPhone, deploy it behind HTTPS and configure its URL in Travel → Account. Remote requests require an Aurum account session.
+
+The supplied API key is configured in the ignored local backend environment. A live BA178 status lookup through the backend succeeded on September 6, 2026 (local time), returning JFK–LHR, scheduled departure, estimated arrival and aircraft type. History remains disabled pending confirmation of account entitlements; live position and historical coverage have not been verified. A deployed backend needs its own secret configuration. Development UI fixtures are explicitly labeled and only enabled by paired UI-test flags; normal launches and Release builds do not show them.
+
+As checked September 6, 2026, AeroAPI Personal is limited to personal/academic use. Standard supports commercial consumer apps and historical data with a $100 monthly minimum and usage-based pricing. Premium lists Foresight predictive arrivals and a $1,000 monthly minimum and usage-based pricing. Confirm the current terms with [FlightAware AeroAPI](https://www.flightaware.com/commercial/aeroapi/) before subscribing; no plan has been purchased.
+
+### Scope and limits
+
+- Recent status queries cover the provider's near-term window. Far-future bookings retain saved schedules. Older dates and history need the appropriate entitlement.
+- History is a bounded sample from one provider page over up to seven preceding days, filtered to the selected route. Its on-time percentage is descriptive, not a delay prediction or complete lifetime history.
+- Provider-reported positions can be unavailable or stale; their timestamps are displayed. The app does not animate a guessed aircraft position.
+- This integration does not reproduce Flighty's proprietary predictions, monitor inbound aircraft chains, or implement background alerts, APNs or ActivityKit Live Activities. Those need additional implementation and appropriate provider/push services.
+- Maps require network access for imagery and discovery. Device performance and provider coverage vary.

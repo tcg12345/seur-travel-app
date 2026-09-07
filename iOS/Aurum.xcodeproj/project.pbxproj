@@ -1,0 +1,548 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		09DD320B78932A3F05280890 /* AurumTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A14D818E1437513932C4F421 /* AurumTests.swift */; };
+		289B9CFAF7CB01D447B414AD /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B2B4367B873474FE1C68712A /* Assets.xcassets */; };
+		5662376140F9D0F8AAB8A7A4 /* HotelDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B3E0A51725C543883C8532C /* HotelDetailView.swift */; };
+		8B6E688535F1D5539BF20232 /* AurumUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 338C060BE393E5932D0CE664 /* AurumUITests.swift */; };
+		8C6C64A5FA7FCD1367ADBDCB /* DesignSystem.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6A6ABC622C8A615B5E97F17 /* DesignSystem.swift */; };
+		9BA7778106424EA359EA9DC8 /* JourneysView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BAE6B937772308D1F0321F01 /* JourneysView.swift */; };
+		ADAD5C97CCEB378BCA5DA510 /* AurumApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0749CAC36E1330F48EB188EF /* AurumApp.swift */; };
+		C28E3B592A560C32484F497E /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B0C8FAFE1B09544C5912233 /* Models.swift */; };
+		D85A7146F885996C903E05C6 /* DiscoverView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B941FFDDBFA04FFC50847F9C /* DiscoverView.swift */; };
+		F95A3C1621A7EB44D12A6AE3 /* Resources/hotels.json in Resources */ = {isa = PBXBuildFile; fileRef = 1590ED954DF1DC4130655C2D /* Resources/hotels.json */; };
+		ACCC00000000000000000001 /* ConciergeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ACCC00000000000000000002 /* ConciergeView.swift */; };
+		ADDD00000000000000000001 /* RestaurantDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADDD00000000000000000002 /* RestaurantDetailView.swift */; };
+		00194D9641B7405F8697AEBB /* JourneyEditors.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED71E368AD0C9DF9B974CE5D /* JourneyEditors.swift */; };
+		838E710A134F7EC9D99C3B50 /* JourneyExporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABF820BB24D88FFFC319E7C4 /* JourneyExporter.swift */; };
+		4A0749638C12B58D3720E3A8 /* JourneyModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3DD524D72BA291CDFB3EE22 /* JourneyModels.swift */; };
+		92C688F9E381EE48AB871A83 /* TravelSearchViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BA695EA023C73F9137D23CA /* TravelSearchViews.swift */; };
+		B9EB3F10090B13AF70D9B66B /* TravelServices.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35EF526550BED1EC047737E1 /* TravelServices.swift */; };
+		F143A7B751A70AAA3AAE8C26 /* TravelSocialViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19252540FA5E304E7378258A /* TravelSocialViews.swift */; };
+		C8A40D988C9FC3F7F1EA24DF /* TravelViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 836A3CFEC5E2BE5AF3AB29DC /* TravelViews.swift */; };
+		AEFE00000000000000000002 /* JourneyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AEFE00000000000000000001 /* JourneyTests.swift */; };
+		0A188AE6033B645CEA0B28AD /* OnboardingState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BD9635E44F55FE5166EA77B /* OnboardingState.swift */; };
+		6E6434C18A018DB4A502A6AE /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 22F9BCD5A91D6B8F81C701D5 /* OnboardingView.swift */; };
+		F0E14DA1A030ADA7C754FFC9 /* MembershipPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5CE89CB3D626F339562EF553 /* MembershipPreviewView.swift */; };
+		A11C00000000000000000002 /* LocationAutocomplete.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11C00000000000000000001 /* LocationAutocomplete.swift */; };
+		CE2000000000000000000001 /* CityExploreModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE1000000000000000000001 /* CityExploreModels.swift */; };
+		CE2000000000000000000002 /* CityExploreViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE1000000000000000000002 /* CityExploreViews.swift */; };
+		FA2000000000000000000001 /* WorldMapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA1000000000000000000001; };
+		FA2000000000000000000002 /* FlightTracking.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA1000000000000000000002; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		1B275934A11783B80FE65589 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 98F54143AB4E86B28C3AFEE0 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = C13732C8E715C9BEE4FA51C9;
+			remoteInfo = Aurum;
+		};
+		7B7BF83B3F46E50A23F8470F /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 98F54143AB4E86B28C3AFEE0 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = C13732C8E715C9BEE4FA51C9;
+			remoteInfo = Aurum;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		0749CAC36E1330F48EB188EF /* AurumApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AurumApp.swift; sourceTree = "<group>"; };
+		1590ED954DF1DC4130655C2D /* Resources/hotels.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = Resources/hotels.json; sourceTree = "<group>"; };
+		1B0C8FAFE1B09544C5912233 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
+		338C060BE393E5932D0CE664 /* AurumUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AurumUITests.swift; sourceTree = "<group>"; };
+		3B3E0A51725C543883C8532C /* HotelDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotelDetailView.swift; sourceTree = "<group>"; };
+		8A6ED015D34B3A3BEC57D504 /* AurumUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; path = AurumUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		A14D818E1437513932C4F421 /* AurumTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AurumTests.swift; sourceTree = "<group>"; };
+		B2B4367B873474FE1C68712A /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		B941FFDDBFA04FFC50847F9C /* DiscoverView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoverView.swift; sourceTree = "<group>"; };
+		BAE6B937772308D1F0321F01 /* JourneysView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JourneysView.swift; sourceTree = "<group>"; };
+		C4095E227B53697430FABAA3 /* AurumTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; path = AurumTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		E6FC57C251E9E1BEC1D3C0D2 /* Aurum.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; path = Aurum.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		F6A6ABC622C8A615B5E97F17 /* DesignSystem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignSystem.swift; sourceTree = "<group>"; };
+		ACCC00000000000000000002 /* ConciergeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConciergeView.swift; sourceTree = "<group>"; };
+		ADDD00000000000000000002 /* RestaurantDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RestaurantDetailView.swift; sourceTree = "<group>"; };
+		ED71E368AD0C9DF9B974CE5D /* JourneyEditors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Travel/JourneyEditors.swift; sourceTree = "<group>"; };
+		ABF820BB24D88FFFC319E7C4 /* JourneyExporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Travel/JourneyExporter.swift; sourceTree = "<group>"; };
+		B3DD524D72BA291CDFB3EE22 /* JourneyModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Travel/JourneyModels.swift; sourceTree = "<group>"; };
+		1BA695EA023C73F9137D23CA /* TravelSearchViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Travel/TravelSearchViews.swift; sourceTree = "<group>"; };
+		35EF526550BED1EC047737E1 /* TravelServices.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Travel/TravelServices.swift; sourceTree = "<group>"; };
+		19252540FA5E304E7378258A /* TravelSocialViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Travel/TravelSocialViews.swift; sourceTree = "<group>"; };
+		836A3CFEC5E2BE5AF3AB29DC /* TravelViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Travel/TravelViews.swift; sourceTree = "<group>"; };
+		AEFE00000000000000000001 /* JourneyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JourneyTests.swift; sourceTree = "<group>"; };
+		1BD9635E44F55FE5166EA77B /* OnboardingState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Onboarding/OnboardingState.swift; sourceTree = "<group>"; };
+		22F9BCD5A91D6B8F81C701D5 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Onboarding/OnboardingView.swift; sourceTree = "<group>"; };
+		5CE89CB3D626F339562EF553 /* MembershipPreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Onboarding/MembershipPreviewView.swift; sourceTree = "<group>"; };
+		A11C00000000000000000001 /* LocationAutocomplete.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Travel/LocationAutocomplete.swift; sourceTree = "<group>"; };
+		CE1000000000000000000001 /* CityExploreModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Explore/CityExploreModels.swift; sourceTree = "<group>"; };
+		CE1000000000000000000002 /* CityExploreViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Explore/CityExploreViews.swift; sourceTree = "<group>"; };
+		FA1000000000000000000001 /* WorldMapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Map/WorldMapView.swift; sourceTree = "<group>"; };
+		FA1000000000000000000002 /* FlightTracking.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Map/FlightTracking.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		12384B5908BE5FE5B3301CEE /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		1E6F432397FA2739E609620A /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		93AF5C8793CBA74063CC0DF0 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		3A2A88DEEFF3D1D23E496597 /* Aurum */ = {
+			isa = PBXGroup;
+			children = (
+				0749CAC36E1330F48EB188EF /* AurumApp.swift */,
+				A11C00000000000000000001 /* LocationAutocomplete.swift */,
+				FA1000000000000000000001 /* WorldMapView.swift */,
+				FA1000000000000000000002 /* FlightTracking.swift */,
+				CE1000000000000000000002 /* CityExploreViews.swift */,
+				CE1000000000000000000001 /* CityExploreModels.swift */,
+				5CE89CB3D626F339562EF553 /* MembershipPreviewView.swift */,
+				22F9BCD5A91D6B8F81C701D5 /* OnboardingView.swift */,
+				1BD9635E44F55FE5166EA77B /* OnboardingState.swift */,
+				F6A6ABC622C8A615B5E97F17 /* DesignSystem.swift */,
+				B941FFDDBFA04FFC50847F9C /* DiscoverView.swift */,
+				3B3E0A51725C543883C8532C /* HotelDetailView.swift */,
+				BAE6B937772308D1F0321F01 /* JourneysView.swift */,
+				1B0C8FAFE1B09544C5912233 /* Models.swift */,
+				ACCC00000000000000000002 /* ConciergeView.swift */,
+				ED71E368AD0C9DF9B974CE5D /* JourneyEditors.swift */,
+				ABF820BB24D88FFFC319E7C4 /* JourneyExporter.swift */,
+				B3DD524D72BA291CDFB3EE22 /* JourneyModels.swift */,
+				1BA695EA023C73F9137D23CA /* TravelSearchViews.swift */,
+				35EF526550BED1EC047737E1 /* TravelServices.swift */,
+				19252540FA5E304E7378258A /* TravelSocialViews.swift */,
+				836A3CFEC5E2BE5AF3AB29DC /* TravelViews.swift */,
+				ADDD00000000000000000002 /* RestaurantDetailView.swift */,
+				B2B4367B873474FE1C68712A /* Assets.xcassets */,
+				1590ED954DF1DC4130655C2D /* Resources/hotels.json */,
+			);
+			path = Aurum;
+			sourceTree = "<group>";
+		};
+		4AFB906665D24912D978359B /* AurumTests */ = {
+			isa = PBXGroup;
+			children = (
+				AEFE00000000000000000001 /* JourneyTests.swift */,
+				A14D818E1437513932C4F421 /* AurumTests.swift */,
+			);
+			path = AurumTests;
+			sourceTree = "<group>";
+		};
+		B28B7AF69320201D1CF206EB = {
+			isa = PBXGroup;
+			children = (
+				3A2A88DEEFF3D1D23E496597 /* Aurum */,
+				4AFB906665D24912D978359B /* AurumTests */,
+				EFFAB4249A5E68BD09BB80CD /* AurumUITests */,
+				FBDC4F23F93125BBEEAE800C,
+			);
+			sourceTree = "<group>";
+		};
+		EFFAB4249A5E68BD09BB80CD /* AurumUITests */ = {
+			isa = PBXGroup;
+			children = (
+				338C060BE393E5932D0CE664 /* AurumUITests.swift */,
+			);
+			path = AurumUITests;
+			sourceTree = "<group>";
+		};
+		FBDC4F23F93125BBEEAE800C = {
+			isa = PBXGroup;
+			children = (
+				E6FC57C251E9E1BEC1D3C0D2 /* Aurum.app */,
+				C4095E227B53697430FABAA3 /* AurumTests.xctest */,
+				8A6ED015D34B3A3BEC57D504 /* AurumUITests.xctest */,
+			);
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		55F23B82F1EE611D2CFE5E9F /* AurumTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 56C8F02356852CC6BF1F2EF1 /* Build configuration list for PBXNativeTarget "AurumTests" */;
+			buildPhases = (
+				E1BDC95824BE2988A4CDDC17 /* Sources */,
+				1E6F432397FA2739E609620A /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				3BD58037EDFF59B24F35995F /* PBXTargetDependency */,
+			);
+			name = AurumTests;
+			productName = AurumTests;
+			productReference = C4095E227B53697430FABAA3 /* AurumTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		C13732C8E715C9BEE4FA51C9 /* Aurum */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = F37922C48DA5978D02C9E50E /* Build configuration list for PBXNativeTarget "Aurum" */;
+			buildPhases = (
+				80714DF7D184E5884375F77C /* Sources */,
+				15A9F8FA58F43C72C1A3F83A /* Resources */,
+				12384B5908BE5FE5B3301CEE /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = Aurum;
+			productName = Aurum;
+			productReference = E6FC57C251E9E1BEC1D3C0D2 /* Aurum.app */;
+			productType = "com.apple.product-type.application";
+		};
+		CD0C069CCD4D9EE4568BC8B3 /* AurumUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 14510AC2BA0E2BE344A3A258 /* Build configuration list for PBXNativeTarget "AurumUITests" */;
+			buildPhases = (
+				21C0F577F4520259DDCAB3D9 /* Sources */,
+				93AF5C8793CBA74063CC0DF0 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				684FD2752B9E03D42CB16D35 /* PBXTargetDependency */,
+			);
+			name = AurumUITests;
+			productName = AurumUITests;
+			productReference = 8A6ED015D34B3A3BEC57D504 /* AurumUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		98F54143AB4E86B28C3AFEE0 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 2600;
+				TargetAttributes = {
+					C13732C8E715C9BEE4FA51C9 = {
+						CreatedOnToolsVersion = 26.6;
+					};
+				};
+			};
+			buildConfigurationList = 862894B703A6DEDF96A9DD6C /* Build configuration list for PBXProject "Aurum" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = B28B7AF69320201D1CF206EB;
+			productRefGroup = FBDC4F23F93125BBEEAE800C;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				C13732C8E715C9BEE4FA51C9 /* Aurum */,
+				55F23B82F1EE611D2CFE5E9F /* AurumTests */,
+				CD0C069CCD4D9EE4568BC8B3 /* AurumUITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		15A9F8FA58F43C72C1A3F83A /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				289B9CFAF7CB01D447B414AD /* Assets.xcassets in Resources */,
+				F95A3C1621A7EB44D12A6AE3 /* Resources/hotels.json in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		21C0F577F4520259DDCAB3D9 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				8B6E688535F1D5539BF20232 /* AurumUITests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		80714DF7D184E5884375F77C /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				ADAD5C97CCEB378BCA5DA510 /* AurumApp.swift in Sources */,
+				A11C00000000000000000002 /* LocationAutocomplete.swift in Sources */,
+				FA2000000000000000000001 /* WorldMapView.swift in Sources */,
+				FA2000000000000000000002 /* FlightTracking.swift in Sources */,
+				CE2000000000000000000002 /* CityExploreViews.swift in Sources */,
+				CE2000000000000000000001 /* CityExploreModels.swift in Sources */,
+				F0E14DA1A030ADA7C754FFC9 /* MembershipPreviewView.swift in Sources */,
+				6E6434C18A018DB4A502A6AE /* OnboardingView.swift in Sources */,
+				0A188AE6033B645CEA0B28AD /* OnboardingState.swift in Sources */,
+				8C6C64A5FA7FCD1367ADBDCB /* DesignSystem.swift in Sources */,
+				D85A7146F885996C903E05C6 /* DiscoverView.swift in Sources */,
+				5662376140F9D0F8AAB8A7A4 /* HotelDetailView.swift in Sources */,
+				9BA7778106424EA359EA9DC8 /* JourneysView.swift in Sources */,
+				C28E3B592A560C32484F497E /* Models.swift in Sources */,
+				ACCC00000000000000000001 /* ConciergeView.swift in Sources */,
+				00194D9641B7405F8697AEBB /* JourneyEditors.swift in Sources */,
+				838E710A134F7EC9D99C3B50 /* JourneyExporter.swift in Sources */,
+				4A0749638C12B58D3720E3A8 /* JourneyModels.swift in Sources */,
+				92C688F9E381EE48AB871A83 /* TravelSearchViews.swift in Sources */,
+				B9EB3F10090B13AF70D9B66B /* TravelServices.swift in Sources */,
+				F143A7B751A70AAA3AAE8C26 /* TravelSocialViews.swift in Sources */,
+				C8A40D988C9FC3F7F1EA24DF /* TravelViews.swift in Sources */,
+				ADDD00000000000000000001 /* RestaurantDetailView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		E1BDC95824BE2988A4CDDC17 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AEFE00000000000000000002 /* JourneyTests.swift in Sources */,
+				09DD320B78932A3F05280890 /* AurumTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		3BD58037EDFF59B24F35995F /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = C13732C8E715C9BEE4FA51C9 /* Aurum */;
+			targetProxy = 7B7BF83B3F46E50A23F8470F /* PBXContainerItemProxy */;
+		};
+		684FD2752B9E03D42CB16D35 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = C13732C8E715C9BEE4FA51C9 /* Aurum */;
+			targetProxy = 1B275934A11783B80FE65589 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		280C5CD414E6C90C2C8B7E66 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.aurum.AurumUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = Aurum;
+			};
+			name = Release;
+		};
+		5A8C91857F674E16E2724F47 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 669SG3MPU7;
+				ENABLE_TESTABILITY = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CADisableMinimumFrameDurationOnPhone = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = Aurum;
+				INFOPLIST_FILE = Aurum/Info.plist;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.aurumapp.travel;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		7726B4364A2434FE6D4AF182 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.aurum.AurumTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Aurum.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Aurum";
+			};
+			name = Debug;
+		};
+		89E1FD6268CC0F221A2BE178 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		C8D467D067A57302CD8F6749 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.aurum.AurumTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Aurum.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Aurum";
+			};
+			name = Release;
+		};
+		DFD9BCE3903D5F08FAC1BC97 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.aurum.AurumUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = Aurum;
+			};
+			name = Debug;
+		};
+		E6DE6C99132752C914FEF632 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		E9B2E96ABC5F6856F2BE79CF /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 669SG3MPU7;
+				ENABLE_TESTABILITY = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CADisableMinimumFrameDurationOnPhone = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = Aurum;
+				INFOPLIST_FILE = Aurum/Info.plist;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.aurumapp.travel;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		14510AC2BA0E2BE344A3A258 /* Build configuration list for PBXNativeTarget "AurumUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				DFD9BCE3903D5F08FAC1BC97 /* Debug */,
+				280C5CD414E6C90C2C8B7E66 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		56C8F02356852CC6BF1F2EF1 /* Build configuration list for PBXNativeTarget "AurumTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				7726B4364A2434FE6D4AF182 /* Debug */,
+				C8D467D067A57302CD8F6749 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		862894B703A6DEDF96A9DD6C /* Build configuration list for PBXProject "Aurum" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				89E1FD6268CC0F221A2BE178 /* Debug */,
+				E6DE6C99132752C914FEF632 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		F37922C48DA5978D02C9E50E /* Build configuration list for PBXNativeTarget "Aurum" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E9B2E96ABC5F6856F2BE79CF /* Debug */,
+				5A8C91857F674E16E2724F47 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 98F54143AB4E86B28C3AFEE0 /* Project object */;
+}
