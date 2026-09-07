@@ -624,21 +624,111 @@ final class AurumUITests: XCTestCase {
         app.buttons["Travel account"].tap()
         XCTAssertTrue(app.buttons["Create account"].waitForExistence(timeout: 8))
         capture("20 Account before signup")
-        app.buttons["Create account"].tap()
+        app.segmentedControls["account-mode"].buttons["Create account"].tap()
         capture("21 Account signup form")
         let handle = app.textFields["account-handle"]
         XCTAssertTrue(handle.waitForExistence(timeout: 5)); handle.tap(); handle.typeText("ui_" + UUID().uuidString.prefix(8).lowercased())
-        let displayName = app.textFields["Display name"]
+        let displayName = app.textFields["account-name"]
         displayName.tap(); displayName.typeText("Native Test Traveler")
         let password = app.secureTextFields["account-password"]
         password.tap(); password.typeText("Strong-simulator-password-123")
-        app.buttons["Create my account"].tap()
+        let confirm = app.secureTextFields["account-confirmation"]; reveal(confirm); confirm.tap(); confirm.typeText("Strong-simulator-password-123")
+        reveal(app.buttons["account-submit"]); app.buttons["account-submit"].tap()
         let connected = app.buttons["Sign out"].waitForExistence(timeout: 10)
         capture("22 Account registration result")
         XCTAssertTrue(connected)
         capture("19 Backend account connected")
         app.buttons["Sign out"].tap()
         XCTAssertTrue(app.secureTextFields["account-password"].waitForExistence(timeout: 8))
+    }
+    @MainActor func testGuestCanCreateAccountAndSignInFromProfile() throws {
+        let root = "https://bwrodcxmdzrpyrshrlfd.supabase.co/functions/v1/travel-api"
+        let username = "guest_" + UUID().uuidString.prefix(8).lowercased()
+        let passwordValue = "Seur-Travel-" + UUID().uuidString.prefix(12)
+        addTeardownBlock {
+            var login = URLRequest(url: URL(string: root + "/v1/auth/login")!)
+            login.httpMethod = "POST"; login.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            login.httpBody = try JSONSerialization.data(withJSONObject: ["handle": username, "password": passwordValue])
+            let (data, response) = try await URLSession.shared.data(for: login)
+            if (response as? HTTPURLResponse)?.statusCode == 401 { return }
+            let body = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+            let token = try XCTUnwrap(body?["token"] as? String)
+            var removal = URLRequest(url: URL(string: root + "/v1/account")!); removal.httpMethod = "DELETE"
+            removal.setValue("Bearer " + token, forHTTPHeaderField: "Authorization")
+            let (_, removed) = try await URLSession.shared.data(for: removal)
+            XCTAssertEqual((removed as? HTTPURLResponse)?.statusCode, 200)
+        }
+        let server = ["--travel-test-server", root + "?guest-test=" + username]
+        app.terminate(); app.launchArguments = ["--ui-testing", "--location-testing"] + server; app.launch()
+        app.tabBars.buttons["Travel"].tap(); app.buttons["travel-create"].tap()
+        app.textFields["trip-destination"].tap(); app.textFields["trip-destination"].typeText("Paris\n")
+        app.buttons["journey-save"].tap()
+        app.tabBars.buttons["Discover"].tap(); app.buttons["Your workspace"].tap()
+        XCTAssertTrue(app.buttons["profile-create-account"].waitForExistence(timeout: 8)); capture("89 Guest profile account access")
+        app.buttons["profile-create-account"].tap()
+        let name = app.textFields["account-name"]
+        XCTAssertTrue(name.waitForExistence(timeout: 5)); name.tap(); name.typeText("Avery Traveler")
+        app.keyboards.buttons["next"].tap()
+        let handle = app.textFields["account-handle"]; handle.typeText(username)
+        app.keyboards.buttons["next"].tap(); dismissStrongPasswordIfNeeded()
+        let password = app.secureTextFields["account-password"]
+        for character in passwordValue { password.typeText(String(character)) }
+        app.keyboards.buttons["next"].tap(); dismissStrongPasswordIfNeeded()
+        let confirm = app.secureTextFields["account-confirmation"]; confirm.typeText("does-not-match")
+        let submit = app.buttons["account-submit"]; reveal(submit); submit.tap()
+        XCTAssertTrue(app.staticTexts["account-message"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["account-message"].label.contains("don’t match"))
+        reveal(confirm); confirm.tap(); confirm.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 14))
+        for character in passwordValue { confirm.typeText(String(character)) }
+        reveal(submit); capture("90 Create a Seur account"); submit.tap(); dismissSavePasswordIfNeeded()
+        XCTAssertTrue(app.staticTexts["account-success"].waitForExistence(timeout: 25), app.staticTexts["account-message"].exists ? app.staticTexts["account-message"].label : "No account response")
+        capture("91 Guest account created")
+        app.buttons["account-continue"].tap(); XCTAssertTrue(app.buttons["profile-account"].waitForExistence(timeout: 5))
+        app.buttons["Done"].tap(); app.tabBars.buttons["Travel"].tap()
+        XCTAssertTrue(app.staticTexts["Trip to Paris"].waitForExistence(timeout: 5))
+        app.terminate(); app.launchArguments = ["--ui-testing", "--preserve-state", "--location-testing"] + server; app.launch()
+        app.buttons["Your workspace"].tap()
+        XCTAssertTrue(app.buttons["profile-account"].waitForExistence(timeout: 15), "Session must restore from Keychain")
+        app.buttons["profile-account"].tap(); app.buttons["Sign out"].tap()
+        XCTAssertTrue(handle.waitForExistence(timeout: 8))
+        handle.tap(); handle.typeText(username); app.keyboards.buttons["next"].tap()
+        password.typeText("wrong-password-value"); reveal(submit); submit.tap()
+        XCTAssertTrue(app.staticTexts["account-message"].waitForExistence(timeout: 15))
+        reveal(password); password.tap(); password.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 20) + passwordValue)
+        reveal(submit); capture("92 Sign in after onboarding"); submit.tap(); dismissSavePasswordIfNeeded()
+        XCTAssertTrue(app.staticTexts["account-success"].waitForExistence(timeout: 25))
+    }
+    func testAccountFullPageDesign() {
+        Thread.sleep(forTimeInterval: 1)
+        app.tabBars.buttons["Travel"].tap()
+        XCTAssertTrue(app.buttons["Travel account"].waitForExistence(timeout: 8), app.debugDescription)
+        app.buttons["Travel account"].tap()
+        XCTAssertTrue(app.textFields["account-handle"].waitForExistence(timeout: 8))
+        XCTAssertFalse(app.sheets.firstMatch.exists)
+        XCTAssertFalse(app.tabBars.buttons["Map"].isHittable)
+        app.segmentedControls["account-mode"].buttons["Create account"].tap()
+        XCTAssertTrue(app.textFields["account-name"].waitForExistence(timeout: 5))
+        reveal(app.secureTextFields["account-confirmation"])
+        app.buttons["Done"].tap()
+        XCTAssertTrue(app.tabBars.buttons["Map"].waitForExistence(timeout: 5))
+        // The native tab bar animates back into place after leaving account navigation.
+        Thread.sleep(forTimeInterval: 0.8)
+        app.tabBars.buttons["Discover"].tap()
+        XCTAssertTrue(app.buttons["Your workspace"].waitForExistence(timeout: 8))
+        app.buttons["Your workspace"].tap()
+        app.buttons["profile-sign-in"].tap()
+        XCTAssertTrue(app.textFields["account-handle"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.sheets.firstMatch.exists)
+    }
+    func testAccountAccessAtLargeText() {
+        app.terminate(); app.launchArguments = ["--ui-testing", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]; app.launch()
+        app.tabBars.buttons["Travel"].tap(); app.buttons["Travel account"].tap()
+        XCTAssertTrue(app.textFields["account-handle"].waitForExistence(timeout: 8))
+        let mode = app.segmentedControls["account-mode"]; reveal(mode); mode.buttons["Create account"].tap()
+        let name = app.textFields["account-name"]; reveal(name); XCTAssertTrue(name.isHittable)
+        let submit = app.buttons["account-submit"]; reveal(submit); XCTAssertTrue(submit.isHittable)
+        capture("93 Accessible account page")
+        app.buttons["Done"].tap(); XCTAssertTrue(app.buttons["travel-create"].waitForExistence(timeout: 5))
     }
     @MainActor func testSupabaseNativeAccount() async throws {
         let root = "https://bwrodcxmdzrpyrshrlfd.supabase.co/functions/v1/travel-api"

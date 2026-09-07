@@ -20,6 +20,7 @@ import SwiftUI
 }
 
 struct RootView: View {
+    @Environment(TravelAPI.self) private var api
     @Environment(TravelStore.self) private var store
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     var body: some View {
@@ -32,6 +33,7 @@ struct RootView: View {
             Tab(value: 3, role: .search) { NavigationStack { SearchView() } } label: { Label("Search", systemImage: "magnifyingglass") }
         }
         .tabBarMinimizeBehavior(.never)
+        .task { try? await api.refresh() }
         .overlay(alignment: .top) {
             if let message = store.message {
                 Label(message, systemImage: "checkmark.circle.fill").font(.subheadline)

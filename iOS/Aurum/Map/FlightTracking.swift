@@ -363,7 +363,7 @@ struct FlightAddView: View {
                 }
             }
         }.presentationDetents([.large]).presentationDragIndicator(.visible)
-            .sheet(isPresented: $accountSheet) { TravelAccountView() }
+            .fullScreenCover(isPresented: $accountSheet) { TravelAccountView() }
             .onChange(of: api.isSignedIn) { if api.isSignedIn { accountSheet = false } }
             .onChange(of: airlineText) { if airlineText != airline?.name { airline = nil }; feed = nil }
             .onChange(of: method) { feed = nil; error = nil; editingAirline = false }

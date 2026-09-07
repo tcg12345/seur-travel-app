@@ -3,6 +3,7 @@ import MapKit
 import UniformTypeIdentifiers
 
 struct TravelHubView: View {
+    @Environment(TravelAPI.self) private var api
     @Environment(JourneyLibrary.self) private var library
     @Environment(TravelStore.self) private var store
     @State private var section = "Trips"
@@ -52,7 +53,7 @@ struct TravelHubView: View {
         }.background(Color.canvas).navigationTitle("Travel").navigationBarTitleDisplayMode(.inline)
             .searchable(text: $query, prompt: "Search trips or destinations")
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) { Button { account = true } label: { Image(systemName: "person.crop.circle") }.accessibilityLabel("Travel account") }
+                ToolbarItem(placement: .topBarLeading) { Button { account = true } label: { if api.isSignedIn { Image(systemName: "person.crop.circle") } else { Text("Sign in").font(.subheadline.weight(.medium)) } }.accessibilityLabel("Travel account") }
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
                         Button("New trip", systemImage: "plus") { section = "Trips"; newJourney = true }
@@ -61,7 +62,7 @@ struct TravelHubView: View {
                 }
             }
             .sheet(isPresented: $newJourney) { TripCreationView() }
-            .sheet(isPresented: $account) { TravelAccountView() }
+            .navigationDestination(isPresented: $account) { TravelAccountPage() }
             .fileImporter(isPresented: $importing, allowedContentTypes: [.json]) { result in
                 do { let url = try result.get(); let accessed = url.startAccessingSecurityScopedResource(); defer { if accessed { url.stopAccessingSecurityScopedResource() } }; _ = try library.importData(Data(contentsOf: url)) } catch { self.error = error.localizedDescription }
             }

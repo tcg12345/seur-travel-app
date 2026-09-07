@@ -43,7 +43,7 @@ struct DiscoverView: View {
                 Button { showProfile = true } label: { Image(systemName: "person.crop.circle").fontWeight(.light) }.accessibilityLabel("Your workspace")
             }
         }
-        .sheet(isPresented: $showProfile) { ProfileView() }
+        .navigationDestination(isPresented: $showProfile) { ProfileView() }
         .navigationDestination(for: Hotel.self) { hotel in
             HotelDetailView(hotel: hotel).navigationTransition(.zoom(sourceID: hotel.id, in: hotelTransition))
         }

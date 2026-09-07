@@ -183,41 +183,48 @@ struct EditPlanView: View {
 }
 
 struct ProfileView: View {
+    @Environment(TravelAPI.self) private var api
     @Environment(OnboardingStore.self) private var onboarding
     @State private var preferences = false
     @State private var membership = false
     @Environment(\.dismiss) private var dismiss
     @AppStorage("aurum.appearance") private var appearance = "System"
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
-                    SeurLogo(size: 76)
-                    Editorial("Travel,\nthoughtfully.", size: 38)
-                    Text("Your personal Seur workspace").font(.subheadline).foregroundStyle(.secondary)
-                    VStack(spacing: 20) {
-                        LabeledContent("The collection", value: "1,513 hotels")
-                        LabeledContent("At the table", value: "5,755 dining entries")
-                        LabeledContent("A world of possibilities", value: "12 cities")
-                        Picker("Appearance", selection: $appearance) { Text("System").tag("System"); Text("Light").tag("Light"); Text("Dark").tag("Dark") }
-                    }.font(.subheadline).padding(22).background(.background, in: .rect(cornerRadius: 25))
-                    VStack(alignment: .leading, spacing: 16) {
-                        Button { preferences = true } label: { Label("Your travel preferences", systemImage: "slider.horizontal.3").frame(maxWidth: .infinity, alignment: .leading) }.accessibilityIdentifier("profile-preferences")
-                        Divider()
-                        Button { membership = true } label: {
-                            HStack { Label("Seur Reserve", systemImage: "sparkles"); Spacer(); Text(onboarding.profile.previewPlan.map { $0.title + " preview" } ?? "Explore preview").font(.caption).foregroundStyle(.secondary) }
-                        }.accessibilityIdentifier("profile-membership")
-                        if onboarding.profile.previewPlan != nil {
-                            Button("Clear membership preview", role: .destructive) { onboarding.selectPreview(nil) }.font(.caption)
-                        }
-                    }.padding(22).background(.background, in: .rect(cornerRadius: 25))
-                    Text("Hotel favorites and earlier plans stay on this device. Hotel, flight, and activity bookings are completed with external providers. Travel itineraries and journals can be saved to your connected backend and shared with friends. Seur does not process payments.").font(.footnote).foregroundStyle(.secondary).lineSpacing(4)
-                    Text("Hotel and dining details come from the supplied collection. Featured hotel photography: WBP Stars, Polycor, and Architectural Digest India. Images belong to their respective owners.").font(.caption).foregroundStyle(.secondary)
-                    Text("Made for the journey.").font(.system(.title3, design: .serif)).foregroundStyle(Color.bronze).padding(.top, 12)
-                }.padding(25)
-            }.background(Color.canvas).toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
-                .fullScreenCover(isPresented: $preferences) { OnboardingView(review: true) }
-                .sheet(isPresented: $membership) { MembershipPreviewView(onFinish: { membership = false }) }
-        }
+        ScrollView {
+            VStack(alignment: .leading, spacing: 24) {
+                SeurLogo(size: 76)
+                VStack(alignment: .leading, spacing: 16) {
+                    if let account = api.account, api.isSignedIn {
+                        Text(account.name).font(.title2.weight(.semibold))
+                        NavigationLink { TravelAccountPage() } label: { HStack { Label("Your account", systemImage: "person.crop.circle"); Spacer(); Text("@" + account.handle).font(.caption); Image(systemName: "chevron.right").font(.caption) } }.accessibilityIdentifier("profile-account")
+                    } else {
+                        Text("Welcome to Seur").font(.title2.weight(.semibold))
+                        NavigationLink { TravelAccountPage(register: false) } label: { Label("Sign in", systemImage: "person.crop.circle").frame(maxWidth: .infinity, minHeight: 44) }.buttonStyle(.glassProminent).accessibilityIdentifier("profile-sign-in")
+                        NavigationLink { TravelAccountPage(register: true) } label: { Text("Create account").frame(maxWidth: .infinity, minHeight: 44) }.accessibilityIdentifier("profile-create-account")
+                    }
+                }.padding(22).background(.background, in: .rect(cornerRadius: 25))
+                VStack(spacing: 20) {
+                    LabeledContent("The collection", value: "1,513 hotels")
+                    LabeledContent("At the table", value: "5,755 dining entries")
+                    LabeledContent("A world of possibilities", value: "12 cities")
+                    Picker("Appearance", selection: $appearance) { Text("System").tag("System"); Text("Light").tag("Light"); Text("Dark").tag("Dark") }
+                }.font(.subheadline).padding(22).background(.background, in: .rect(cornerRadius: 25))
+                VStack(alignment: .leading, spacing: 16) {
+                    Button { preferences = true } label: { Label("Your travel preferences", systemImage: "slider.horizontal.3").frame(maxWidth: .infinity, alignment: .leading) }.accessibilityIdentifier("profile-preferences")
+                    Divider()
+                    Button { membership = true } label: {
+                        HStack { Label("Seur Reserve", systemImage: "sparkles"); Spacer(); Text(onboarding.profile.previewPlan.map { $0.title + " preview" } ?? "Explore preview").font(.caption).foregroundStyle(.secondary) }
+                    }.accessibilityIdentifier("profile-membership")
+                    if onboarding.profile.previewPlan != nil {
+                        Button("Clear membership preview", role: .destructive) { onboarding.selectPreview(nil) }.font(.caption)
+                    }
+                }.padding(22).background(.background, in: .rect(cornerRadius: 25))
+                Text("Hotel favorites and earlier plans stay on this device. Hotel, flight, and activity bookings are completed with external providers. Travel itineraries and journals can be saved to your connected backend and shared with friends. Seur does not process payments.").font(.footnote).foregroundStyle(.secondary).lineSpacing(4)
+                Text("Hotel and dining details come from the supplied collection. Featured hotel photography: WBP Stars, Polycor, and Architectural Digest India. Images belong to their respective owners.").font(.caption).foregroundStyle(.secondary)
+                Text("Made for the journey.").font(.system(.title3, design: .serif)).foregroundStyle(Color.bronze).padding(.top, 12)
+            }.padding(25)
+        }.background(Color.canvas).toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+            .fullScreenCover(isPresented: $preferences) { OnboardingView(review: true) }
+            .sheet(isPresented: $membership) { MembershipPreviewView(onFinish: { membership = false }) }
     }
 }

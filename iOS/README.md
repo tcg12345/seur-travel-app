@@ -10,6 +10,10 @@ A native SwiftUI travel app for **iOS 26 and later**, designed around hotel dini
 
 The app works in Simulator without an Apple developer account. To install on your physical iPhone, choose your Apple development team under **Aurum → Signing & Capabilities**, then select your connected iPhone. TestFlight and App Store distribution require signing and provisioning through your Apple Developer account.
 
+Simulator builds used for account testing and installation must retain code signing (`CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=-`) so the app has its application identifier for Keychain session storage. Do not install a simulator build produced with `CODE_SIGNING_ALLOWED=NO`; reserve that option for compile-only physical-device checks.
+
+Guests can open **Discover → profile → Sign in / Create account**, or use **Sign in** at the top of Travel. Both routes open a full native account page, with travel photography, an adaptive form, and no sheet or tab bar covering the fields. Contextual sign-in from friends, sharing, and flight search also uses a full-screen page. Accounts use a Seur username and password; signing in preserves local trips.
+
 There are no external Swift packages. Offline travel planning works immediately. The Supabase backend enables accounts, friends, cloud copies, private photos, provider search and sharing; see [the cloud setup](../supabase/README.md). The app defaults to the deployed HTTPS service.
 
 The installed app is named **Seur**. The existing Xcode project/scheme and bundle identifier are retained so upgrades preserve local trips and Keychain sessions. [Brand assets and generation prompt](Brand/README.md).
