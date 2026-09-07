@@ -63,11 +63,13 @@ Unit tests cover catalog integrity, city/cuisine search, sorting, persistence, d
 
 Build products, result bundles, and simulator recordings are excluded from source control. See `Validation.md` for the checks actually completed.
 
-## Concierge preview
+## AI concierge
 
-The native **Concierge** tab is an on-device chat demo. It includes suggested prompts, a glass composer, animated messages and a preparation indicator, catalog-based hotel/dining cards, simple weekend ideas, follow-up city/cuisine context, and links into the existing Flights, Experiences, and Trips screens. It can summarize the device’s saved places and draft itinerary. Recommended hotel cards open the normal hotel details and planning flow.
+The native **Concierge** tab connects to OpenAI through the authenticated Supabase travel API. Sign in, then ask for a destination comparison, detailed itinerary, restaurant ideas, practical travel advice or improvements to an existing trip. Select a trip above the conversation to include its schedule; travel preferences and saved places can be enabled independently. Restaurant detail pages can open the concierge with that venue's supplied context.
 
-The demo uses local intent matching and response templates, not a connected AI model. It makes no network calls and does not book anything. The interface labels this explicitly. Chat remains in memory while the app runs and across tab switches; “New conversation” clears the chat and cancels any pending reply. Saved places and plans are unaffected. Input is limited to 1,000 characters. An AI service can later replace `ConciergeEngine` without replacing the native chat interface.
+Replies support readable Markdown, contextual follow-ups and Apple Maps place discovery. Draft itineraries have a **Review & add to a trip** action with daily activities, proposed local times and notes. Save to a new trip with flexible or exact dates, or add a compatible draft to an existing route without overwriting its plans. The concierge does not make bookings or verify live availability. Provider lookups and estimated advice are distinguished in responses.
+
+Chat remains in memory while the app runs and across tab switches; **New conversation** clears it and cancels pending client work. Saved trips are unaffected. Input is limited to 4,000 characters, with bounded recent history and prior draft context sent for follow-ups. Stop/Retry controls handle slow or failed replies. Booking references, journal notes, photos and private booking notes are omitted from automatic trip context. See `PlacesCostControls.md` for call limits and paid-test protections.
 
 ## Restaurant details
 

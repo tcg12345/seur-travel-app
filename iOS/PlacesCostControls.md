@@ -29,4 +29,10 @@ Place, restaurant and hotel pages provide a secondary **Ratings & more details**
 
 `TravelAPI` blocks live Tripadvisor and OpenAI calls during XCTest/UI tests as well as Google calls. Backend provider tests replace fetch with stubs and run without network permission. Manual bounded provider smoke checks are separate from automated app tests.
 
+## AI concierge
+
+Each submitted chat turn makes one OpenAI request, with at most one additional request after up to two native Apple Maps searches when place discovery is useful. General advice and follow-ups using existing results can finish in one request. No Google or Tripadvisor calls are used. Recent history is limited to twelve messages/24,000 characters; mapped candidates are limited to sixteen. Server limits are forty requests per account per hour and 1,000 per hour across the app, with at most 6,500 output tokens per request. Search errors still allow an explicitly unverified general-knowledge answer without paid place-provider fallbacks.
+
+The automated concierge UI test opts into a deterministic `--concierge-testing` fixture together with `--ui-testing`; it never uses the live OpenAI key. The service-level paid-provider guard remains in force for all other automated tests. Stop cancels client work and prevents late messages; a provider request already underway may still incur cost.
+
 For domain-restricted Tripadvisor keys, configure `TRIPADVISOR_REFERER` in Supabase with an HTTPS URL whose exact hostname is allowed in Tripadvisor (for example, `https://your-allowed-domain.example/`). The backend sends it only to Tripadvisor; it does not accept client-provided referring domains. See [Tripadvisor security](https://tripadvisor-content-api.readme.io/reference/api-security). Do not guess the allowed domain or remove key restrictions.

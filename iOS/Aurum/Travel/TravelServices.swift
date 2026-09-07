@@ -171,6 +171,25 @@ private struct EmptyReply: Codable { var ok: Bool }
         guard !payload.candidates.isEmpty else { return AITravelResponse(text: "No places were found in Apple Maps. Try another destination or different interests.", places: []) }
         return try await request("/v1/ai/activities", method: "POST", encodable: payload)
     }
+    func conciergeReply(_ payload: ConciergeRequest) async throws -> ConciergeReply {
+        #if DEBUG
+        if ConciergeFixtures.enabled {
+            try await Task.sleep(for: .milliseconds(80))
+            return ConciergeReply(text: "## A plan shaped around you\n\nHere is a flexible two-day plan for Paris, with time for exploring and a slower afternoon. You can review each activity before saving it.\n\nTell me what you would like to change and I’ll refine the plan.", suggestions: ["Make the pace slower", "Add more restaurant ideas"], searches: [], itinerary: ConciergeFixtures.plan)
+        }
+        #endif
+        try requirePaidProviderAccess()
+        return try await perform("/v1/ai/concierge", method: "POST", data: JSONEncoder().encode(payload), timeout: 90)
+    }
+    func conciergeSearch(_ query: ConciergeSearch) async throws -> [PlaceRecord] {
+        try Task.checkCancellation()
+        let destinations = try await ApplePlaceSearch.search(query.city, citiesOnly: true)
+        guard let destination = destinations.first(where: \.hasCoordinate) else { return [] }
+        let city = ExploreCity(name: query.city, country: "", latitude: destination.latitude!, longitude: destination.longitude!)
+        let results = try await CityExploreSearch.search(city: city, interest: .highlights, term: query.query, wider: false)
+        try Task.checkCancellation()
+        return Array(results.prefix(8).map(\.record))
+    }
     private func requirePaidProviderAccess() throws {
         guard !PlaceSearchTestPolicy.blocksPaidRequests else { throw JourneyError.message("Live paid place and AI requests are disabled during automated tests.") }
         guard isSignedIn else { throw JourneyError.message("Sign in to your travel account to use this feature.") }

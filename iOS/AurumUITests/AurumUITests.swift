@@ -952,33 +952,22 @@ final class AurumUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Choose different departure and arrival cities."].waitForExistence(timeout: 5))
         capture("07 Flight validation")
     }
-    func testConciergeChatAndHotelNavigation() {
+    func testConciergeChatAndPlanSave() {
+        app.terminate(); app.launchArguments.append("--concierge-testing"); app.launch()
         app.tabBars.buttons["Concierge"].tap()
-        let prompt = app.buttons["concierge-prompt-bed.double"]
-        XCTAssertTrue(prompt.waitForExistence(timeout: 5))
-        capture("09 Concierge welcome")
-        prompt.tap()
-        XCTAssertTrue(app.staticTexts["concierge-reply"].waitForExistence(timeout: 5))
-        capture("10 Concierge recommendations")
-        let hotel = app.buttons["concierge-hotel-par-peninsula"]
-        XCTAssertTrue(hotel.waitForExistence(timeout: 5))
-        if !hotel.isHittable { app.swipeDown() }
-        hotel.tap()
-        XCTAssertTrue(app.buttons["plan-stay"].waitForExistence(timeout: 5))
-        app.navigationBars.buttons.element(boundBy: 0).tap()
-        let input = app.textFields["concierge-input"].exists ? app.textFields["concierge-input"] : app.textViews["concierge-input"]
-        XCTAssertTrue(input.waitForExistence(timeout: 5)); input.tap(); input.typeText("What about Tokyo?")
-        app.buttons["concierge-send"].tap()
-        let reply = app.staticTexts.matching(identifier: "concierge-reply")
-        let hasTwo = NSPredicate(format: "count == 2")
-        expectation(for: hasTwo, evaluatedWith: reply)
-        waitForExpectations(timeout: 6)
-        XCTAssertTrue(reply.element(boundBy: 1).label.contains("Tokyo"))
-        openSavedCollection()
+        let prompt = app.buttons["concierge-prompt-calendar"]
+        XCTAssertTrue(prompt.waitForExistence(timeout: 5)); prompt.tap()
+        let review = app.buttons["concierge-review-plan"]
+        XCTAssertTrue(review.waitForExistence(timeout: 8))
+        if !review.isHittable { app.swipeUp() }
+        review.tap()
+        let save = app.buttons["concierge-save-plan"]
+        XCTAssertTrue(save.waitForExistence(timeout: 5)); save.tap()
+        XCTAssertTrue(app.buttons["Added to your trips"].waitForExistence(timeout: 5))
+        app.tabBars.buttons["Travel"].tap()
+        XCTAssertTrue(app.staticTexts["A thoughtful Paris weekend"].waitForExistence(timeout: 5))
         app.tabBars.buttons["Concierge"].tap()
-        XCTAssertEqual(app.staticTexts.matching(identifier: "concierge-reply").count, 2)
-        app.buttons["New conversation"].tap()
-        app.buttons["Clear this conversation"].tap()
+        app.buttons["New conversation"].tap(); app.buttons["Clear this conversation"].tap()
         XCTAssertTrue(prompt.waitForExistence(timeout: 5))
     }
 

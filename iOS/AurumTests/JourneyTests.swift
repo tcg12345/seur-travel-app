@@ -636,3 +636,73 @@ import MapKit
         do { _ = try await api.hotelOverview(PlaceRecord(name: "Hotel")); XCTFail("Hotel AI should be blocked") } catch { XCTAssertTrue(error.localizedDescription.contains("automated tests")) }
     }
 }
+
+@MainActor final class ConciergeLiveTests: XCTestCase {
+    private var reply: ConciergeReply { .init(text: "A detailed and thoughtful plan.", suggestions: ["Refine it"], searches: [], itinerary: ConciergeFixtures.plan) }
+    func testTripContextOmitsBookingReferencesJournalNotesAndPrivateFields() {
+        var trip = JourneyDocument(title: "Paris", destination: "Paris")
+        trip.hotels = [HotelReservation(place: PlaceRecord(name: "Hotel"), confirmation: "PRIVATE-CODE", notes: "PRIVATE-NOTES")]
+        trip.places = [RatedPlace(place: PlaceRecord(name: "Journal"), notes: "PRIVATE-JOURNAL")]
+        trip.flights = [FlightReservation(flightNumber: "BA178", notes: "PRIVATE-FLIGHT")]
+        let context = ConciergeContext.tripSummary(trip)
+        XCTAssertTrue(context.contains("Hotel")); XCTAssertTrue(context.contains("BA178")); XCTAssertFalse(context.contains("PRIVATE"))
+    }
+    func testDraftCreatesValidTripAndDuplicateSaveDoesNotDuplicateActivities() throws {
+        let draft = ConciergeFixtures.plan
+        let trip = try draft.applying(to: nil, places: [], startDate: "2026-10-01")
+        XCTAssertNil(trip.validationError()); XCTAssertEqual(trip.events.count, 2)
+        XCTAssertEqual(trip.startDate, "2026-10-01"); XCTAssertEqual(trip.endDate, "2026-10-02")
+        XCTAssertThrowsError(try draft.applying(to: trip, places: [], startDate: nil))
+        XCTAssertEqual(trip.events.count, 2)
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString).appendingPathComponent("library.json")
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+        let library = JourneyLibrary(url: url); XCTAssertTrue(library.save(trip)); XCTAssertEqual(JourneyLibrary(url: url).documents.first?.events.count, 2)
+    }
+    func testDraftRouteMismatchNeverOverwritesExistingPlans() throws {
+        let original = JourneyDocument(title: "Tokyo", stops: [JourneyStop(name: "Tokyo", nights: 3)])
+        XCTAssertThrowsError(try ConciergeFixtures.plan.applying(to: original, places: [], startDate: nil))
+        XCTAssertTrue(original.events.isEmpty); XCTAssertEqual(original.stops.first?.name, "Tokyo")
+    }
+    func testMultiCityDraftPreservesDatesAndMappedPlaces() throws {
+        var draft = ConciergeFixtures.plan; draft.days[1].city = "London"; draft.days[0].items[0].placeID = "mapped"
+        let place = PlaceRecord(id: "mapped", name: "Museum", category: .museum, latitude: 48.8, longitude: 2.3, source: "Apple Maps")
+        let trip = try draft.applying(to: nil, places: [place], startDate: "2026-10-01")
+        XCTAssertNil(trip.validationError()); XCTAssertEqual(trip.stops.count, 2)
+        XCTAssertEqual(trip.date(for: trip.events[1]), "2026-10-02")
+        XCTAssertEqual(trip.events[0].place.id, "mapped"); XCTAssertTrue(trip.events[0].place.hasCoordinate)
+    }
+    func testSearchPhaseIsBoundedAndFollowupReceivesHistory() async throws {
+        let chat = ConciergeConversation(); var calls = 0, searches = 0
+        let response = reply
+        let respond: ConciergeConversation.Respond = { request in
+            calls += 1
+            if calls == 1 { return .init(text: "Searching", suggestions: [], searches: Array(repeating: .init(city: "Paris", query: "museums"), count: 5), itinerary: nil) }
+            if calls == 2 { XCTAssertFalse(request.allowSearch); XCTAssertEqual(request.places.count, 1) }
+            if calls == 3 {
+                XCTAssertEqual(request.messages.count, 3); XCTAssertEqual(request.messages.last?.text, "Slower please")
+                XCTAssertTrue(request.messages[1].text.contains("Previously proposed draft"))
+                XCTAssertTrue(request.messages[1].text.contains(response.itinerary!.days[0].items[0].title))
+            }
+            return response
+        }
+        let search: ConciergeConversation.Search = { _ in searches += 1; return [.init(id: "map", name: "Museum", latitude: 48.8, longitude: 2.3, source: "Apple Maps")] }
+        chat.send("Plan Paris", context: .init(), respond: respond, search: search)
+        for _ in 0..<100 where chat.isReplying { try await Task.sleep(for: .milliseconds(5)) }
+        XCTAssertEqual(calls, 2); XCTAssertEqual(searches, 2); XCTAssertEqual(chat.messages.count, 2)
+        chat.send("Slower please", context: .init(), respond: respond, search: search)
+        for _ in 0..<100 where chat.isReplying { try await Task.sleep(for: .milliseconds(5)) }
+        XCTAssertEqual(calls, 3); XCTAssertEqual(chat.messages.count, 4)
+    }
+    func testFailureRetryAndResetNeverInsertFakeOrLateReplies() async throws {
+        let chat = ConciergeConversation(); let response = reply
+        chat.send("Paris", context: .init(), respond: { _ in throw JourneyError.message("Offline") }, search: { _ in [] })
+        for _ in 0..<100 where chat.isReplying { try await Task.sleep(for: .milliseconds(5)) }
+        XCTAssertEqual(chat.messages.count, 1); XCTAssertEqual(chat.error, "Offline")
+        chat.retry(context: .init(), respond: { _ in response }, search: { _ in [] })
+        for _ in 0..<100 where chat.isReplying { try await Task.sleep(for: .milliseconds(5)) }
+        XCTAssertEqual(chat.messages.count, 2)
+        chat.send("London", context: .init(), respond: { _ in try? await Task.sleep(for: .milliseconds(80)); return response }, search: { _ in [] })
+        chat.reset(); try await Task.sleep(for: .milliseconds(100))
+        XCTAssertTrue(chat.messages.isEmpty); XCTAssertFalse(chat.isReplying)
+    }
+}

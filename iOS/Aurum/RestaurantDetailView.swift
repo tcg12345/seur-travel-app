@@ -143,14 +143,15 @@ struct RestaurantDetailView: View {
     }
     private var conciergeCard: some View {
         Button {
-            store.concierge.send("Tell me about \(venue.name) at \(hotel.name)", store: store)
+            store.concierge.reference = String("Selected restaurant: \(venue.name), at \(hotel.name), \(hotel.city). Cuisine: \(venue.cuisine). Supplied description: \(venue.description). These collection details are not live availability.".prefix(12000))
+            store.concierge.pendingInput = "Help me plan a visit to \(venue.name) at \(hotel.name). What should I know, and how could it fit into my trip?"
             concierge = true
         } label: {
             HStack(spacing: 15) {
                 Image(systemName: "sparkles").font(.title2.weight(.light)).foregroundStyle(Color.bronze)
                 VStack(alignment: .leading, spacing: 5) {
                     Text("A little inside knowledge").font(.system(.headline, design: .serif)).foregroundStyle(.primary)
-                    Text("Ask your concierge · Demo").font(.caption).foregroundStyle(.secondary)
+                    Text("Ask your concierge").font(.caption).foregroundStyle(.secondary)
                 }.frame(maxWidth: .infinity, alignment: .leading)
                 Image(systemName: "arrow.up.right").foregroundStyle(Color.bronze)
             }.padding(21).cardSurface(cornerRadius: 24, emphasized: true)

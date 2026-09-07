@@ -48,15 +48,7 @@ import XCTest
         XCTAssertTrue(TravelStore(defaults: defaults).savedRestaurants.isEmpty)
         XCTAssertTrue(TravelStore(defaults: defaults).restaurantVisits.isEmpty)
     }
-    func testRestaurantConciergeUsesSelectedVenue() {
-        let hotel = store.featured[0], venue = store.featured[0].venues[0]
-        var context = ConciergeContext()
-        let reply = ConciergeEngine.reply(to: "Tell me about \(venue.name) at \(hotel.name)", context: &context, store: store)
-        XCTAssertTrue(reply.text.contains(venue.description))
-        XCTAssertTrue(reply.text.contains("doesn’t reserve a table"))
-        XCTAssertEqual(context.city, hotel.city)
-        XCTAssertTrue(store.plans.isEmpty)
-    }
+
     func testTripPersistenceDuplicateAndInvalidDates() {
         let hotel = store.featured[0]
         let dates = BookingDates()
@@ -88,43 +80,4 @@ import XCTest
         store.toggleCompare(store.hotels[0])
         XCTAssertEqual(store.compared.count, 2)
     }
-    func testConciergeRecommendationsAndContext() {
-        var context = ConciergeContext()
-        let reply = ConciergeEngine.reply(to: "Find a hotel in Paris with great dining", context: &context, store: store)
-        XCTAssertEqual(context.city, "Paris")
-        XCTAssertFalse(reply.hotelIDs.isEmpty)
-        XCTAssertTrue(reply.hotelIDs.allSatisfy { id in store.hotels.contains { $0.id == id && $0.city == "Paris" } })
-        let followUp = ConciergeEngine.reply(to: "Japanese dining instead", context: &context, store: store)
-        XCTAssertEqual(context.city, "Paris")
-        XCTAssertEqual(context.cuisine, "Japanese")
-        XCTAssertFalse(followUp.hotelIDs.isEmpty)
-        XCTAssertTrue(followUp.hotelIDs.allSatisfy { id in store.hotels.first { $0.id == id }!.venues.contains { $0.cuisine.localizedCaseInsensitiveContains("Japanese") } })
-    }
-    func testConciergeDoesNotBookAndUsesRealPlans() {
-        var context = ConciergeContext(city: "Bangkok")
-        let booking = ConciergeEngine.reply(to: "Book it for me", context: &context, store: store)
-        XCTAssertTrue(booking.text.contains("can’t make reservations"))
-        XCTAssertTrue(store.plans.isEmpty)
-        let emptyPlans = ConciergeEngine.reply(to: "Show my itinerary", context: &context, store: store)
-        XCTAssertTrue(emptyPlans.text.contains("fresh page"))
-        let hotel = store.featured[0]
-        store.addPlan(name: hotel.name, city: hotel.city, kind: "Stay", hotelID: hotel.id, dates: BookingDates())
-        XCTAssertTrue(ConciergeEngine.reply(to: "Show my itinerary", context: &context, store: store).text.contains(hotel.name))
-        XCTAssertEqual(ConciergeEngine.reply(to: "Help me find flights", context: &context, store: store).action, .flights)
-    }
-    func testConciergeResetCancelsReply() async throws {
-        let chat = ConciergeConversation()
-        chat.send("Paris", store: store)
-        chat.send("Tokyo", store: store)
-        XCTAssertEqual(chat.messages.count, 1)
-        XCTAssertTrue(chat.isReplying)
-        chat.reset()
-        try await Task.sleep(for: .milliseconds(850))
-        XCTAssertTrue(chat.messages.isEmpty)
-        XCTAssertFalse(chat.isReplying)
-        XCTAssertNil(chat.context.city)
-        chat.send("  ", store: store)
-        XCTAssertTrue(chat.messages.isEmpty)
-    }
-
 }

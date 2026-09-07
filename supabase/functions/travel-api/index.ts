@@ -36,6 +36,7 @@ import {
   historyEnabled,
   nearbyFlightAirport,
 } from "./flights.ts";
+import { concierge } from "./concierge.ts";
 import { sharedLines, sharePDF } from "./shared.ts";
 const headers = {
   "Cache-Control": "no-store",
@@ -343,6 +344,11 @@ export async function handler(req: Request): Promise<Response> {
     if (/^\/v1\/places\/\d+$/.test(path) && method === "GET") {
       await limit("places:" + uid, 30);
       return json(await placeDetails(path.split("/").pop()!));
+    }
+    if (path === "/v1/ai/concierge" && method === "POST") {
+      await limit("concierge:" + uid, 40, 3600);
+      await limit("concierge-global", 1000, 3600);
+      return json(await concierge(body));
     }
     if (
       ["/v1/ai/activities", "/v1/ai/hotel"].includes(path) && method === "POST"
