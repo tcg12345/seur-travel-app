@@ -1,0 +1,470 @@
+import SwiftUI
+import MapKit
+import UniformTypeIdentifiers
+
+struct TravelHubView: View {
+    @Environment(JourneyLibrary.self) private var library
+    @Environment(TravelStore.self) private var store
+    @State private var section = "Trips"
+    @State private var query = ""
+    @State private var grid = false
+    @State private var newJourney = false
+    @State private var account = false
+    @State private var importing = false
+    @State private var filter = "All"
+    @State private var error: String?
+    private var documents: [JourneyDocument] {
+        library.documents.filter { (query.isEmpty || ($0.title + " " + $0.routeLabel).localizedCaseInsensitiveContains(query)) && (filter == "All" || $0.visibility.title == filter) }.sorted { $0.updatedAt > $1.updatedAt }
+    }
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 24) {
+                VStack(alignment: .leading, spacing: 10) {
+                    Eyebrow(text: "A life well travelled")
+                    Editorial("The journey,\nyours to make.", size: 38)
+                    Text("Plan what’s next. Remember what mattered.").font(.subheadline).foregroundStyle(.secondary)
+                }.padding(.top, 10)
+                Picker("Travel tool", selection: $section) { Text("Trips").tag("Trips"); Text("Friends").tag("Friends") }.pickerStyle(.segmented).accessibilityIdentifier("travel-tool")
+                if section == "Friends" { TravelFriendsView() }
+                else {
+                    HStack {
+                        Menu { Picker("Show", selection: $filter) { ForEach(["All", "Private", "Friends", "Public"], id: \.self) { Text($0) } } } label: { Label(filter == "All" ? "All journeys" : filter, systemImage: "line.3.horizontal.decrease") }.font(.subheadline)
+                        Spacer()
+                        Button { withAnimation(.smooth) { grid.toggle() } } label: { Image(systemName: grid ? "list.bullet" : "square.grid.2x2").frame(width: 38, height: 38) }.buttonStyle(.glass).accessibilityLabel(grid ? "List view" : "Grid view")
+                    }
+                    if documents.isEmpty {
+                        VStack(spacing: 18) {
+                            Image(systemName: "point.topleft.down.to.point.bottomright.curvepath").font(.system(size: 40, weight: .ultraLight)).foregroundStyle(Color.bronze)
+                            Editorial(query.isEmpty ? "A world of possibilities." : "No journeys found.", size: 27)
+                            Text("Your plans, stays, flights and favourite memories. One trip, from the first idea to the last photograph.").font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                            Button { newJourney = true } label: { Label("Create trip", systemImage: "plus").padding(.vertical, 10) }.buttonStyle(.glassProminent).accessibilityIdentifier("travel-create")
+                        }.frame(maxWidth: .infinity).padding(.vertical, 30).padding(.horizontal, 15).background(.background, in: .rect(cornerRadius: 28))
+                    } else {
+                        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 14), count: grid ? 2 : 1), spacing: 16) {
+                            ForEach(documents) { document in
+                                NavigationLink { JourneyDetailView(id: document.id) } label: { JourneyCard(document: document, compact: grid) }.buttonStyle(PressStyle())
+                            }
+                        }
+                    }
+                    if !store.plans.isEmpty {
+                        NavigationLink { TripsView() } label: { Label("Earlier saved plans · \(store.plans.count)", systemImage: "tray.full").font(.subheadline).frame(maxWidth: .infinity).padding(18).background(.background, in: .rect(cornerRadius: 22)) }
+                    }
+                }
+            }.padding(22)
+        }.background(Color.canvas).navigationTitle("Travel").navigationBarTitleDisplayMode(.inline)
+            .searchable(text: $query, prompt: "Search journeys or destinations")
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) { Button { account = true } label: { Image(systemName: "person.crop.circle") }.accessibilityLabel("Travel account") }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        Button("New trip", systemImage: "plus") { section = "Trips"; newJourney = true }
+                        Button("Import Aurum JSON", systemImage: "square.and.arrow.down") { importing = true }
+                    } label: { Image(systemName: "plus") }.accessibilityIdentifier("travel-new-menu")
+                }
+            }
+            .sheet(isPresented: $newJourney) { TripCreationView() }
+            .sheet(isPresented: $account) { TravelAccountView() }
+            .fileImporter(isPresented: $importing, allowedContentTypes: [.json]) { result in
+                do { let url = try result.get(); let accessed = url.startAccessingSecurityScopedResource(); defer { if accessed { url.stopAccessingSecurityScopedResource() } }; _ = try library.importData(Data(contentsOf: url)) } catch { self.error = error.localizedDescription }
+            }
+            .alert("Travel", isPresented: Binding(get: { error != nil || library.error != nil }, set: { if !$0 { error = nil; library.error = nil } })) { Button("OK") { error = nil; library.error = nil } } message: { Text(error ?? library.error ?? "") }
+    }
+}
+
+private struct JourneyCard: View {
+    let document: JourneyDocument
+    var compact = false
+    private var accent: Color { Color(red: 0.19, green: 0.31, blue: 0.29) }
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ZStack(alignment: .bottomLeading) {
+                LinearGradient(colors: [accent, accent.opacity(0.75)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                Image(systemName: "airplane").font(.system(size: compact ? 70 : 100, weight: .ultraLight)).rotationEffect(.degrees(-15)).foregroundStyle(.white.opacity(0.12)).frame(maxWidth: .infinity, alignment: .trailing).padding(15)
+                VStack(alignment: .leading, spacing: 8) {
+                    Label("THE WHOLE JOURNEY", systemImage: "map").font(.system(size: 9, weight: .semibold)).tracking(1.5)
+                    Text(document.routeLabel.isEmpty ? "Your journey" : document.routeLabel).font(.system(compact ? .title3 : .title2, design: .serif)).lineLimit(2)
+                }.foregroundStyle(.white).padding(20)
+            }.frame(height: compact ? 138 : 150)
+            VStack(alignment: .leading, spacing: 12) {
+                Text(document.title).font(.system(.title3, design: .serif)).foregroundStyle(.primary).lineLimit(2)
+                Text("\(document.planCount) plans · \(document.places.count) journal places" + (document.nights > 0 ? " · \(document.nights) nights" : "")).font(.caption).foregroundStyle(.secondary)
+                HStack {
+                    Label(document.visibility.title, systemImage: document.visibility == .private ? "lock" : "person.2").font(.caption2).foregroundStyle(.secondary)
+                    Spacer(); Image(systemName: "arrow.up.right").foregroundStyle(Color.bronze)
+                }
+            }.padding(19)
+        }.background(.background, in: .rect(cornerRadius: 27)).clipShape(.rect(cornerRadius: 27))
+    }
+}
+
+struct JourneyDetailView: View {
+    @Environment(JourneyLibrary.self) private var library
+    @Environment(\.dismiss) private var dismiss
+    let id: UUID
+    @State private var mode = "Agenda"
+    @State private var chapter = "Plan"
+    @State private var selectedDay: String?
+    @State private var editInfo = false
+    @State private var event: JourneyEvent?
+    @State private var addingPlan = false
+    @State private var addingDay: JourneyAgendaDay?
+    @State private var hotel: HotelReservation?
+    @State private var flight: FlightReservation?
+    @State private var rated: RatedPlace?
+    @State private var share = false
+    @State private var importing = false
+    @State private var savedRatings = false
+    @State private var deleting = false
+    @State private var exportURL: ExportedJourney?
+    @State private var error: String?
+    @State private var placeFilter: PlaceCategory?
+    @State private var placeGrid = false
+    private var document: JourneyDocument? { library.documents.first { $0.id == id } }
+    var body: some View {
+        Group {
+            if let document {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 25) {
+                        header(document)
+                        Picker("Trip section", selection: $chapter) { Text("Plan").tag("Plan"); Text("Journal").tag("Journal") }.pickerStyle(.segmented).accessibilityIdentifier("trip-section")
+                        if chapter == "Plan" { itinerary(document) } else { journal(document) }
+                    }.padding(22)
+                }.background(Color.canvas)
+                    .navigationBarTitleDisplayMode(.inline).toolbar(.hidden, for: .tabBar)
+                    .toolbar {
+                        ToolbarItem(placement: .topBarTrailing) { Button { share = true } label: { Image(systemName: "square.and.arrow.up") }.accessibilityLabel("Share journey") }
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Menu {
+                                Button("Edit journey", systemImage: "pencil") { editInfo = true }
+                                Button("Add planned places to journal", systemImage: "star.bubble") {
+                                    var updated = document
+                                    let count = updated.addPlannedPlacesToJournal()
+                                    if library.save(updated) { chapter = "Journal"; error = count > 0 ? "Added \(count) restaurants and attractions to rate. Your plans and existing ratings are preserved." : "Your planned restaurants and attractions are already in the journal, or there are none to add yet." }
+                                }.accessibilityIdentifier("trip-journal-planned")
+                                Button("Import places from a trip", systemImage: "square.and.arrow.down") { importing = true }
+                                Button("Add a rated restaurant", systemImage: "star") { savedRatings = true }
+                                Menu("Export", systemImage: "square.and.arrow.up") {
+                                    ForEach(JourneyExportFormat.allCases) { format in Button(format.rawValue.uppercased()) { do { exportURL = ExportedJourney(url: try JourneyExporter.export(document, format: format)) } catch { self.error = error.localizedDescription } } }
+                                }
+                                Button("Delete journey", systemImage: "trash", role: .destructive) { deleting = true }
+                            } label: { Image(systemName: "ellipsis") }.accessibilityIdentifier("journey-menu")
+                        }
+                    }
+                    .safeAreaInset(edge: .bottom) {
+                        HStack(spacing: 12) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(chapter == "Plan" ? "Room for a little more" : "Keep the memory").font(.subheadline.weight(.medium))
+                                Text(chapter == "Plan" ? "Make every day your own" : "Add a place you visited").font(.caption2).foregroundStyle(.secondary)
+                            }.frame(maxWidth: .infinity, alignment: .leading)
+                            if chapter == "Plan" {
+                                Button { addingDay = nil; addingPlan = true } label: { Label("Add to plan", systemImage: "plus").padding(.vertical, 10) }.buttonStyle(.glassProminent).accessibilityIdentifier("journey-add")
+                            } else { Button { rated = RatedPlace() } label: { Label("Log a place", systemImage: "plus").padding(.vertical, 10) }.buttonStyle(.glassProminent).accessibilityIdentifier("trip-add-place") }
+                        }.padding(14).glassEffect(.regular, in: .rect(cornerRadius: 27)).padding(.horizontal, 16).padding(.bottom, 8)
+                    }
+                    .sheet(isPresented: $editInfo) { JourneyEditor(document: document) }
+                    .sheet(isPresented: $addingPlan) { TripAddFlowView(documentID: id, day: addingDay) }
+                    .sheet(item: $event) { JourneyEventEditor(documentID: id, event: $0) }
+                    .sheet(item: $hotel) { HotelReservationEditor(documentID: id, reservation: $0) }
+                    .sheet(item: $flight) { FlightReservationEditor(documentID: id, reservation: $0) }
+                    .sheet(item: $rated) { RatedPlaceEditor(documentID: id, rated: $0) }
+                    .sheet(isPresented: $share) { JourneyShareView(documentID: id) }
+                    .sheet(isPresented: $importing) { ItineraryIntoTripView(tripID: id) }
+                    .sheet(isPresented: $savedRatings) { RatedRestaurantImportView(tripID: id) }
+                    .sheet(item: $exportURL) { ActivityShareSheet(items: [$0.url]) }
+                    .confirmationDialog("Delete this local journey?", isPresented: $deleting, titleVisibility: .visible) {
+                        Button("Delete from device", role: .destructive) { if library.remove(id) { dismiss() } }
+                    } message: { Text("A shared cloud copy is managed separately in Sharing. Removing the local copy does not revoke a link.") }
+            } else { ContentUnavailableView("Journey unavailable", systemImage: "suitcase", description: Text("This journey may have been removed.")) }
+        }.alert("Travel", isPresented: Binding(get: { error != nil || library.error != nil }, set: { if !$0 { error = nil; library.error = nil } })) { Button("OK") { error = nil; library.error = nil } } message: { Text(error ?? library.error ?? "") }
+    }
+    private func header(_ d: JourneyDocument) -> some View {
+        VStack(alignment: .leading, spacing: 15) {
+            Eyebrow(text: "Your trip")
+            Editorial(d.title, size: 37).accessibilityIdentifier("journey-title")
+            Label(d.routeLabel.isEmpty ? "Add your destination" : d.routeLabel, systemImage: "mappin.and.ellipse").font(.subheadline).foregroundStyle(.secondary)
+            if let start = d.startDate { Text(TravelDay.label(start) + (d.endDate.map { " – " + TravelDay.label($0) } ?? "")).font(.caption).foregroundStyle(Color.bronze) }
+            if !d.description.isEmpty { Text(d.description).font(.subheadline).foregroundStyle(.secondary).lineSpacing(4) }
+            HStack(spacing: 0) {
+                metric("\(d.nights)", "Nights")
+                Divider().frame(height: 34)
+                metric("\(d.planCount)", "Plans")
+                Divider().frame(height: 34)
+                metric("\(d.places.count)", "Journal places")
+            }.padding(.vertical, 19).background(.background, in: .rect(cornerRadius: 24))
+        }
+    }
+    private func metric(_ value: String, _ caption: String) -> some View { VStack(spacing: 6) { Text(value).font(.system(.title2, design: .serif)); Text(caption).font(.caption2).foregroundStyle(.secondary) }.frame(maxWidth: .infinity) }
+    private func itinerary(_ d: JourneyDocument) -> some View {
+        VStack(alignment: .leading, spacing: 24) {
+            if d.stops.isEmpty {
+                VStack(alignment: .leading, spacing: 12) {
+                    SectionHeading(title: "Give your plans a place", subtitle: "Add route stops to organise events by day. You can already save bookings and log visits.")
+                    Button("Add destinations", systemImage: "mappin.and.ellipse") { editInfo = true }.buttonStyle(.glass).accessibilityIdentifier("trip-add-route")
+                }.padding(20).background(Color.cardSurface, in: .rect(cornerRadius: 24))
+            }
+            Picker("Itinerary view", selection: $mode) { Text("Agenda").tag("Agenda"); Text("Calendar").tag("Calendar"); Text("Map").tag("Map") }.pickerStyle(.segmented)
+            if mode != "Map" && (!d.hotels.isEmpty || !d.flights.isEmpty) { bookingSection(d) }
+            if mode == "Map" { JourneyMapView(places: d.mapPlaces).frame(height: 380).clipShape(.rect(cornerRadius: 26)) }
+            else {
+                if mode == "Calendar" {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 95))], spacing: 10) {
+                        ForEach(d.days) { day in
+                            Button { selectedDay = selectedDay == day.id ? nil : day.id } label: {
+                                VStack(spacing: 6) { Text(day.label).font(.subheadline.weight(.medium)); Text(day.city).font(.caption2).lineLimit(1); Text("\(d.events.filter { $0.stopID == day.stopID && $0.day == day.localDay }.count) plans").font(.caption2).foregroundStyle(.secondary) }.frame(maxWidth: .infinity).padding(13).background(selectedDay == day.id ? Color.bronze.opacity(0.17) : Color.cardSurface, in: .rect(cornerRadius: 17))
+                            }.buttonStyle(.plain)
+                        }
+                    }
+                }
+                ForEach(d.days.filter { mode != "Calendar" || selectedDay == nil || selectedDay == $0.id }) { day in
+                    VStack(alignment: .leading, spacing: 14) {
+                        HStack { SectionHeading(title: day.label, subtitle: day.city); Spacer(); Button { addingDay = day; addingPlan = true } label: { Image(systemName: "plus").frame(width: 35, height: 35) }.buttonStyle(.glass).accessibilityLabel("Add event on \(day.label) in \(day.city)") }
+                        let events = d.events.filter { $0.stopID == day.stopID && $0.day == day.localDay }.sorted { $0.sortMinute < $1.sortMinute }
+                        if events.isEmpty { Text("A little space for serendipity.").font(.subheadline).foregroundStyle(.secondary).padding(.vertical, 10) }
+                        ForEach(events) { item in
+                            Button { event = item } label: {
+                                HStack(alignment: .top, spacing: 15) {
+                                    Text(item.allDay == true ? "All day" : item.timeLabel).font(.caption.monospacedDigit()).foregroundStyle(Color.bronze).frame(width: 42).padding(.top, 3)
+                                    VStack(alignment: .leading, spacing: 7) { Text(item.displayTitle).font(.system(.headline, design: .serif)).foregroundStyle(.primary); Text(item.categoryTitle + (item.endTimeLabel.map { " · Until " + $0 } ?? "")).font(.caption).foregroundStyle(.secondary); if !item.isPlaceVisit && !item.place.name.isEmpty { Text(item.place.name).font(.caption).foregroundStyle(.secondary) }; if let attendees = item.attendees, !attendees.isEmpty { Text(attendees).font(.caption).foregroundStyle(.secondary) }; if !item.description.isEmpty { Text(item.description).font(.caption).foregroundStyle(.secondary).lineLimit(2) }; if let cost = item.cost { Text(cost.formatted).font(.caption).foregroundStyle(Color.bronze) } }.frame(maxWidth: .infinity, alignment: .leading)
+                                    Image(systemName: item.symbol).foregroundStyle(Color.bronze)
+                                }.padding(18).background(.background, in: .rect(cornerRadius: 22))
+                            }.buttonStyle(PressStyle()).accessibilityIdentifier("agenda-event-\(day.localDay)")
+                            .contextMenu {
+                                if item.isPlaceVisit {
+                                    Button("Log or rate visit", systemImage: "star.bubble") { rated = d.places.first(where: { $0.place.id == item.place.id && $0.place.source == item.place.source }) ?? RatedPlace(place: item.place) }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            if mode == "Map" || (d.hotels.isEmpty && d.flights.isEmpty) { bookingSection(d) }
+            VStack(alignment: .leading, spacing: 14) {
+                SectionHeading(title: "The little details add up")
+                priceRows(d.eventTotals, label: "Events")
+                Divider()
+                priceRows(d.totals, label: "Total planned cost")
+                Text("Each repeated event counts once per day. Different currencies stay separate. Missing prices are excluded.").font(.caption).foregroundStyle(.secondary)
+            }.padding(21).background(.background, in: .rect(cornerRadius: 25))
+        }
+    }
+    private func bookingSection(_ d: JourneyDocument) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            SectionHeading(title: "The stay & the journey", subtitle: "Your booking details, all together.")
+            ForEach(d.hotels) { item in Button { hotel = item } label: { bookingRow(item.place.name, subtitle: "\(TravelDay.label(item.checkIn)) – \(TravelDay.label(item.checkOut)) · \(item.rooms) rooms", symbol: "bed.double", cost: item.cost) }.buttonStyle(PressStyle()).contextMenu { Button("Log or rate stay", systemImage: "star.bubble") { rated = d.places.first(where: { $0.place.id == item.place.id && $0.place.source == item.place.source }) ?? RatedPlace(place: item.place) } } }
+            ForEach(d.flights) { item in Button { flight = item } label: { bookingRow("\(item.departureAirport) → \(item.arrivalAirport)", subtitle: "\(item.airline) \(item.flightNumber) · \(item.departureDay)", symbol: "airplane", cost: item.cost) }.buttonStyle(PressStyle()) }
+            if d.hotels.isEmpty && d.flights.isEmpty { Text("Attach a hotel or flight using Add to plan.").font(.subheadline).foregroundStyle(.secondary) }
+        }
+    }
+    private func priceRows(_ totals: [String: Decimal], label: String) -> some View {
+        VStack(alignment: .leading, spacing: 8) { Text(label).font(.subheadline.weight(.medium)); if totals.isEmpty { Text("No prices added").font(.caption).foregroundStyle(.secondary) }; ForEach(totals.keys.sorted(), id: \.self) { currency in HStack { Text(currency).foregroundStyle(.secondary); Spacer(); Text(TravelMoney(amount: totals[currency]!, currency: currency).formatted) }.font(.subheadline) } }
+    }
+    private func bookingRow(_ name: String, subtitle: String, symbol: String, cost: TravelMoney?) -> some View {
+        HStack(spacing: 16) { Image(systemName: symbol).font(.title2.weight(.light)).foregroundStyle(Color.bronze); VStack(alignment: .leading, spacing: 7) { Text(name).font(.system(.headline, design: .serif)).foregroundStyle(.primary); Text(subtitle).font(.caption).foregroundStyle(.secondary); if let cost { Text(cost.formatted).font(.caption).foregroundStyle(Color.bronze) } }.frame(maxWidth: .infinity, alignment: .leading); Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary) }.padding(19).background(.background, in: .rect(cornerRadius: 23))
+    }
+    private func journal(_ d: JourneyDocument) -> some View {
+        VStack(alignment: .leading, spacing: 22) {
+            HStack {
+                metric(d.averageScore.map { String(format: "%.1f", $0) } ?? "—", "Average / 10")
+                Divider().frame(height: 32)
+                metric("\(d.places.reduce(0) { $0 + $1.photos.count })", "Photos")
+                Divider().frame(height: 32)
+                metric("\(d.stops.count)", "Destinations")
+            }.padding(.vertical, 18).background(Color.cardSurface, in: .rect(cornerRadius: 24))
+            if !d.plannedPlacesToRate.isEmpty {
+                Button {
+                    var updated = d; updated.addPlannedPlacesToJournal()
+                    _ = library.save(updated)
+                } label: { Label("Bring planned places into your journal", systemImage: "calendar.badge.checkmark").font(.subheadline) }.accessibilityIdentifier("trip-journal-planned")
+                Text("Adds restaurants and attractions to rate without changing your plans or existing reviews.").font(.caption).foregroundStyle(.secondary)
+            }
+            HStack {
+                Menu { Button("All places") { placeFilter = nil }; ForEach(PlaceCategory.allCases) { category in Button(category.title) { placeFilter = category } } } label: { Label(placeFilter?.title ?? "All places", systemImage: "line.3.horizontal.decrease") }
+                Spacer()
+                Button { placeGrid.toggle() } label: { Image(systemName: placeGrid ? "list.bullet" : "square.grid.2x2").frame(width: 35, height: 35) }.buttonStyle(.glass)
+            }
+            if d.places.isEmpty { ContentUnavailableView("The places that stayed with you", systemImage: "star", description: Text("Log a visit or bring this trip’s planned restaurants and attractions into your journal.")) }
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: placeGrid ? 2 : 1), spacing: 16) {
+                ForEach(d.places.filter { placeFilter == nil || $0.place.category == placeFilter }) { place in
+                    Button { rated = place } label: {
+                        VStack(alignment: .leading, spacing: 13) {
+                            if let photo = place.photos.first, let image = UIImage(data: photo.jpeg) { Image(uiImage: image).resizable().scaledToFill().frame(height: 140).clipped().clipShape(.rect(cornerRadius: 17)) }
+                            HStack { Image(systemName: place.place.category.symbol).foregroundStyle(Color.bronze); Spacer(); Text(place.overall > 0 ? String(format: "%.1f", place.overall) : "To rate").font(.headline).foregroundStyle(Color.bronze) }
+                            Text(place.place.name).font(.system(.headline, design: .serif)).foregroundStyle(.primary)
+                            Text(place.place.category.title + (place.visitedOn.map { " · " + TravelDay.label($0) } ?? "")).font(.caption).foregroundStyle(.secondary)
+                            if !place.notes.isEmpty { Text(place.notes).font(.caption).foregroundStyle(.secondary).lineLimit(3) }
+                        }.frame(maxWidth: .infinity, alignment: .leading).padding(18).background(.background, in: .rect(cornerRadius: 23))
+                    }.buttonStyle(PressStyle())
+                }
+            }
+            if !d.places.isEmpty { SectionHeading(title: "Your trip, on the map"); JourneyMapView(places: d.places.filter { placeFilter == nil || $0.place.category == placeFilter }.map(\.place)).frame(height: 320).clipShape(.rect(cornerRadius: 25)) }
+        }
+    }
+}
+
+struct JourneyMapView: View {
+    let places: [PlaceRecord]
+    @State private var selected: String?
+    private var plotted: [PlaceRecord] { var ids = Set<String>(); return places.filter { $0.hasCoordinate && ids.insert($0.id).inserted } }
+    private var initialCamera: MapCameraPosition {
+        guard plotted.count == 1, let place = plotted.first else { return .automatic }
+        return .region(MKCoordinateRegion(center: CLLocationCoordinate2D(latitude: place.latitude!, longitude: place.longitude!), span: MKCoordinateSpan(latitudeDelta: 0.018, longitudeDelta: 0.018)))
+    }
+    var body: some View {
+        VStack(spacing: 9) {
+            if plotted.isEmpty { ContentUnavailableView("No mapped places yet", systemImage: "map", description: Text("Search for a place or add coordinates to put it on your map.")) }
+            else {
+                Map(initialPosition: initialCamera, selection: $selected) { ForEach(plotted) { place in Marker(place.name, systemImage: place.category.symbol, coordinate: CLLocationCoordinate2D(latitude: place.latitude!, longitude: place.longitude!)).tint(Color.bronze).tag(place.id) } }.id(plotted).mapStyle(.standard(elevation: .realistic)).mapControls { MapCompass(); MapScaleView() }
+                if let selected, let place = plotted.first(where: { $0.id == selected }) {
+                    Button { let item = MKMapItem(location: CLLocation(latitude: place.latitude!, longitude: place.longitude!), address: nil); item.name = place.name; item.openInMaps() } label: { Label("\(place.name) · Open in Maps", systemImage: "arrow.up.right").font(.caption) }.padding(.horizontal)
+                }
+            }
+            if !plotted.isEmpty { Text("\(plotted.count) \(plotted.count == 1 ? "place" : "places") on your map").font(.caption2).foregroundStyle(.secondary).accessibilityIdentifier("trip-map-count") }
+            if places.count > plotted.count { Text("Only places with coordinates are plotted; duplicate locations share a pin.").font(.caption2).foregroundStyle(.secondary).padding(.horizontal) }
+        }
+    }
+}
+struct ExportedJourney: Identifiable { let id = UUID(); let url: URL }
+struct ActivityShareSheet: UIViewControllerRepresentable {
+    let items: [Any]
+    func makeUIViewController(context: Context) -> UIActivityViewController { UIActivityViewController(activityItems: items, applicationActivities: nil) }
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
+}
+
+struct ItineraryItemChooser: View {
+    @Environment(\.dismiss) private var dismiss
+    let select: (String) -> Void
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 28) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Eyebrow(text: "A day, beautifully considered")
+                        Editorial("What’s on your agenda?", size: 32)
+                        Text("From a table for two to a moment that’s entirely yours.").font(.subheadline).foregroundStyle(.secondary)
+                    }.padding(.top, 8)
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Stays & flights").font(.subheadline.weight(.semibold))
+                        HStack(spacing: 10) { option("Hotel booking", symbol: "bed.double", value: "hotel"); option("Flight booking", symbol: "airplane", value: "flight") }
+                    }
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Tables & discoveries").font(.subheadline.weight(.semibold))
+                        HStack(spacing: 10) { option("Restaurant", symbol: "fork.knife", value: "place"); option("Activity or place", symbol: "mappin.and.ellipse", value: "attraction") }
+                    }
+                    ForEach(ItineraryItemKind.groups, id: \.title) { group in
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text(group.title).font(.subheadline.weight(.semibold))
+                            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                                ForEach(group.items.filter { $0 != .place }) { kind in option(kind.title, symbol: kind.symbol, value: kind.rawValue) }
+                            }
+                        }
+                    }
+                    Button { select("ai") } label: { Label("AI activity ideas", systemImage: "sparkles").frame(maxWidth: .infinity).padding(12) }.buttonStyle(.glass)
+                }.padding(22)
+            }.background(Color.canvas).navigationTitle("Add to your trip").navigationBarTitleDisplayMode(.inline)
+                .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } } }
+        }.presentationDragIndicator(.visible)
+    }
+    private func option(_ title: String, symbol: String, value: String) -> some View {
+        Button { select(value) } label: {
+            VStack(alignment: .leading, spacing: 14) {
+                Image(systemName: symbol).font(.title3).foregroundStyle(Color.bronze)
+                Text(title).font(.subheadline.weight(.medium)).foregroundStyle(.primary).fixedSize(horizontal: false, vertical: true)
+            }.frame(maxWidth: .infinity, minHeight: 88, alignment: .topLeading).padding(16).background(Color.cardSurface, in: .rect(cornerRadius: 21))
+        }.buttonStyle(PressStyle()).accessibilityIdentifier("add-plan-" + value)
+    }
+}
+
+/// Keep the chooser mounted while presenting an editor. There is no race between sibling sheets.
+struct TripAddFlowView: View {
+    @Environment(JourneyLibrary.self) private var library
+    @Environment(\.dismiss) private var dismiss
+    let documentID: UUID
+    var day: JourneyAgendaDay?
+    @State private var route: AddRoute?
+    @State private var saved = false
+    @State private var pendingChoice: String?
+    private var document: JourneyDocument? { library.documents.first { $0.id == documentID } }
+    private enum AddRoute: Identifiable {
+        case event(JourneyEvent), hotel(HotelReservation), flight(FlightReservation), ideas, destination
+        var id: String {
+            switch self { case .event(let item): "event-" + item.id.uuidString; case .hotel(let item): "hotel-" + item.id.uuidString; case .flight(let item): "flight-" + item.id.uuidString; case .ideas: "ideas"; case .destination: "destination" }
+        }
+    }
+    var body: some View {
+        ItineraryItemChooser(select: choose)
+            .sheet(item: $route, onDismiss: {
+                if saved { dismiss() }
+                else if let choice = pendingChoice {
+                    pendingChoice = nil
+                    if document?.stops.isEmpty == false { choose(choice) }
+                }
+            }) { route in
+                switch route {
+                case .event(let value): JourneyEventEditor(documentID: documentID, event: value, onSaved: { saved = true })
+                case .hotel(let value): HotelReservationEditor(documentID: documentID, reservation: value, onSaved: { saved = true })
+                case .flight(let value): FlightReservationEditor(documentID: documentID, reservation: value, onSaved: { saved = true })
+                case .ideas: ActivityIdeasView(documentID: documentID)
+                case .destination: AddTripDestinationView(documentID: documentID)
+                }
+            }
+    }
+    private func choose(_ choice: String) {
+        guard var document else { return }
+        if document.preparePlanningRoute(), !library.save(document) { return }
+        saved = false
+        let stop = document.stops.first(where: { $0.id == day?.stopID }) ?? document.stops.first
+        switch choice {
+        case "hotel":
+            var hotel = HotelReservation()
+            hotel.place.city = stop?.name ?? document.destination
+            hotel.checkIn = stop?.arrival ?? document.startDate ?? hotel.checkIn
+            hotel.checkOut = stop?.departure ?? document.endDate ?? TravelDay.adding(3, to: hotel.checkIn)
+            if hotel.checkOut <= hotel.checkIn { hotel.checkOut = TravelDay.adding(1, to: hotel.checkIn) }
+            route = .hotel(hotel)
+        case "flight":
+            var flight = FlightReservation()
+            flight.departureDay = document.startDate ?? stop?.arrival ?? flight.departureDay
+            flight.arrivalDay = flight.departureDay
+            route = .flight(flight)
+        default:
+            guard let stop else { pendingChoice = choice; route = .destination; return }
+            if choice == "ai" { route = .ideas; return }
+            guard let kind = choice == "attraction" ? ItineraryItemKind.place : ItineraryItemKind(rawValue: choice) else { return }
+            let category: PlaceCategory = choice == "attraction" ? .attraction : kind == .place ? .restaurant : .other
+            route = .event(JourneyEvent(stopID: stop.id, day: min(day?.localDay ?? 0, stop.nights), place: PlaceRecord(category: category, city: stop.name), kind: kind))
+        }
+    }
+}
+
+/// Older journal-only trips acquire a route without losing the user's selected add action.
+struct AddTripDestinationView: View {
+    @Environment(JourneyLibrary.self) private var library
+    @Environment(\.dismiss) private var dismiss
+    let documentID: UUID
+    var fallbackDestination = ""
+    @State private var destination = ""
+    @State private var selection: LocationSelection?
+    @State private var start = TravelDay.key(.now)
+    @State private var end = TravelDay.adding(3, to: TravelDay.key(.now))
+    @State private var error: String?
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section { LocationAutocompleteField("Destination", text: $destination, identifier: "add-trip-destination", onEdit: { selection = nil }) { selection = $0 } }
+                Section("Travel dates") { DayField(title: "Arrival", value: $start); DayField(title: "Departure", value: $end) }
+                if let error { Text(error).foregroundStyle(.red) }
+            }.scrollContentBackground(.hidden).background(Color.canvas).navigationTitle("Where will this happen?").navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                    ToolbarItem(placement: .confirmationAction) { Button("Continue") {
+                        guard var document = library.documents.first(where: { $0.id == documentID }) else { return }
+                        guard end > start else { error = "Choose a departure after your arrival."; return }
+                        document.dateMode = .dates; document.startDate = start; document.endDate = end; document.destination = destination.trimmingCharacters(in: .whitespacesAndNewlines)
+                        document.stops.append(JourneyStop(name: destination.trimmingCharacters(in: .whitespacesAndNewlines), country: selection?.country ?? "", arrival: start, nights: TravelDay.distance(start, end), latitude: selection?.place.latitude, longitude: selection?.place.longitude))
+                        if library.save(document) { dismiss() } else { error = library.error }
+                    }.disabled(destination.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty).accessibilityIdentifier("add-trip-continue") }
+                }
+                .onAppear { if let document = library.documents.first(where: { $0.id == documentID }) { destination = document.destination.isEmpty ? fallbackDestination : document.destination; start = document.startDate ?? start; end = document.endDate ?? TravelDay.adding(3, to: start) } }
+        }
+    }
+}
