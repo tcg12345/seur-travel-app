@@ -229,3 +229,8 @@ The SwiftUI source uses native iOS 26 Liquid Glass APIs and system controls. The
 
 - Removed the map panel's hidden state and the “Explore your world” recovery button. Opening Saved places no longer hides the panel, so returning to Map always reveals the existing sheet.
 - The simulator build and expanded existing navigation regression passed in `/tmp/SeurPersistentMapQA.xcresult`, including returning from Saved places with visible, usable sheet controls and no recovery button. Both existing simulator apps were updated with saved data preserved.
+
+## Direct new-trip button — September 7, 2026
+
+- Replaced the Travel toolbar's plus menu with a direct New trip button that opens the existing trip creation form. Removed the JSON import option and its file picker from this page.
+- The signed Debug simulator build passed. This small toolbar change was checked in the source diff; no new UI test was added.
