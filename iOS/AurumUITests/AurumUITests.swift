@@ -353,8 +353,7 @@ final class AurumUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Lisbon Museum 1"].waitForExistence(timeout: 5)); capture("59 Saved city discoveries")
         app.tabBars.buttons["Travel"].tap(); app.staticTexts["Trip to Lisbon, Portugal"].tap()
         let museum = app.staticTexts["Lisbon Museum 1"]; reveal(museum); XCTAssertTrue(museum.exists)
-        for _ in 0..<8 { if app.buttons["Map"].isHittable { break }; app.swipeDown(velocity: .slow) }
-        app.buttons["Map"].tap(); XCTAssertTrue(app.staticTexts["trip-map-count"].waitForExistence(timeout: 5))
+        selectTripPlanView("Map"); XCTAssertTrue(app.staticTexts["trip-map-count"].waitForExistence(timeout: 5))
     }
     func testCityCollectionProminentAndSearchable() {
         openCityExplorer(fixtures: true)
@@ -402,6 +401,11 @@ final class AurumUITests: XCTestCase {
         for _ in 0..<8 { if app.textFields["city-place-query"].isHittable { break }; app.swipeDown(velocity: .slow) }
         let query = app.textFields["city-place-query"]; query.tap(); query.typeText("noresults\n")
         let empty = app.staticTexts["No saved places match this search. Try another interest or reset your filters."]; reveal(empty); XCTAssertTrue(empty.waitForExistence(timeout: 5))
+    }
+    private func selectTripPlanView(_ view: String) {
+        let selector = app.buttons["trip-plan-view"]
+        reveal(selector); selector.tap()
+        app.buttons[view].tap()
     }
     private func createAddFlowTrip(fixtures: Bool = true) {
         app.terminate(); app.launchArguments = ["--ui-testing"] + (fixtures ? ["--location-testing"] : []); app.launch()
@@ -487,7 +491,7 @@ final class AurumUITests: XCTestCase {
         app.buttons["flight-record-save"].tap(); XCTAssertTrue(app.buttons["journey-add"].waitForExistence(timeout: 8))
         app.terminate(); app.launchArguments = ["--ui-testing", "--preserve-state", "--location-testing"]; app.launch()
         app.tabBars.buttons["Travel"].tap(); app.staticTexts["Trip to Paris"].tap()
-        let map = app.buttons["Map"]; reveal(map); map.tap()
+        selectTripPlanView("Map")
         XCTAssertTrue(app.staticTexts["trip-map-count"].waitForExistence(timeout: 5))
         XCTAssertEqual(app.staticTexts["trip-map-count"].label, "4 places on your map")
         capture("50 Saved trip map with bookings and meeting")
@@ -593,7 +597,7 @@ final class AurumUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["place-map-ready"].waitForExistence(timeout: 20))
         capture("52 Resolved Savoy hotel")
         app.buttons["hotel-record-save"].tap(); XCTAssertTrue(app.buttons["journey-add"].waitForExistence(timeout: 8))
-        let map = app.buttons["Map"]; reveal(map); map.tap()
+        selectTripPlanView("Map")
         XCTAssertTrue(app.maps.firstMatch.waitForExistence(timeout: 10))
         RunLoop.current.run(until: Date().addingTimeInterval(3))
         capture("54 Live Savoy on trip map")
@@ -659,8 +663,7 @@ final class AurumUITests: XCTestCase {
         let secondEvent = app.buttons["agenda-event-1"]
         for _ in 0..<5 { if secondEvent.isHittable { break }; app.swipeUp() }
         XCTAssertTrue(secondEvent.exists)
-        for _ in 0..<6 { if app.buttons["Calendar"].isHittable { break }; app.swipeDown() }
-        app.buttons["Calendar"].tap()
+        selectTripPlanView("Calendar")
         capture("15 Itinerary calendar")
         app.terminate(); app.launchArguments = ["--ui-testing", "--preserve-state"]; app.launch()
         app.tabBars.buttons["Travel"].tap()
@@ -1111,7 +1114,7 @@ final class AurumUITests: XCTestCase {
         XCTAssertTrue(trip.waitForExistence(timeout: 5)); trip.tap()
         XCTAssertFalse(app.buttons["trip-add-route"].exists)
         XCTAssertTrue(app.buttons["journey-add"].exists)
-        XCTAssertFalse(app.segmentedControls["trip-section"].exists)
+        XCTAssertEqual(app.segmentedControls.count, 0)
         let add = app.buttons["journey-add"]
         XCTAssertEqual(add.value as? String, "Expanded")
         capture("47 Automatically prepared trip")
@@ -1125,13 +1128,20 @@ final class AurumUITests: XCTestCase {
         app.buttons["Close"].firstMatch.tap()
         for _ in 0..<5 { if add.value as? String == "Expanded" { break }; scroll.swipeDown() }
         XCTAssertEqual(add.value as? String, "Expanded")
-        app.buttons["Calendar"].tap()
-        XCTAssertTrue(app.buttons["Calendar"].isSelected)
-        app.buttons["Map"].tap()
+        XCTAssertFalse(app.buttons["Calendar"].exists)
+        selectTripPlanView("Calendar")
+        XCTAssertTrue(app.buttons["Plan"].isSelected)
+        XCTAssertEqual(app.buttons["trip-plan-view"].value as? String, "Calendar")
+        selectTripPlanView("Map")
         XCTAssertTrue(app.staticTexts["trip-map-count"].waitForExistence(timeout: 5))
         app.buttons["Journal"].tap()
         XCTAssertTrue(app.buttons["trip-add-place"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["trip-plan-view"].exists)
+        XCTAssertTrue(app.staticTexts["Your visits & memories"].exists)
+        capture("106 Journal visits and memories")
         app.buttons["Plan"].tap()
+        XCTAssertEqual(app.buttons["trip-plan-view"].value as? String, "Map")
+        selectTripPlanView("List")
         app.buttons["journey-menu"].tap(); app.buttons["Edit journey"].tap()
         XCTAssertEqual(app.textFields["journey-name"].value as? String, "Trip to Paris, France")
         let savedStop = app.collectionViews.staticTexts["Paris, France"]

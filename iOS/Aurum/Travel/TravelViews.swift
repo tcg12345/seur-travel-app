@@ -175,20 +175,18 @@ struct JourneyDetailView: View {
         }.alert("Travel", isPresented: Binding(get: { error != nil || library.error != nil }, set: { if !$0 { error = nil; library.error = nil } })) { Button("OK") { error = nil; library.error = nil } } message: { Text(error ?? library.error ?? "") }
     }
     private var tripNavigation: some View {
-        HStack(spacing: 0) {
-            ForEach(["Plan", "Calendar", "Map", "Journal"], id: \.self) { tab in
-                let selected = tab == "Journal" ? chapter == "Journal" : chapter == "Plan" && mode == (tab == "Plan" ? "Agenda" : tab)
+        HStack(spacing: 24) {
+            ForEach(["Plan", "Journal"], id: \.self) { tab in
+                let selected = chapter == tab
                 Button {
-                    withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) {
-                        chapter = tab == "Journal" ? "Journal" : "Plan"
-                        if tab != "Journal" { mode = tab == "Plan" ? "Agenda" : tab }
-                    }
+                    withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) { chapter = tab }
                 } label: {
                     Text(tab)
                         .font(.subheadline.weight(selected ? .semibold : .medium))
                         .foregroundStyle(selected ? Color.bronze : .secondary)
                         .lineLimit(1)
-                        .frame(maxWidth: .infinity, minHeight: 46)
+                        .frame(minHeight: 46)
+                        .padding(.horizontal, 2)
                         .overlay(alignment: .bottom) {
                             Capsule().fill(selected ? Color.bronze : .clear).frame(height: 2)
                         }
@@ -197,10 +195,33 @@ struct JourneyDetailView: View {
                 .buttonStyle(.plain)
                 .accessibilityAddTraits(selected ? .isSelected : [])
             }
+            Spacer(minLength: 0)
+            if chapter == "Plan" {
+                Menu {
+                    Picker("Plan view", selection: Binding(get: { mode }, set: { value in
+                        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) { mode = value }
+                    })) {
+                        Label("List", systemImage: "list.bullet").tag("Agenda")
+                        Label("Calendar", systemImage: "calendar").tag("Calendar")
+                        Label("Map", systemImage: "map").tag("Map")
+                    }
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: mode == "Agenda" ? "list.bullet" : mode == "Calendar" ? "calendar" : "map")
+                        Text(mode == "Agenda" ? "List" : mode)
+                        Image(systemName: "chevron.down").font(.system(size: 9, weight: .semibold))
+                    }
+                    .font(.caption.weight(.medium)).lineLimit(1)
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
+                }
+                .accessibilityLabel("Plan view")
+                .accessibilityValue(mode == "Agenda" ? "List" : mode)
+                .accessibilityIdentifier("trip-plan-view")
+            }
         }
         .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
         .background(alignment: .bottom) { Rectangle().fill(.quaternary).frame(height: 1) }
-        .accessibilityIdentifier("trip-section")
     }
     private var addButton: some View {
         Button {
@@ -210,7 +231,7 @@ struct JourneyDetailView: View {
             HStack(spacing: 8) {
                 Image(systemName: "plus").font(.title3.weight(.medium)).frame(width: 22)
                 if !compactAdd {
-                    Text(chapter == "Plan" ? "Add to plan" : "Log a place")
+                    Text(chapter == "Plan" ? "Add to plan" : "Log a visit")
                         .font(.subheadline.weight(.semibold)).lineLimit(1)
                         .transition(.opacity)
                 }
@@ -222,7 +243,7 @@ struct JourneyDetailView: View {
         .buttonStyle(.glassProminent)
         .buttonBorderShape(.capsule)
         .animation(reduceMotion ? nil : .smooth(duration: 0.24), value: compactAdd)
-        .accessibilityLabel(chapter == "Plan" ? "Add to plan" : "Log a place")
+        .accessibilityLabel(chapter == "Plan" ? "Add to plan" : "Log a visit")
         .accessibilityValue(compactAdd ? "Compact" : "Expanded")
         .accessibilityIdentifier(chapter == "Plan" ? "journey-add" : "trip-add-place")
     }
@@ -237,7 +258,7 @@ struct JourneyDetailView: View {
                 Divider().frame(height: 34)
                 metric("\(d.planCount)", "Plans")
                 Divider().frame(height: 34)
-                metric("\(d.places.count)", "Journal places")
+                metric("\(d.places.count)", "Journal entries")
             }.padding(.top, 8)
         }
     }
@@ -310,26 +331,31 @@ struct JourneyDetailView: View {
     }
     private func journal(_ d: JourneyDocument) -> some View {
         VStack(alignment: .leading, spacing: 22) {
-            HStack {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Your visits & memories").font(.title2.weight(.semibold))
+                Text("Photos, notes and personal ratings from the places you’ve visited.")
+                    .font(.subheadline).foregroundStyle(.secondary)
+            }.accessibilityIdentifier("trip-journal-intro")
+            if !d.places.isEmpty { HStack {
                 metric(d.averageScore.map { String(format: "%.1f", $0) } ?? "—", "Average / 10")
                 Divider().frame(height: 32)
                 metric("\(d.places.reduce(0) { $0 + $1.photos.count })", "Photos")
                 Divider().frame(height: 32)
                 metric("\(d.stops.count)", "Destinations")
-            }.padding(.vertical, 18).background(Color.cardSurface, in: .rect(cornerRadius: 24))
+            }.padding(.vertical, 12) }
             if !d.plannedPlacesToRate.isEmpty {
                 Button {
                     var updated = d; updated.addPlannedPlacesToJournal()
                     _ = library.save(updated)
-                } label: { Label("Bring planned places into your journal", systemImage: "calendar.badge.checkmark").font(.subheadline) }.accessibilityIdentifier("trip-journal-planned")
-                Text("Adds restaurants and attractions to rate without changing your plans or existing reviews.").font(.caption).foregroundStyle(.secondary)
+                } label: { Label("Add places from your plan", systemImage: "calendar.badge.checkmark").font(.subheadline) }.accessibilityIdentifier("trip-journal-planned")
+                Text("Bring over a restaurant or attraction, then add your memories and ratings.").font(.caption).foregroundStyle(.secondary)
             }
             HStack {
                 Menu { Button("All places") { placeFilter = nil }; ForEach(PlaceCategory.allCases) { category in Button(category.title) { placeFilter = category } } } label: { Label(placeFilter?.title ?? "All places", systemImage: "line.3.horizontal.decrease") }
                 Spacer()
                 Button { placeGrid.toggle() } label: { Image(systemName: placeGrid ? "list.bullet" : "square.grid.2x2").frame(width: 35, height: 35) }.buttonStyle(.glass)
             }
-            if d.places.isEmpty { ContentUnavailableView("The places that stayed with you", systemImage: "star", description: Text("Log a visit or bring this trip’s planned restaurants and attractions into your journal.")) }
+            if d.places.isEmpty { ContentUnavailableView("Your first memory", systemImage: "camera.on.rectangle", description: Text("After a visit, tap Log a visit to save what you loved, add photos and leave your own rating.")) }
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: placeGrid ? 2 : 1), spacing: 16) {
                 ForEach(d.places.filter { placeFilter == nil || $0.place.category == placeFilter }) { place in
                     Button { rated = place } label: {
