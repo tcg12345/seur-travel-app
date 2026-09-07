@@ -25,6 +25,7 @@ struct PlaceFields: View {
     var context = ""
     var optional = false
     var identifier = "place-name"
+    var suggestionSymbol: String?
     private var category: PlaceCategory { fixedCategory ?? place.category }
     private var title: String { optional ? "Location · optional" : category == .hotel ? "Your hotel" : category == .restaurant ? "Your restaurant" : "Your place" }
     private var prompt: String { optional ? "Search for a venue or address" : category == .hotel ? "Search hotel name" : category == .restaurant ? "Search restaurant name" : "Search for a place" }
@@ -32,7 +33,7 @@ struct PlaceFields: View {
         Section {
             HStack(alignment: .top, spacing: 12) {
                 Image(systemName: "magnifyingglass").foregroundStyle(Color.bronze).padding(.top, 2)
-                LocationAutocompleteField(prompt, text: $place.name, kind: .place, identifier: identifier, category: category, searchContext: context, onEdit: {
+                LocationAutocompleteField(prompt, text: $place.name, kind: .place, identifier: identifier, category: category, searchContext: context, suggestionSymbol: suggestionSymbol, onEdit: {
                     place = PlaceRecord(name: place.name, category: category, city: context)
                 }) { selection in var value = selection.place; value.category = category; place = value }
             }.padding(.vertical, 5)

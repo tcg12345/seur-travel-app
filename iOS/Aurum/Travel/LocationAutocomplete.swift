@@ -172,12 +172,16 @@ struct LocationAutocompleteField: View {
     var identifier = "location-field"
     var category: PlaceCategory = .other
     var searchContext = ""
+    var suggestionSymbol: String?
+    private var resultSymbol: String {
+        suggestionSymbol ?? (kind == .place && category != .other ? category.symbol : kind.symbol)
+    }
     var onEdit: (() -> Void)?
     var onSelect: ((LocationSelection) -> Void)?
     @State private var model: LocationAutocompleteModel
     @FocusState private var focused: Bool
-    init(_ title: String, text: Binding<String>, kind: LocationSearchKind = .destination, identifier: String = "location-field", category: PlaceCategory = .other, searchContext: String = "", onEdit: (() -> Void)? = nil, onSelect: ((LocationSelection) -> Void)? = nil) {
-        self.title = title; _text = text; self.kind = kind; self.identifier = identifier; self.category = category; self.searchContext = searchContext; self.onEdit = onEdit; self.onSelect = onSelect
+    init(_ title: String, text: Binding<String>, kind: LocationSearchKind = .destination, identifier: String = "location-field", category: PlaceCategory = .other, searchContext: String = "", suggestionSymbol: String? = nil, onEdit: (() -> Void)? = nil, onSelect: ((LocationSelection) -> Void)? = nil) {
+        self.title = title; _text = text; self.kind = kind; self.identifier = identifier; self.category = category; self.searchContext = searchContext; self.suggestionSymbol = suggestionSymbol; self.onEdit = onEdit; self.onSelect = onSelect
         #if DEBUG
         let args = ProcessInfo.processInfo.arguments
         _model = State(initialValue: LocationAutocompleteModel(fixtures: args.contains("--ui-testing") && args.contains("--location-testing")))
@@ -200,7 +204,7 @@ struct LocationAutocompleteField: View {
                             }
                         } label: {
                             HStack(alignment: .top, spacing: 12) {
-                                Image(systemName: kind.symbol).font(.system(size: 16, weight: .light)).foregroundStyle(Color.bronze).frame(width: 21).padding(.top, 2)
+                                Image(systemName: resultSymbol).font(.system(size: 16, weight: .regular)).foregroundStyle(Color.bronze).frame(width: 21).padding(.top, 2)
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text(suggestion.title).font(.subheadline.weight(.medium)).foregroundStyle(.primary)
                                     if !suggestion.subtitle.isEmpty { Text(suggestion.subtitle).font(.caption).foregroundStyle(.secondary) }

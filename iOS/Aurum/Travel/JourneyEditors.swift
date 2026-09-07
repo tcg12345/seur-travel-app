@@ -157,7 +157,7 @@ struct JourneyEventEditor: View {
                         }.pickerStyle(.menu)
                         TextField(event.kind?.titlePrompt ?? "Event title", text: Binding(get: { event.title ?? "" }, set: { event.title = $0 })).accessibilityIdentifier("event-title")
                     }
-                    PlaceFields(place: $event.place, fixedCategory: .other, context: document?.stops.first(where: { $0.id == event.stopID })?.name ?? "", optional: true, identifier: "event-location")
+                    PlaceFields(place: $event.place, fixedCategory: .other, context: document?.stops.first(where: { $0.id == event.stopID })?.name ?? "", optional: true, identifier: "event-location", suggestionSymbol: event.symbol)
                 }
                 if let document {
                     Section("When") {

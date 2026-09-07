@@ -257,3 +257,8 @@ The SwiftUI source uses native iOS 26 Liquid Glass APIs and system controls. The
 
 - Replaced near-black system backgrounds on trip events, hotel/flight bookings, journal entries and the budget panel with a shared warm-charcoal surface in dark mode and white in light mode. Added a subtle outline that strengthens with Increase Contrast, and increased itinerary time-label weight. Card dimensions and interactions remain unchanged.
 - The signed Debug simulator build passed. The existing plan/journal persistence and deduplication UI regression passed in dark mode in `/tmp/SeurTripContrastQA.xcresult` (1 test, 0 failures). Visually reviewed dark itinerary and journal screenshots; item surfaces and outlines are clearly separated from the canvas. No new test was added for the styling change.
+
+## Contextual trip search icons — September 7, 2026
+
+- Inline place suggestions now use the selected place category's symbol, including restaurant cutlery, hotel beds, museum columns, parks, cafes and other supported categories. Optional event-venue searches use the event's symbol, such as meetings, concerts, trains or transfers. Airport, city, address and time-zone fields retain their existing search-kind icons. These symbols describe the add/search context; provider results and selection behavior are unchanged.
+- The signed Debug simulator build and existing inline restaurant/hotel/attraction/journal search regression passed in `/tmp/SeurSearchIconsQA.xcresult` (1 test, 0 failures). Visually confirmed the restaurant suggestion's cutlery icon in a dark-mode screenshot. No new test was added for this small presentation change.
