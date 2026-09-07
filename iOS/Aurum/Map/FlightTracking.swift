@@ -244,6 +244,8 @@ struct FlightDetailPanel: View {
             endpoint(departure: false)
             Divider()
             updates
+            FlightNotificationControls(flight: live, day: flight.flight.departureDay)
+            Divider()
             if let feed = tracker.feed, feed.flights.count > 1 {
                 VStack(alignment: .leading, spacing: 10) {
                     Text("Choose your departure").font(.subheadline.weight(.semibold))

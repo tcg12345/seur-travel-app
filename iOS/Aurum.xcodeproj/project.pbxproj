@@ -35,6 +35,12 @@
 		F95A3C1621A7EB44D12A6AE3 /* Resources/hotels.json in Resources */ = {isa = PBXBuildFile; fileRef = 1590ED954DF1DC4130655C2D /* Resources/hotels.json */; };
 		FA2000000000000000000001 /* Map/WorldMapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA1000000000000000000001 /* Map/WorldMapView.swift */; };
 		FA2000000000000000000002 /* Map/FlightTracking.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA1000000000000000000002 /* Map/FlightTracking.swift */; };
+		5857C38DBD3DA27DEFDD41E5 = {isa = PBXBuildFile; fileRef = 7F42EC9384585FDEA9D5A827; };
+		CA24950FECCFDA32E435AF61 = {isa = PBXBuildFile; fileRef = A83868A5C4D4A6D4E16A7BAD; };
+		EFDF477D4759FBCA6EC8CDBB = {isa = PBXBuildFile; fileRef = BC54F3EFA3903674332C60B3; };
+		E58B6F7B84D2F0BEB760DE2F = {isa = PBXBuildFile; fileRef = A83868A5C4D4A6D4E16A7BAD; };
+		E00C8144E339AB95024F11CC = {isa = PBXBuildFile; fileRef = 1738930E36556D057A6BA22B; };
+		F0C92F8648BCC2FE9CAE6C13 = {isa = PBXBuildFile; fileRef = F1415C84BDA17552F762D95B; settings = {ATTRIBUTES = (RemoveHeadersOnCopy,); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -52,7 +58,12 @@
 			remoteGlobalIDString = C13732C8E715C9BEE4FA51C9;
 			remoteInfo = Aurum;
 		};
+		1D909FBBFAFE396FF42C52B5 = {isa = PBXContainerItemProxy; containerPortal = 98F54143AB4E86B28C3AFEE0; proxyType = 1; remoteGlobalIDString = 5C17E70EF869878703191D06; remoteInfo = SeurFlightActivity; };
 /* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		8B13C2FDFA428F3F05A10AAF = {isa = PBXCopyFilesBuildPhase; buildActionMask = 2147483647; dstPath = ""; dstSubfolderSpec = 13; files = (F0C92F8648BCC2FE9CAE6C13,); name = "Embed App Extensions"; runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		0749CAC36E1330F48EB188EF /* AurumApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AurumApp.swift; sourceTree = "<group>"; };
@@ -86,6 +97,11 @@
 		F6A6ABC622C8A615B5E97F17 /* DesignSystem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignSystem.swift; sourceTree = "<group>"; };
 		FA1000000000000000000001 /* Map/WorldMapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Map/WorldMapView.swift; sourceTree = "<group>"; };
 		FA1000000000000000000002 /* Map/FlightTracking.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Map/FlightTracking.swift; sourceTree = "<group>"; };
+		7F42EC9384585FDEA9D5A827 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Map/FlightNotifications.swift; sourceTree = "<group>"; };
+		A83868A5C4D4A6D4E16A7BAD = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Map/FlightActivityAttributes.swift; sourceTree = "<group>"; };
+		BC54F3EFA3903674332C60B3 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Travel/DestinationWeather.swift; sourceTree = "<group>"; };
+		1738930E36556D057A6BA22B = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Map/FlightLiveActivityWidget.swift; sourceTree = "<group>"; };
+		F1415C84BDA17552F762D95B = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; path = SeurFlightActivity.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -117,6 +133,10 @@
 			isa = PBXGroup;
 			children = (
 				0749CAC36E1330F48EB188EF /* AurumApp.swift */,
+				1738930E36556D057A6BA22B,
+				BC54F3EFA3903674332C60B3,
+				A83868A5C4D4A6D4E16A7BAD,
+				7F42EC9384585FDEA9D5A827,
 				A11C00000000000000000001 /* Travel/LocationAutocomplete.swift */,
 				FA1000000000000000000001 /* Map/WorldMapView.swift */,
 				FA1000000000000000000002 /* Map/FlightTracking.swift */,
@@ -176,6 +196,7 @@
 			isa = PBXGroup;
 			children = (
 				E6FC57C251E9E1BEC1D3C0D2 /* Seur.app */,
+				F1415C84BDA17552F762D95B,
 				C4095E227B53697430FABAA3 /* AurumTests.xctest */,
 				8A6ED015D34B3A3BEC57D504 /* AurumUITests.xctest */,
 			);
@@ -205,6 +226,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = F37922C48DA5978D02C9E50E /* Build configuration list for PBXNativeTarget "Aurum" */;
 			buildPhases = (
+				8B13C2FDFA428F3F05A10AAF,
 				80714DF7D184E5884375F77C /* Sources */,
 				15A9F8FA58F43C72C1A3F83A /* Resources */,
 				12384B5908BE5FE5B3301CEE /* Frameworks */,
@@ -212,6 +234,7 @@
 			buildRules = (
 			);
 			dependencies = (
+				72CF83F7F5F49696491396E7,
 			);
 			name = Aurum;
 			productName = Aurum;
@@ -235,6 +258,7 @@
 			productReference = 8A6ED015D34B3A3BEC57D504 /* AurumUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
+		5C17E70EF869878703191D06 = {isa = PBXNativeTarget; buildConfigurationList = 4C70997D4640859847E9C01C; buildPhases = (2F16673587464D74C0FC7D70,); buildRules = (); dependencies = (); name = SeurFlightActivity; productName = SeurFlightActivity; productReference = F1415C84BDA17552F762D95B; productType = "com.apple.product-type.app-extension"; };
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -263,6 +287,7 @@
 			projectRoot = "";
 			targets = (
 				C13732C8E715C9BEE4FA51C9 /* Aurum */,
+				5C17E70EF869878703191D06,
 				55F23B82F1EE611D2CFE5E9F /* AurumTests */,
 				CD0C069CCD4D9EE4568BC8B3 /* AurumUITests */,
 			);
@@ -295,6 +320,9 @@
 			buildActionMask = 2147483647;
 			files = (
 				ADAD5C97CCEB378BCA5DA510 /* AurumApp.swift in Sources */,
+				EFDF477D4759FBCA6EC8CDBB,
+				CA24950FECCFDA32E435AF61,
+				5857C38DBD3DA27DEFDD41E5,
 				A11C00000000000000000002 /* Travel/LocationAutocomplete.swift in Sources */,
 				FA2000000000000000000001 /* Map/WorldMapView.swift in Sources */,
 				FA2000000000000000000002 /* Map/FlightTracking.swift in Sources */,
@@ -329,6 +357,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		2F16673587464D74C0FC7D70 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (E58B6F7B84D2F0BEB760DE2F, E00C8144E339AB95024F11CC,); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -342,6 +371,7 @@
 			target = C13732C8E715C9BEE4FA51C9 /* Aurum */;
 			targetProxy = 1B275934A11783B80FE65589 /* PBXContainerItemProxy */;
 		};
+		72CF83F7F5F49696491396E7 = {isa = PBXTargetDependency; target = 5C17E70EF869878703191D06; targetProxy = 1D909FBBFAFE396FF42C52B5; };
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
@@ -365,6 +395,11 @@
 		5A8C91857F674E16E2724F47 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = Aurum/Aurum.entitlements;
+				APNS_ENVIRONMENT = production;
+				INFOPLIST_KEY_APNSEnvironment = "$(APNS_ENVIRONMENT)";
+				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
+				INFOPLIST_FILE = Aurum/AppInfo.plist;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
@@ -478,6 +513,11 @@
 		E9B2E96ABC5F6856F2BE79CF /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = Aurum/Aurum.entitlements;
+				APNS_ENVIRONMENT = development;
+				INFOPLIST_KEY_APNSEnvironment = "$(APNS_ENVIRONMENT)";
+				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
+				INFOPLIST_FILE = Aurum/AppInfo.plist;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
@@ -507,6 +547,8 @@
 			};
 			name = Debug;
 		};
+		F4BD9611B6A6CD1BC99715B5 = {isa = XCBuildConfiguration; buildSettings = {APPLICATION_EXTENSION_API_ONLY = YES; CODE_SIGN_STYLE = Automatic; DEVELOPMENT_TEAM = 669SG3MPU7; GENERATE_INFOPLIST_FILE = YES; INFOPLIST_FILE = Aurum/Map/FlightWidgetInfo.plist; INFOPLIST_KEY_CFBundleDisplayName = "Seur Flights"; IPHONEOS_DEPLOYMENT_TARGET = 26.0; CURRENT_PROJECT_VERSION = 1; MARKETING_VERSION = 1.0; PRODUCT_BUNDLE_IDENTIFIER = com.seurapp.travel.FlightActivity; PRODUCT_NAME = "$(TARGET_NAME)"; SDKROOT = iphoneos; SKIP_INSTALL = YES; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2"; SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)"; SWIFT_OPTIMIZATION_LEVEL = "-Onone";}; name = Debug; };
+		165B6C86EC69EA7C95D91BD9 = {isa = XCBuildConfiguration; buildSettings = {APPLICATION_EXTENSION_API_ONLY = YES; CODE_SIGN_STYLE = Automatic; DEVELOPMENT_TEAM = 669SG3MPU7; GENERATE_INFOPLIST_FILE = YES; INFOPLIST_FILE = Aurum/Map/FlightWidgetInfo.plist; INFOPLIST_KEY_CFBundleDisplayName = "Seur Flights"; IPHONEOS_DEPLOYMENT_TARGET = 26.0; CURRENT_PROJECT_VERSION = 1; MARKETING_VERSION = 1.0; PRODUCT_BUNDLE_IDENTIFIER = com.seurapp.travel.FlightActivity; PRODUCT_NAME = "$(TARGET_NAME)"; SDKROOT = iphoneos; SKIP_INSTALL = YES; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2";}; name = Release; };
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -546,6 +588,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		4C70997D4640859847E9C01C = {isa = XCConfigurationList; buildConfigurations = (F4BD9611B6A6CD1BC99715B5, 165B6C86EC69EA7C95D91BD9,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
 /* End XCConfigurationList section */
 	};
 	rootObject = 98F54143AB4E86B28C3AFEE0 /* Project object */;

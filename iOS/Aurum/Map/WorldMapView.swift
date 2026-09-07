@@ -101,6 +101,9 @@ struct WorldMapView: View {
             withTransaction(transaction) { detent = .height(260) }
         }
         .onChange(of: selection) { _, value in selected(value) }
+        .onChange(of: FlightNotifications.shared.openFlights, initial: true) {
+            if FlightNotifications.shared.openFlights { mode = "Flights"; detent = .medium; FlightNotifications.shared.openFlights = false }
+        }
         .onChange(of: mode) { selection = nil; if mode != "Flights" { selectedFlightID = nil; tracker = FlightTracker() } }
         .task(id: api.account?.id) { await api.loadSavedFlights() }
         .navigationDestination(isPresented: $showSaved) { SavedView().toolbar(.visible, for: .navigationBar) }

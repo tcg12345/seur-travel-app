@@ -77,3 +77,9 @@ The previous local SQLite database had zero users, cloud documents, friendships,
 New authenticated FlightAware routes: `/v1/flights/route` (origin, destination, local date), `/v1/flights/airport` (code) and `/v1/flights/airport-nearby` (selected airport coordinates). Lookups share existing provider rate limits; airport metadata is cached for 24 hours. Nearby airport normalization accepts both current and legacy FlightAware code fields. Route searches request one nonstop provider page and disclose their limited date window.
 
 Run `python3 supabase/tests/flights_smoke.py --providers` for disposable-account ownership/CRUD tests and four bounded live provider queries. Verified September 7, 2026: one BA178 departure, two JFK–LHR route results, airport details and autocomplete resolution. Temporary users and their flights are deleted afterward.
+
+## Flight push monitoring
+
+`/v1/flight-notifications` provides authenticated per-installation watch listing, registration, token refresh and removal. Live flight identity is validated against FlightAware before following. Device-token rotation preserves the existing Live Activity token. Registrations are tied to the originating session, and logout revokes them transactionally through a foreign-key cascade.
+
+The `seur-flight-notifications` database cron runs every five minutes and skips Edge Function calls when no watches are due. Its internal worker endpoint requires an expiring, single-use database ticket. Work uses row-lock leases, shared flight lookups, bounded polling and an additional 120/hour provider limit. Tables have explicit deny policies for client roles and service-only grants. Secrets: `APNS_PRIVATE_KEY_B64`, `APNS_KEY_ID`, `APNS_TEAM_ID`, `APNS_BUNDLE_ID`; never deploy a `.p8` file as function source. [Native setup and operating details](../iOS/AppleServices.md).

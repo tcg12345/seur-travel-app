@@ -118,3 +118,7 @@ Existing dated trips without stops now prepare their route from the destination 
 
 ### Place-search popup stability
 The “Find a restaurant or place” and “Search hotels” buttons present search from the editor’s NavigationStack. The reusable place form only requests presentation; it no longer owns a sheet on a Form section. Restaurant/activity plans, hotel records, and journal entries use this shared presenter, so form row recycling cannot dismiss the search popup. Selecting a result returns it to the current draft; cancelling keeps the draft intact.
+
+## Flight alerts and destination weather
+
+Flight detail pages now offer **Follow flight** for push alerts and **Show on Lock Screen** for Live Activities. Upcoming itinerary days use native WeatherKit forecasts with rain-aware concierge suggestions. See [AppleServices.md](AppleServices.md) for setup, permissions, monitoring costs and platform limits.

@@ -286,6 +286,7 @@ struct JourneyDetailView: View {
                 ForEach(d.days.filter { mode != "Calendar" || selectedDay == nil || selectedDay == $0.id }) { day in
                     VStack(alignment: .leading, spacing: 14) {
                         HStack { SectionHeading(title: day.label, subtitle: day.city); Spacer(); Button { addingDay = day; addingPlan = true } label: { Image(systemName: "plus").frame(width: 35, height: 35) }.buttonStyle(.glass).accessibilityLabel("Add event on \(day.label) in \(day.city)") }
+                        DestinationWeatherRow(city: day.city, day: day.date, tripID: d.id, latitude: d.stops.first { $0.id == day.stopID }?.latitude, longitude: d.stops.first { $0.id == day.stopID }?.longitude)
                         let events = d.events.filter { $0.stopID == day.stopID && $0.day == day.localDay }.sorted { $0.sortMinute < $1.sortMinute }
                         if events.isEmpty { Text("No plans yet").font(.subheadline).foregroundStyle(.secondary).padding(.vertical, 10) }
                         ForEach(events) { item in

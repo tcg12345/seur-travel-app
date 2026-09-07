@@ -48,7 +48,7 @@ struct TravelAccountPage: View {
                     }
                     Section {
                         NavigationLink("Connected services") { TravelServicesSettingsView() }
-                        Button("Sign out") { Task { loading = true; await api.logout(); cloud = []; justAuthenticated = false; register = false; message = nil; loading = false } }.disabled(loading)
+                        Button("Sign out") { Task { loading = true; defer { loading = false }; do { try await api.logout(); cloud = []; justAuthenticated = false; register = false; message = nil } catch { message = "Couldn’t turn off this device’s flight alerts. Reconnect and try signing out again." } } }.disabled(loading)
                     }
                     Section { Button("Delete cloud account", role: .destructive) { confirmingDeletion = true }.disabled(loading) }
                         footer: { Text("Trips saved on this device stay on this device.") }

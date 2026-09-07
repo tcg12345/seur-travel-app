@@ -637,6 +637,27 @@ import MapKit
     }
 }
 
+@MainActor final class AppleTravelFeatureTests: XCTestCase {
+    func testActivityUsesAirportTimeZonesAndActualState() {
+        var flight = FlightMapFixtures.snapshot
+        flight.scheduledOut = "2026-10-01T22:00:00Z"; flight.originZone = "America/New_York"
+        flight.actualOut = nil; flight.estimatedOut = nil; flight.actualIn = nil; flight.cancelled = false
+        let state = FlightNotifications.state(flight, now: Date(timeIntervalSince1970: 123))
+        XCTAssertEqual(state.departureTime, "18:00"); XCTAssertEqual(state.phase, "scheduled"); XCTAssertEqual(state.updatedAt, 123)
+        flight.actualOut = flight.scheduledOut
+        XCTAssertEqual(FlightNotifications.state(flight).phase, "departed")
+        flight.cancelled = true
+        XCTAssertEqual(FlightNotifications.state(flight).phase, "cancelled")
+    }
+    func testWeatherAvoidsRequestsForFlexibleAndDistantDates() {
+        let now = TravelDay.date("2026-09-07")!
+        XCTAssertFalse(DestinationWeatherService.canForecast(day: nil, now: now))
+        XCTAssertFalse(DestinationWeatherService.canForecast(day: "2026-12-01", now: now))
+        XCTAssertFalse(DestinationWeatherService.canForecast(day: "2025-09-07", now: now))
+        XCTAssertTrue(DestinationWeatherService.canForecast(day: "2026-09-08", now: now))
+    }
+}
+
 @MainActor final class ConciergeLiveTests: XCTestCase {
     private var reply: ConciergeReply { .init(text: "A detailed and thoughtful plan.", suggestions: ["Refine it"], searches: [], itinerary: ConciergeFixtures.plan) }
     func testTripContextOmitsBookingReferencesJournalNotesAndPrivateFields() {

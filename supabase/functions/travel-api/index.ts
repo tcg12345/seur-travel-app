@@ -37,6 +37,7 @@ import {
   nearbyFlightAirport,
 } from "./flights.ts";
 import { concierge } from "./concierge.ts";
+import { notificationWorker, pushConfigured, watches } from "./notifications.ts";
 import { sharedLines, sharePDF } from "./shared.ts";
 const headers = {
   "Cache-Control": "no-store",
@@ -181,6 +182,7 @@ export async function handler(req: Request): Promise<Response> {
         googlePlaces: configured("GOOGLE_PLACES_API_KEY"),
         tripadvisor: configured("TRIPADVISOR_API_KEY"),
         ai: configured("OPENAI_API_KEY"),
+        flightNotifications: pushConfigured(),
         publicSharing: true,
       });
     }
@@ -235,14 +237,19 @@ export async function handler(req: Request): Promise<Response> {
       await rpc("travel_maintenance", {});
       return json(await auth(body, path.endsWith("/register")));
     }
-    const uid = await account(req);
+    if (path === "/internal/flight-notifications" && method === "POST") return json(await notificationWorker(body.ticket));
     if (path === "/v1/auth/logout" && method === "POST") {
-      await platform(
-        "/rest/v1/travel_sessions?token_hash=eq." +
-          await digest(req.headers.get("Authorization")!.slice(7)),
-        "DELETE",
-      );
+      const bearer = req.headers.get("Authorization")?.match(/^Bearer ([a-f0-9]{80})$/)?.[1];
+      requireValue(bearer, "Invalid session.", 401);
+      // Possession permits revoking this session even after expiration. Linked
+      // flight watches are removed by the foreign key in the same transaction.
+      await platform("/rest/v1/travel_sessions?token_hash=eq." + await digest(bearer), "DELETE");
       return json({ ok: true });
+    }
+    const uid = await account(req);
+    if (path === "/v1/flight-notifications" && ["GET", "POST", "PUT", "DELETE"].includes(method)) {
+      await limit("push-settings:" + uid, 30);
+      return json(await watches(uid, method, method === "GET" ? { installationID: q.get("installationID") } : body, await digest(req.headers.get("Authorization")!.slice(7))));
     }
     if (path === "/v1/account" && method === "DELETE") {
       const docs = await platform(

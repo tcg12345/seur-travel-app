@@ -76,10 +76,12 @@ private struct EmptyReply: Codable { var ok: Bool }
     }
     func deleteAccount() async throws {
         let _: EmptyReply = try await request("/v1/account", method: "DELETE", body: [:])
+        await FlightNotifications.shared.clearLocalActivities()
         Self.deleteToken(for: baseURL); token = nil; account = nil; savedFlights = []; savedFlightsError = nil
     }
-    func logout() async {
-        if token != nil { let _: EmptyReply? = try? await request("/v1/auth/logout", method: "POST", body: [:]) }
+    func logout() async throws {
+        if token != nil { let _: EmptyReply = try await request("/v1/auth/logout", method: "POST", body: [:]) }
+        await FlightNotifications.shared.clearLocalActivities()
         Self.deleteToken(for: baseURL); token = nil; account = nil; savedFlights = []; savedFlightsError = nil
     }
     func loadSavedFlights() async {
@@ -93,6 +95,16 @@ private struct EmptyReply: Codable { var ok: Bool }
             guard account?.id == user else { return }
             savedFlights = values; savedFlightsError = nil
         } catch { if account?.id == user { savedFlightsError = error.localizedDescription } }
+    }
+    func flightWatches(_ installation: String) async throws -> [FlightWatch] {
+        try await request("/v1/flight-notifications", query: ["installationID": installation])
+    }
+    func followFlight(_ body: [String: String], update: Bool = false) async throws -> FlightWatchReply {
+        try await request("/v1/flight-notifications", method: update ? "PUT" : "POST", body: body)
+    }
+    func stopFlightNotifications(_ installation: String, id: String? = nil) async throws {
+        var body = ["installationID": installation]; if let id { body["id"] = id }
+        let _: EmptyReply = try await request("/v1/flight-notifications", method: "DELETE", body: body)
     }
     func saveFlight(_ flight: FlightReservation) async throws {
         let user = account?.id, server = baseURL

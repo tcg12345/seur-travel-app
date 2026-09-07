@@ -1,6 +1,7 @@
 import SwiftUI
 
 @main struct AurumApp: App {
+    @UIApplicationDelegateAdaptor(SeurNotificationDelegate.self) private var notificationsDelegate
     @AppStorage("aurum.appearance") private var appearance = "System"
     @State private var library = JourneyLibrary()
     @State private var api = TravelAPI()
@@ -15,7 +16,13 @@ import SwiftUI
         } else { _store = State(initialValue: TravelStore()); _onboarding = State(initialValue: OnboardingStore()) }
     }
     var body: some Scene {
-        WindowGroup { AppEntryView().environment(onboarding).environment(store).environment(library).environment(api).tint(.bronze).preferredColorScheme(appearance == "System" ? nil : appearance == "Dark" ? .dark : .light) }
+        WindowGroup { AppEntryView().environment(onboarding).environment(store).environment(library).environment(api).tint(.bronze).preferredColorScheme(appearance == "System" ? nil : appearance == "Dark" ? .dark : .light)
+            .task {
+                #if DEBUG
+                await AppleFeatureCheck.run()
+                #endif
+            }
+        }
     }
 }
 
@@ -36,6 +43,10 @@ struct RootView: View {
         }
         .tabBarMinimizeBehavior(.never)
         .task { try? await api.refresh() }
+        .task(id: api.account?.id) { await FlightNotifications.shared.restore(api: api) }
+        .task(id: FlightNotifications.shared.deviceToken) { await FlightNotifications.shared.syncDeviceToken(api: api) }
+        .onOpenURL { url in if url.scheme == "seur" && url.host == "flights" { FlightNotifications.shared.openFlights = true; store.selectedTab = 1 } }
+        .onChange(of: FlightNotifications.shared.openFlights) { if FlightNotifications.shared.openFlights { store.selectedTab = 1 } }
         .overlay(alignment: .top) {
             if let message = store.message {
                 Label(message, systemImage: "checkmark.circle.fill").font(.subheadline)
