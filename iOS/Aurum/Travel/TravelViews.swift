@@ -291,10 +291,10 @@ struct JourneyDetailView: View {
                         ForEach(events) { item in
                             Button { event = item } label: {
                                 HStack(alignment: .top, spacing: 15) {
-                                    Text(item.allDay == true ? "All day" : item.timeLabel).font(.caption.monospacedDigit()).foregroundStyle(Color.bronze).frame(width: 42).padding(.top, 3)
+                                    Text(item.allDay == true ? "All day" : item.timeLabel).font(.caption.weight(.semibold).monospacedDigit()).foregroundStyle(Color.bronze).frame(width: 42).padding(.top, 3)
                                     VStack(alignment: .leading, spacing: 7) { Text(item.displayTitle).font(.system(.headline, design: .serif)).foregroundStyle(.primary); Text(item.categoryTitle + (item.endTimeLabel.map { " · Until " + $0 } ?? "")).font(.caption).foregroundStyle(.secondary); if !item.isPlaceVisit && !item.place.name.isEmpty { Text(item.place.name).font(.caption).foregroundStyle(.secondary) }; if let attendees = item.attendees, !attendees.isEmpty { Text(attendees).font(.caption).foregroundStyle(.secondary) }; if !item.description.isEmpty { Text(item.description).font(.caption).foregroundStyle(.secondary).lineLimit(2) }; if let cost = item.cost { Text(cost.formatted).font(.caption).foregroundStyle(Color.bronze) } }.frame(maxWidth: .infinity, alignment: .leading)
                                     Image(systemName: item.symbol).foregroundStyle(Color.bronze)
-                                }.padding(18).background(.background, in: .rect(cornerRadius: 22))
+                                }.padding(18).modifier(TripItemSurface(cornerRadius: 22))
                             }.buttonStyle(PressStyle()).accessibilityIdentifier("agenda-event-\(day.localDay)")
                             .contextMenu {
                                 if item.isPlaceVisit {
@@ -312,7 +312,7 @@ struct JourneyDetailView: View {
                 Divider()
                 priceRows(d.totals, label: "Total planned cost")
                 DisclosureGroup("How totals work") { Text("Repeated events count once per day. Currencies stay separate. Only added prices count.").font(.caption).foregroundStyle(.secondary) }.font(.caption)
-            }.padding(21).background(.background, in: .rect(cornerRadius: 25))
+            }.padding(21).modifier(TripItemSurface(cornerRadius: 25))
         }
     }
     private func bookingSection(_ d: JourneyDocument) -> some View {
@@ -327,7 +327,7 @@ struct JourneyDetailView: View {
         VStack(alignment: .leading, spacing: 8) { Text(label).font(.subheadline.weight(.medium)); if totals.isEmpty { Text("No prices added").font(.caption).foregroundStyle(.secondary) }; ForEach(totals.keys.sorted(), id: \.self) { currency in HStack { Text(currency).foregroundStyle(.secondary); Spacer(); Text(TravelMoney(amount: totals[currency]!, currency: currency).formatted) }.font(.subheadline) } }
     }
     private func bookingRow(_ name: String, subtitle: String, symbol: String, cost: TravelMoney?) -> some View {
-        HStack(spacing: 16) { Image(systemName: symbol).font(.title2.weight(.light)).foregroundStyle(Color.bronze); VStack(alignment: .leading, spacing: 7) { Text(name).font(.system(.headline, design: .serif)).foregroundStyle(.primary); Text(subtitle).font(.caption).foregroundStyle(.secondary); if let cost { Text(cost.formatted).font(.caption).foregroundStyle(Color.bronze) } }.frame(maxWidth: .infinity, alignment: .leading); Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary) }.padding(19).background(.background, in: .rect(cornerRadius: 23))
+        HStack(spacing: 16) { Image(systemName: symbol).font(.title2.weight(.light)).foregroundStyle(Color.bronze); VStack(alignment: .leading, spacing: 7) { Text(name).font(.system(.headline, design: .serif)).foregroundStyle(.primary); Text(subtitle).font(.caption).foregroundStyle(.secondary); if let cost { Text(cost.formatted).font(.caption).foregroundStyle(Color.bronze) } }.frame(maxWidth: .infinity, alignment: .leading); Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary) }.padding(19).modifier(TripItemSurface(cornerRadius: 23))
     }
     private func journal(_ d: JourneyDocument) -> some View {
         VStack(alignment: .leading, spacing: 22) {
@@ -365,12 +365,31 @@ struct JourneyDetailView: View {
                             Text(place.place.name).font(.system(.headline, design: .serif)).foregroundStyle(.primary)
                             Text(place.place.category.title + (place.visitedOn.map { " · " + TravelDay.label($0) } ?? "")).font(.caption).foregroundStyle(.secondary)
                             if !place.notes.isEmpty { Text(place.notes).font(.caption).foregroundStyle(.secondary).lineLimit(3) }
-                        }.frame(maxWidth: .infinity, alignment: .leading).padding(18).background(.background, in: .rect(cornerRadius: 23))
+                        }.frame(maxWidth: .infinity, alignment: .leading).padding(18).modifier(TripItemSurface(cornerRadius: 23))
                     }.buttonStyle(PressStyle())
                 }
             }
             if !d.places.isEmpty { SectionHeading(title: "Your trip, on the map"); JourneyMapView(places: d.places.filter { placeFilter == nil || $0.place.category == placeFilter }.map(\.place)).frame(height: 320).clipShape(.rect(cornerRadius: 25)) }
         }
+    }
+}
+
+/// Trip records need a distinct surface over the warm canvas, especially in dark mode.
+private struct TripItemSurface: ViewModifier {
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.colorSchemeContrast) private var contrast
+    var cornerRadius: CGFloat
+    func body(content: Content) -> some View {
+        let dark = colorScheme == .dark
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        content
+            .background(dark ? Color(red: 0.18, green: 0.17, blue: 0.16) : .white, in: shape)
+            .overlay {
+                shape.strokeBorder(
+                    dark ? Color.bronze.opacity(contrast == .increased ? 0.65 : 0.30) : Color.primary.opacity(contrast == .increased ? 0.25 : 0.07),
+                    lineWidth: 1
+                ).allowsHitTesting(false)
+            }
     }
 }
 
