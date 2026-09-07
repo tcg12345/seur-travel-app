@@ -19,10 +19,10 @@ struct CityExplorerView: View {
                     Label("Where shall we wander?", systemImage: "globe.europe.africa").font(.subheadline.weight(.medium)).foregroundStyle(Color.bronze)
                     LocationAutocompleteField("Search any city in the world", text: $query, kind: .city, identifier: "explore-city-query", onSelect: { selection in
                         if let city = ExploreCity(selection) { selected = city; error = nil } else { error = "Choose a city suggestion so we can find places around it." }
-                    }).padding(15).background(Color.canvas, in: .rect(cornerRadius: 17))
+                    }).padding(15).background(Color.cardSurface, in: .rect(cornerRadius: 17))
                     Text("Start typing and choose a city. You’re free to explore beyond our hotel collection.").font(.caption).foregroundStyle(.secondary)
                     if let error { Text(error).font(.caption).foregroundStyle(.red) }
-                }.padding(20).background(Color.cardSurface, in: .rect(cornerRadius: 27))
+                }.padding(.vertical, 4)
                 if !store.recentExploreCities.isEmpty {
                     SectionHeading(title: "Pick up where you left off")
                     ScrollView(.horizontal) {
@@ -157,22 +157,25 @@ struct CityGuideView: View {
     }
     private var diningCollection: some View {
         VStack(alignment: .leading, spacing: 17) {
-            HStack(alignment: .top) { VStack(alignment: .leading, spacing: 9) { Eyebrow(text: "The Seur dining collection").accessibilityIdentifier("city-dining-collection"); Editorial("Extraordinary tables.\nExceptional addresses.", size: 29) }; Spacer(); Image(systemName: "fork.knife.circle").font(.system(size: 36, weight: .ultraLight)).foregroundStyle(Color.bronze) }
+            HStack(alignment: .top) { VStack(alignment: .leading, spacing: 9) { Eyebrow(text: "The Seur dining collection").accessibilityIdentifier("city-dining-collection"); Editorial("Extraordinary tables. Exceptional addresses.", size: 27) }; Spacer(); Image(systemName: "fork.knife.circle").font(.system(size: 36, weight: .ultraLight)).foregroundStyle(Color.bronze) }
             Text("\(collection.count) dining venues at \(Set(collection.compactMap(\.hotelID)).count) hotels in \(city.name).").font(.subheadline).foregroundStyle(.secondary)
             ScrollView(.horizontal) {
-                HStack(spacing: 12) { ForEach(collection.prefix(12)) { place in
+                HStack(alignment: .top, spacing: 18) { ForEach(collection.prefix(12)) { place in
                     NavigationLink { ExplorePlaceDetailView(place: place) } label: {
                         VStack(alignment: .leading, spacing: 13) {
                             Text(place.cuisine.isEmpty ? "HOTEL DINING" : place.cuisine.uppercased()).font(.caption2.weight(.medium)).tracking(1).foregroundStyle(Color.bronze).lineLimit(2)
                             Text(place.record.name).font(.system(.title3, design: .serif)).foregroundStyle(.primary).lineLimit(2)
                             Text(place.hotelName).font(.caption).foregroundStyle(.secondary).lineLimit(2)
                             HStack { Text(place.priceBand.isEmpty ? "Discover the table" : place.priceBand).lineLimit(1); Spacer(); Image(systemName: "arrow.up.right") }.font(.caption).foregroundStyle(Color.bronze)
-                        }.frame(width: 222, height: 148, alignment: .topLeading).padding(19).background(Color.cardSurface, in: .rect(cornerRadius: 23))
+                        }.frame(width: 220, alignment: .topLeading).padding(.vertical, 12)
+                            .contentShape(Rectangle())
                     }.buttonStyle(PressStyle()).accessibilityIdentifier("city-collection-" + place.record.id)
-                } }
+                    if place.id != collection.prefix(12).last?.id { Divider() }
+                } }.fixedSize(horizontal: false, vertical: true)
             }.scrollIndicators(.hidden)
+            Divider()
             NavigationLink { CityDiningCollectionView(city: city) } label: { HStack { Text("Explore the full dining collection"); Spacer(); Image(systemName: "arrow.right") }.font(.subheadline.weight(.medium)).padding(.vertical, 4) }.accessibilityIdentifier("city-collection-all")
-        }.padding(20).background(Color.bronze.opacity(0.075), in: .rect(cornerRadius: 29))
+        }.padding(.vertical, 8)
     }
     private var mapResults: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -207,7 +210,7 @@ struct ExplorePlaceRow: View {
         HStack(spacing: 12) {
             NavigationLink { ExplorePlaceDetailView(place: place) } label: {
                 HStack(alignment: .top, spacing: 14) {
-                    Image(systemName: place.record.category.symbol).font(.system(size: 23, weight: .light)).foregroundStyle(Color.bronze).frame(width: 44, height: 52).background(Color.bronze.opacity(0.07), in: .rect(cornerRadius: 15))
+                    Image(systemName: place.record.category.symbol).font(.system(size: 23, weight: .light)).foregroundStyle(Color.bronze).frame(width: 30, height: 44)
                     VStack(alignment: .leading, spacing: 7) {
                         Text(place.record.name).font(.system(.headline, design: .serif)).foregroundStyle(.primary).fixedSize(horizontal: false, vertical: true)
                         Text(place.isCollection ? place.hotelName : place.record.category.title).font(.caption).foregroundStyle(Color.bronze)

@@ -6,6 +6,10 @@ extension Color {
     static let bronze = Color(uiColor: UIColor { $0.userInterfaceStyle == .dark ? UIColor(red: 0.83, green: 0.70, blue: 0.51, alpha: 1) : UIColor(red: 0.55, green: 0.39, blue: 0.22, alpha: 1) })
     static let brandInk = Color(red: 0.20, green: 0.17, blue: 0.14)
     static let brandBronze = Color(red: 0.55, green: 0.39, blue: 0.22)
+    // Content cards have one surface. Keep sections/carousels that contain cards
+    // transparent; use headings, spacing and dividers instead of another rounded box.
+    // Icons inside a card stay unboxed; photographs and compact control/status badges
+    // are not additional content containers.
     static let cardSurface = Color(uiColor: .secondarySystemGroupedBackground)
 }
 
