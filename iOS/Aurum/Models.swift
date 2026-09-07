@@ -108,6 +108,7 @@ struct FlightSearch {
     private(set) var restaurantVisits: [String: RestaurantVisit] = [:]
     let concierge = ConciergeConversation()
     var selectedTab = 0
+    var cityMapRequest: CityMapRequest?
     var category: TravelCategory = .hotels
     var query = ""
     var city = "Everywhere"

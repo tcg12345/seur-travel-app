@@ -386,6 +386,25 @@ import MapKit
 }
 
 @MainActor final class CityExplorerTests: XCTestCase {
+    func testMapHandoffKeepsResultsAndInvalidatesOlderSearch() async {
+        let model = CityExploreModel { [self] _, _, _, _ in
+            try? await Task.sleep(for: .milliseconds(50))
+            return [sample("old")]
+        }
+        let pending = Task { await model.load(city: lisbon, interest: .museums, term: "", wider: false) }
+        await Task.yield()
+        try? await Task.sleep(for: .milliseconds(10))
+        let selected = sample("selected")
+        model.present([selected], interest: .museums)
+        await pending.value
+        XCTAssertEqual(model.places.map(\.id), [selected.id])
+        XCTAssertFalse(model.loading)
+        XCTAssertTrue(lisbon.contains(selected))
+        var elsewhere = selected
+        elsewhere.city = ExploreCity(name: "Lisbon", country: "United States", latitude: 45, longitude: -100)
+        XCTAssertFalse(lisbon.contains(elsewhere))
+    }
+
     func testDiningPreferencesRefineRestaurantSearchWithoutLeakingToOtherInterests() {
         var preferences = DiningSearchPreferences()
         XCTAssertEqual(preferences.searchTerm("rooftop", interest: .restaurants), "rooftop")

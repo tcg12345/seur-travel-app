@@ -27,7 +27,9 @@ struct RootView: View {
         @Bindable var store = store
         TabView(selection: $store.selectedTab) {
             Tab("Discover", systemImage: "safari", value: 0) { NavigationStack { DiscoverView() } }
-            Tab("Map", systemImage: "globe.europe.africa", value: 1) { NavigationStack { WorldMapView() } }
+            // Reset nested map navigation only for an explicit city-guide handoff.
+            // Normal tab/section switching keeps the same map instance.
+            Tab("Map", systemImage: "globe.europe.africa", value: 1) { NavigationStack { WorldMapView(request: store.cityMapRequest) }.id(store.cityMapRequest?.id) }
             Tab("Travel", systemImage: "suitcase.rolling", value: 2) { NavigationStack { TravelHubView() } }
             Tab("Concierge", systemImage: "sparkles", value: 4) { NavigationStack { ConciergeView() } }
             Tab(value: 3, role: .search) { NavigationStack { SearchView() } } label: { Label("Search", systemImage: "magnifyingglass") }

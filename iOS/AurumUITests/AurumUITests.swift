@@ -403,16 +403,26 @@ final class AurumUITests: XCTestCase {
         let place = firstCityResult(); reveal(place); XCTAssertTrue(place.waitForExistence(timeout: 5)); place.tap()
         XCTAssertTrue(app.buttons["explore-place-save"].waitForExistence(timeout: 5)); app.buttons["explore-place-save"].tap()
         app.navigationBars.buttons.element(boundBy: 0).tap()
-        for _ in 0..<8 { if app.buttons["city-filters"].isHittable { break }; app.swipeDown(velocity: .slow) }
-        app.buttons["city-filters"].tap()
-        let saved = app.switches["Only saved places"]; XCTAssertTrue(saved.waitForExistence(timeout: 5)); saved.coordinate(withNormalizedOffset: CGVector(dx: 0.92, dy: 0.5)).tap(); app.buttons["Done"].tap()
-        let views = app.segmentedControls["city-results-view"]; reveal(views); views.buttons.element(boundBy: 1).tap()
-        let map = app.otherElements["city-results-map"]; XCTAssertTrue(map.waitForExistence(timeout: 8)); app.swipeUp(velocity: .slow); capture("62 City map and saved filter")
+        let shortlist = app.buttons["city-saved-places"]
+        reveal(shortlist); shortlist.tap()
+        XCTAssertEqual(shortlist.value as? String, "Selected")
         XCTAssertTrue(app.staticTexts["Lisbon Museum 1"].exists)
-        for _ in 0..<8 { if app.textFields["city-place-query"].isHittable { break }; app.swipeDown(velocity: .slow) }
         let query = app.textFields["city-place-query"]; query.tap(); query.typeText("noresults\n")
-        let empty = app.staticTexts["No saved places match this search. Try another interest or reset your filters."]; reveal(empty); XCTAssertTrue(empty.waitForExistence(timeout: 5))
+        let empty = app.staticTexts["No saved places match this search. Try another interest or reset your filters."]
+        XCTAssertTrue(empty.waitForExistence(timeout: 5))
+        app.buttons["Clear city search"].tap()
+        let openMap = app.buttons["city-open-map"]; XCTAssertTrue(openMap.isHittable); openMap.tap()
+        XCTAssertTrue(app.buttons["map-section-Explore"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.textFields["world-city-search"].value as? String, "Lisbon")
+        XCTAssertTrue(app.staticTexts["Lisbon Museum 1"].exists)
+        // Opening from a guide inside Map must return to the map root as well.
+        app.buttons["map-city-guide"].tap()
+        let mapAgain = app.buttons["city-open-map"]
+        XCTAssertTrue(mapAgain.waitForExistence(timeout: 5)); mapAgain.tap()
+        XCTAssertTrue(app.buttons["map-section-Explore"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.textFields["world-city-search"].value as? String, "Lisbon")
     }
+
     private func selectTripPlanView(_ view: String) {
         let selector = app.buttons["trip-plan-view"]
         reveal(selector); selector.tap()

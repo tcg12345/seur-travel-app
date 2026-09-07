@@ -17,6 +17,9 @@ struct ExploreCity: Codable, Hashable, Identifiable {
         country = selection.country
         latitude = selection.place.latitude!; longitude = selection.place.longitude!
     }
+    func contains(_ place: ExplorePlace) -> Bool {
+        place.city.id == id || (place.city.name.foldedCityText == name.foldedCityText && CLLocation(latitude: latitude, longitude: longitude).distance(from: CLLocation(latitude: place.city.latitude, longitude: place.city.longitude)) < 70_000)
+    }
     func distance(to place: PlaceRecord) -> Double? {
         guard place.hasCoordinate else { return nil }
         return CLLocation(latitude: latitude, longitude: longitude).distance(from: CLLocation(latitude: place.latitude!, longitude: place.longitude!))
@@ -128,6 +131,19 @@ struct DiningSearchPreferences: Equatable {
     }
 }
 
+struct CityMapRequest: Identifiable {
+    let id = UUID()
+    var city: ExploreCity
+    var interest: ExploreInterest
+    var term: String
+    var dining: DiningSearchPreferences
+    var sort: ExploreSort
+    var wider: Bool
+    var savedOnly: Bool
+    var websiteOnly: Bool
+    var places: [ExplorePlace]
+}
+
 @MainActor @Observable final class CityExploreModel {
     typealias Search = @MainActor (ExploreCity, ExploreInterest, String, Bool) async throws -> [ExplorePlace]
     private(set) var sections: [ExploreSection] = []
@@ -139,6 +155,11 @@ struct DiningSearchPreferences: Equatable {
     var places: [ExplorePlace] {
         var seen = Set<String>()
         return sections.flatMap(\.places).filter { seen.insert($0.id).inserted }
+    }
+    func present(_ places: [ExplorePlace], interest: ExploreInterest) {
+        revision = UUID()
+        sections = [ExploreSection(interest: interest, places: places)]
+        loading = false
     }
     func load(city: ExploreCity, interest: ExploreInterest, term: String, wider: Bool, refresh: Bool = false) async {
         let stamp = UUID(); revision = stamp

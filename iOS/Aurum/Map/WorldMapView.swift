@@ -17,6 +17,8 @@ struct WorldMapView: View {
     @State private var satellite = true
     @State private var selection: String?
     @State private var cityQuery = ""
+    @State private var placeQuery = ""
+    @State private var widerSearch = false
     @State private var selectedCity: ExploreCity?
     @State private var interest: ExploreInterest = .attractions
     @State private var diningFilters = DiningSearchPreferences()
@@ -39,6 +41,25 @@ struct WorldMapView: View {
     @State private var flightInfo = false
     @State private var addingFlight = false
     @State private var addedFlightNumber: String?
+    init(request: CityMapRequest? = nil) {
+        guard let request else { return }
+        _camera = State(initialValue: .region(request.city.region))
+        _center = State(initialValue: request.city.coordinate)
+        _selectedCity = State(initialValue: request.city)
+        _cityQuery = State(initialValue: request.city.name)
+        _placeQuery = State(initialValue: request.term)
+        _searchArea = State(initialValue: request.city)
+        _interest = State(initialValue: request.interest)
+        _diningFilters = State(initialValue: request.dining)
+        _exploreSort = State(initialValue: request.sort)
+        _websiteOnly = State(initialValue: request.websiteOnly)
+        _savedOnly = State(initialValue: request.savedOnly)
+        _widerSearch = State(initialValue: request.wider)
+        _detent = State(initialValue: .medium)
+        let results = CityExploreModel()
+        results.present(request.places, interest: request.interest)
+        _search = State(initialValue: results)
+    }
     private var flights: [MapFlight] {
         var values = api.savedFlights.map { MapFlight(tripID: nil, tripTitle: "My flights", flight: $0) }
         for trip in library.documents { for flight in trip.flights { values.append(MapFlight(tripID: trip.id, tripTitle: trip.title, flight: flight)) } }
@@ -193,7 +214,7 @@ struct WorldMapView: View {
             }).padding(15).background(Color.cardSurface, in: .rect(cornerRadius: 19))
             HStack {
                 Menu {
-                    ForEach([ExploreInterest.attractions, .restaurants, .museums, .parks, .cafes, .hotels]) { value in
+                    ForEach(ExploreInterest.allCases) { value in
                         Button(value.title, systemImage: value.symbol) { interest = value; if let searchArea { Task { await browse(searchArea) } } }
                     }
                 } label: { Label(interest.title, systemImage: interest.symbol).font(.subheadline.weight(.medium)); Image(systemName: "chevron.down").font(.caption2) }
@@ -210,6 +231,13 @@ struct WorldMapView: View {
                 }
                 Spacer(minLength: 0)
                 if exploreFiltersActive { Button("Reset") { diningFilters = DiningSearchPreferences(); exploreSort = .suggested; websiteOnly = false; savedOnly = false }.font(.caption) }
+            }
+            if !placeQuery.isEmpty || widerSearch {
+                HStack {
+                    Text([placeQuery.isEmpty ? nil : "Search: " + placeQuery, widerSearch ? "Wider city" : nil].compactMap { $0 }.joined(separator: " · ")).font(.caption).foregroundStyle(.secondary)
+                    Spacer()
+                    Button("Clear") { placeQuery = ""; widerSearch = false; if let searchArea { Task { await browse(searchArea) } } }.font(.caption)
+                }
             }
             if let selectedCity { NavigationLink { CityGuideView(city: selectedCity).toolbar(.visible, for: .navigationBar) } label: { HStack { VStack(alignment: .leading, spacing: 5) { Text(selectedCity.name).font(.system(.title2, design: .serif)); Text("City guide").font(.caption) }; Spacer(); Image(systemName: "arrow.up.right") }.padding(17).background(Color.cardSurface, in: .rect(cornerRadius: 21)) }.accessibilityIdentifier("map-city-guide") }
             if let selected = selectedPlace { ExplorePlaceRow(place: selected, add: { adding = selected }) }
@@ -260,7 +288,7 @@ struct WorldMapView: View {
         if let flight = flights.first(where: { value == "flight:" + $0.id }) { openFlight(flight) }
         if value.hasPrefix("tripplace:") { resizePanel(.medium) }
     }
-    private func browse(_ city: ExploreCity) async { searchArea = city; await search.load(city: city, interest: interest, term: diningFilters.searchTerm(interest: interest), wider: false) }
+    private func browse(_ city: ExploreCity) async { searchArea = city; await search.load(city: city, interest: interest, term: diningFilters.searchTerm(placeQuery, interest: interest), wider: widerSearch) }
     private func openFlight(_ value: MapFlight) {
         mode = "Flights"; selectFlight(value)
     }
