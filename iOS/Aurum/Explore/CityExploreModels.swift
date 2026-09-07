@@ -198,7 +198,7 @@ struct CityMapRequest: Identifiable {
 @MainActor enum CityExploreSearch {
     static func search(city: ExploreCity, interest: ExploreInterest, term: String, wider: Bool) async throws -> [ExplorePlace] {
         #if DEBUG
-        if ProcessInfo.processInfo.arguments.contains("--ui-testing") && ProcessInfo.processInfo.arguments.contains("--city-testing") {
+        if PlaceSearchTestPolicy.usesFixtures || (ProcessInfo.processInfo.arguments.contains("--ui-testing") && ProcessInfo.processInfo.arguments.contains("--city-testing")) {
             try await Task.sleep(for: .milliseconds(120))
             if term.foldedCityText.contains("noresults") { return [] }
             return (0..<6).map { index in
@@ -231,7 +231,7 @@ struct CityMapRequest: Identifiable {
     static func locateCollection(_ value: ExplorePlace) async -> ExplorePlace {
         guard value.isCollection, !value.record.hasCoordinate else { return value }
         #if DEBUG
-        if ProcessInfo.processInfo.arguments.contains("--ui-testing") && ProcessInfo.processInfo.arguments.contains("--city-testing") {
+        if PlaceSearchTestPolicy.usesFixtures || (ProcessInfo.processInfo.arguments.contains("--ui-testing") && ProcessInfo.processInfo.arguments.contains("--city-testing")) {
             var result = value; result.record.latitude = value.city.latitude; result.record.longitude = value.city.longitude; return result
         }
         #endif

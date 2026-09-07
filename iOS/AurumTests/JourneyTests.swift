@@ -335,19 +335,97 @@ import MapKit
 
 @MainActor final class LocationAutocompleteTests: XCTestCase {
     func testGoogleAutocompleteAndStaleNetworkResponse() async throws {
-        let model = LocationAutocompleteModel()
-        model.update("Savoy", kind: .place, googleSearch: { _ in
+        var paidCalls = 0
+        var appleCalls = 0
+        let model = LocationAutocompleteModel(appleSearch: { _, _ in appleCalls += 1; return [] })
+        model.update("Savoy", kind: .place)
+        try await Task.sleep(for: .milliseconds(400))
+        XCTAssertEqual(paidCalls, 0)
+        XCTAssertEqual(appleCalls, 1)
+        model.requestGoogle { _ in
+            paidCalls += 1
             // Simulate a provider that finishes after cancellation.
             try? await Task.sleep(for: .milliseconds(300))
             return [GooglePlaceSuggestion(id: "old", title: "Old result", subtitle: "London")]
-        })
+        }
+        model.requestGoogle { _ in paidCalls += 1; return [] }
+        try await Task.sleep(for: .milliseconds(20))
+        XCTAssertEqual(paidCalls, 1, "Repeated taps must not issue another request")
+        model.update("Paris", kind: .place)
         try await Task.sleep(for: .milliseconds(400))
-        model.update("Paris", kind: .place, googleSearch: { _ in [GooglePlaceSuggestion(id: "new", title: "Paris venue", subtitle: "France")] })
-        try await Task.sleep(for: .milliseconds(450))
+        XCTAssertTrue(model.suggestions.isEmpty, "Old Google response cannot replace new Apple search")
+        model.requestGoogle { _ in paidCalls += 1; return [GooglePlaceSuggestion(id: "new", title: "Paris venue", subtitle: "France")] }
+        try await Task.sleep(for: .milliseconds(20))
         XCTAssertEqual(model.suggestions.first?.google?.id, "new")
-        XCTAssertEqual(model.suggestions.count, 1)
+        XCTAssertEqual(paidCalls, 2)
         model.stop()
         XCTAssertTrue(model.suggestions.isEmpty)
+    }
+    func testTypingDebouncesAndDuplicateUpdatesDoNotRestartSearch() async throws {
+        var calls: [String] = []
+        let model = LocationAutocompleteModel(appleSearch: { query, _ in
+            calls.append(query)
+            return [LocationSuggestion(title: "The Savoy", subtitle: "London")]
+        })
+        model.update("Sa", kind: .place, context: "London")
+        model.update("Sav", kind: .place, context: "London")
+        model.update("Savoy", kind: .place, context: "London")
+        try await Task.sleep(for: .milliseconds(400))
+        model.update("Savoy", kind: .place, context: "London")
+        try await Task.sleep(for: .milliseconds(400))
+        XCTAssertEqual(calls, ["Savoy London"])
+        XCTAssertTrue(model.canRequestGoogle)
+        XCTAssertNil(model.suggestions.first?.google)
+        model.stop()
+    }
+    func testGoogleFailureKeepsAppleMatchesWithoutAutomaticRetry() async throws {
+        var calls = 0
+        let model = LocationAutocompleteModel(appleSearch: { _, _ in [LocationSuggestion(title: "Apple result", subtitle: "London")] })
+        model.update("Savoy", kind: .place)
+        try await Task.sleep(for: .milliseconds(400))
+        model.requestGoogle { _ in calls += 1; throw JourneyError.message("Offline") }
+        try await Task.sleep(for: .milliseconds(20))
+        XCTAssertEqual(model.suggestions.first?.title, "Apple result")
+        XCTAssertFalse(model.canRequestGoogle)
+        model.requestGoogle { _ in calls += 1; return [] }
+        XCTAssertEqual(calls, 1)
+    }
+    func testShortAndNonPlaceQueriesCannotRequestGoogle() async throws {
+        var calls = 0
+        let model = LocationAutocompleteModel(appleSearch: { _, _ in [] })
+        for (query, kind) in [("Sa", LocationSearchKind.place), ("Paris", .city), ("CDG", .airport)] {
+            model.update(query, kind: kind)
+            try await Task.sleep(for: .milliseconds(400))
+            model.requestGoogle { _ in calls += 1; return [] }
+        }
+        XCTAssertEqual(calls, 0)
+    }
+    func testConcurrentGoogleRequestsCoalesceWithoutRetainingResults() async throws {
+        let gate = GoogleAutocompleteRequests()
+        var calls = 0
+        let request: (String) async throws -> [GooglePlaceSuggestion] = { query in
+            calls += 1
+            try await Task.sleep(for: .milliseconds(50))
+            return [GooglePlaceSuggestion(id: query, title: query, subtitle: "Test")]
+        }
+        let first = Task { try await gate.fetch(" Savoy   London ", server: "test", request: request) }
+        let second = Task { try await gate.fetch("savoy London", server: "test", request: request) }
+        let a = try await first.value, b = try await second.value
+        XCTAssertEqual(a.first?.id, b.first?.id)
+        XCTAssertEqual(calls, 1)
+        _ = try await gate.fetch("Savoy London", server: "test", request: request)
+        XCTAssertEqual(calls, 2, "Completed prediction content is not cached")
+        _ = try await gate.fetch("Sa", server: "test", request: request)
+        XCTAssertEqual(calls, 2)
+    }
+    func testAutomatedTestsBlockGoogleAtTheAPIServiceBoundary() async {
+        XCTAssertTrue(PlaceSearchTestPolicy.blocksPaidRequests)
+        do {
+            _ = try await TravelAPI().autocompletePlaces("Savoy London")
+            XCTFail("Automated tests must never call the live Google endpoint")
+        } catch {
+            XCTAssertTrue(error.localizedDescription.contains("disabled during automated tests"))
+        }
     }
     func testCountriesAndTimeZonesMatchPartialInput() {
         XCTAssertTrue(LocationAutocompleteModel.localSuggestions("Fran", kind: .country).contains { $0.localValue == "France" })

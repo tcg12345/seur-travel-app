@@ -97,6 +97,8 @@ Location entry now suggests matches as you type in trip destinations, itinerary 
 
 No extra key or location permission is required for Apple Maps autocomplete. Two or more characters start a debounced lookup. Suggestions include context to distinguish similarly named places. Selecting one fills the field and applicable metadata; clearing/changing a query cancels older lookups. Manual text remains usable offline or when no match is available. Editing a resolved location clears its stale coordinates.
 
+Google suggestions are now an explicit fallback, not part of routine typing. Automated tests block live Google calls and default to local search fixtures. See [Places API cost controls](PlacesCostControls.md) for request deduplication, testing flags and billing safeguards.
+
 ## Flexible itinerary events
 
 Use **Travel → a trip → Plan → Add to plan**, or the plus beside a day, to choose from 16 types: restaurant/activity, meeting, appointment, conference, celebration, concert, performance, sporting event, tour, car transfer, train, boat/ferry, shopping, wellness, free time, and custom event. Hotel and flight booking records remain available in the same picker.

@@ -15,6 +15,23 @@ struct AITravelResponse: Codable { var text: String; var places: [PlaceRecord] }
 private struct APIProblem: Codable { var error: String }
 private struct EmptyReply: Codable { var ok: Bool }
 
+/// Coalesce only requests that are still running. Google prediction content is
+/// not persisted, prefetched or retained as a reusable response cache.
+@MainActor final class GoogleAutocompleteRequests {
+    private var pending: [String: Task<[GooglePlaceSuggestion], Error>] = [:]
+    func fetch(_ query: String, server: String, request: @escaping (String) async throws -> [GooglePlaceSuggestion]) async throws -> [GooglePlaceSuggestion] {
+        let normalized = query.split(whereSeparator: { $0.isWhitespace }).joined(separator: " ")
+        guard (3...200).contains(normalized.count) else { return [] }
+        try Task.checkCancellation()
+        let key = server + "|" + normalized.lowercased()
+        if let task = pending[key] { return try await task.value }
+        let task = Task { try await request(normalized) }
+        pending[key] = task
+        defer { pending[key] = nil }
+        return try await task.value
+    }
+}
+
 @MainActor @Observable final class TravelAPI {
     var baseURL: String { didSet { if oldValue != baseURL { defaults.set(baseURL, forKey: "aurum.backendURL"); account = nil; token = nil; savedFlights = [] } } }
     private(set) var account: TravelAccount?
@@ -22,6 +39,7 @@ private struct EmptyReply: Codable { var ok: Bool }
     private(set) var savedFlights: [FlightReservation] = []
     var savedFlightsError: String?
     private var token: String?
+    private let googleAutocomplete = GoogleAutocompleteRequests()
     private let defaults = UserDefaults.standard
     init() {
         let fallback = "https://bwrodcxmdzrpyrshrlfd.supabase.co/functions/v1/travel-api"
@@ -135,7 +153,11 @@ private struct EmptyReply: Codable { var ok: Bool }
         return try await request("/v1/flights/position", query: ["id": id])
     }
     func autocompletePlaces(_ query: String) async throws -> [GooglePlaceSuggestion] {
-        try await perform("/v1/locations/autocomplete", method: "GET", data: nil, query: ["q": query], timeout: 5)
+        guard !PlaceSearchTestPolicy.blocksPaidRequests else { throw JourneyError.message("Live Google Places requests are disabled during automated tests.") }
+        guard isSignedIn, status?.googlePlaces != false else { return [] }
+        return try await googleAutocomplete.fetch(query, server: baseURL) { [self] value in
+            try await perform("/v1/locations/autocomplete", method: "GET", data: nil, query: ["q": value], timeout: 5)
+        }
     }
     func searchPlaces(_ query: String, category: PlaceCategory) async throws -> [PlaceRecord] {
         try await request("/v1/places/search", query: ["q": query, "category": category == .hotel ? "hotels" : category == .restaurant || category == .bar || category == .cafe ? "restaurants" : "attractions"])

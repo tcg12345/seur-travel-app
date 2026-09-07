@@ -318,7 +318,7 @@ final class AurumUITests: XCTestCase {
         app.buttons["Cancel"].tap()
     }
     private func openCityExplorer(fixtures: Bool, createTrip: Bool = false) {
-        app.terminate(); app.launchArguments = ["--ui-testing"] + (fixtures ? ["--location-testing", "--city-testing"] : []); app.launch()
+        app.terminate(); app.launchArguments = ["--ui-testing"] + (fixtures ? ["--location-testing", "--city-testing"] : ["--live-apple-places"]); app.launch()
         if createTrip {
             app.tabBars.buttons["Travel"].tap(); app.buttons["travel-create"].tap()
             let field = app.textFields["trip-destination"]; XCTAssertTrue(field.waitForExistence(timeout: 5)); field.tap(); field.typeText("Lis")
@@ -429,7 +429,7 @@ final class AurumUITests: XCTestCase {
         app.buttons[view].tap()
     }
     private func createAddFlowTrip(fixtures: Bool = true) {
-        app.terminate(); app.launchArguments = ["--ui-testing"] + (fixtures ? ["--location-testing"] : []); app.launch()
+        app.terminate(); app.launchArguments = ["--ui-testing"] + (fixtures ? ["--location-testing"] : ["--live-apple-places"]); app.launch()
         app.tabBars.buttons["Travel"].tap(); app.buttons["travel-create"].tap()
         let destination = app.textFields["trip-destination"]
         XCTAssertTrue(destination.waitForExistence(timeout: 5)); destination.tap(); destination.typeText("Paris\n")
@@ -1246,6 +1246,7 @@ final class AurumUITests: XCTestCase {
         capture("34 Selected flight airport")
     }
     func testLiveTripDestinationAutocomplete() {
+        app.terminate(); app.launchArguments = ["--ui-testing", "--live-apple-places"]; app.launch()
         app.tabBars.buttons["Travel"].tap(); app.buttons["travel-create"].tap()
         let destination = app.textFields["trip-destination"]
         destination.tap(); destination.typeText("Paris")
