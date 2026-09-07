@@ -501,8 +501,10 @@ extension FlightSnapshot {
 struct FlightAddView: View {
     private enum Step: Hashable { case number, destination, date, results }
     @Environment(TravelAPI.self) private var api
+    @Environment(JourneyLibrary.self) private var library
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    let documentID: UUID?
     var onAdded: (FlightReservation) -> Void
     @State private var path: [Step] = []
     @State private var method = "Flight number"
@@ -520,6 +522,15 @@ struct FlightAddView: View {
     @State private var draft: FlightReservation?
     @State private var accountSheet = false
     @FocusState private var focused: Step?
+    init(documentID: UUID? = nil, departureDay: String? = nil, onAdded: @escaping (FlightReservation) -> Void) {
+        self.documentID = documentID
+        self.onAdded = onAdded
+        _day = State(initialValue: departureDay.map(TravelDay.localDate) ?? .now)
+    }
+    private func savedFlight(_ id: UUID) -> FlightReservation? {
+        if let documentID { return library.documents.first(where: { $0.id == documentID })?.flights.first(where: { $0.id == id }) }
+        return api.savedFlights.first(where: { $0.id == id })
+    }
     private var needsAccount: Bool {
         #if DEBUG
         if FlightMapFixtures.enabled { return false }
@@ -579,9 +590,9 @@ struct FlightAddView: View {
         }
         .tint(Color.bronze).presentationDetents([.large]).presentationDragIndicator(.visible).interactiveDismissDisabled(preparing != nil)
         .sheet(item: $draft) { value in
-            FlightReservationEditor(documentID: nil, reservation: value, onSaved: {
-                if let saved = api.savedFlights.first(where: { $0.id == value.id }) { onAdded(saved); dismiss() }
-            })
+            FlightReservationEditor(documentID: documentID, reservation: value, onSaved: {
+                if let saved = savedFlight(value.id) { onAdded(saved); dismiss() }
+            }).environment(\.tripEditorEmbedded, false)
         }
         .fullScreenCover(isPresented: $accountSheet) { TravelAccountView() }
         .onChange(of: api.isSignedIn) { if api.isSignedIn { accountSheet = false } }
@@ -658,10 +669,10 @@ struct FlightAddView: View {
         }
         if let error { Label(error, systemImage: "exclamationmark.circle").font(.subheadline).foregroundStyle(.secondary).accessibilityIdentifier("flight-search-error") }
         if let feed {
-            Text("Tap a flight to add it to your map.").font(.subheadline).foregroundStyle(.secondary)
+            Text(documentID == nil ? "Tap a flight to add it to your map." : "Tap a flight to add it to your trip.").font(.subheadline).foregroundStyle(.secondary)
             ForEach(feed.flights) { flight in
                 Button { Task { await choose(flight) } } label: {
-                    FlightCard(flight: flight.reservation(airline: FlightAirline.identified(by: flight.ident)?.name ?? airline?.name ?? flight.ident), subtitle: preparing == flight.id ? "Adding…" : "Add to map", status: flight.status, actionSymbol: "plus")
+                    FlightCard(flight: flight.reservation(airline: FlightAirline.identified(by: flight.ident)?.name ?? airline?.name ?? flight.ident), subtitle: preparing == flight.id ? "Adding…" : (documentID == nil ? "Add to map" : "Add to trip"), status: flight.status, actionSymbol: "plus")
                         .overlay { if preparing == flight.id { ProgressView().padding(16).background(.regularMaterial, in: .circle) } }
                 }.buttonStyle(PressStyle()).disabled(preparing != nil).accessibilityIdentifier("flight-result-" + flight.id)
             }
@@ -713,8 +724,15 @@ struct FlightAddView: View {
             value.arrivalLatitude = b.latitude; value.arrivalLongitude = b.longitude
             var validation = JourneyDocument(title: "Flight"); validation.flights = [value]
             if let problem = validation.validationError() { error = problem; return }
-            try await api.saveFlight(value)
-            guard let saved = api.savedFlights.first(where: { $0.id == value.id }) else { error = "Your account changed. Sign in and try again."; return }
+            if let documentID {
+                guard var document = library.documents.first(where: { $0.id == documentID }) else { error = "This trip is no longer available."; return }
+                document.flights.removeAll { $0.id == value.id }
+                document.flights.append(value)
+                guard library.save(document) else { error = library.error ?? "Couldn’t save this flight to your trip. Try again."; return }
+            } else {
+                try await api.saveFlight(value)
+            }
+            guard let saved = savedFlight(value.id) else { error = "Your flight could not be found after saving. Please try again."; return }
             onAdded(saved); dismiss()
         } catch { self.error = "Couldn’t add this flight. " + error.localizedDescription }
     }

@@ -418,20 +418,31 @@ struct ItineraryItemChooser: View {
 
 /// The chooser and each editor share one modal and one native navigation stack.
 struct TripAddFlowView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(JourneyLibrary.self) private var library
     @Environment(\.dismiss) private var dismiss
     let documentID: UUID
     var day: JourneyAgendaDay?
     @State private var route: AddRoute?
+    @State private var addingFlight = false
     @State private var pendingChoice: String?
     private var document: JourneyDocument? { library.documents.first { $0.id == documentID } }
     private enum AddRoute: Hashable, Identifiable {
-        case event(JourneyEvent), hotel(HotelReservation), flight(FlightReservation), ideas, destination
+        case event(JourneyEvent), hotel(HotelReservation), ideas, destination
         var id: String {
-            switch self { case .event(let item): "event-" + item.id.uuidString; case .hotel(let item): "hotel-" + item.id.uuidString; case .flight(let item): "flight-" + item.id.uuidString; case .ideas: "ideas"; case .destination: "destination" }
+            switch self { case .event(let item): "event-" + item.id.uuidString; case .hotel(let item): "hotel-" + item.id.uuidString; case .ideas: "ideas"; case .destination: "destination" }
         }
     }
     var body: some View {
+        Group {
+            if addingFlight {
+                FlightAddView(documentID: documentID, departureDay: day?.date ?? document?.startDate) { _ in dismiss() }
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
+            } else { chooser }
+        }
+        .presentationDragIndicator(.visible)
+    }
+    private var chooser: some View {
         NavigationStack {
             ItineraryItemChooser(select: choose)
                 .navigationDestination(item: $route) { route in
@@ -439,7 +450,6 @@ struct TripAddFlowView: View {
                         switch route {
                         case .event(let value): JourneyEventEditor(documentID: documentID, event: value, onSaved: { dismiss() })
                         case .hotel(let value): HotelReservationEditor(documentID: documentID, reservation: value, onSaved: { dismiss() })
-                        case .flight(let value): FlightReservationEditor(documentID: documentID, reservation: value, onSaved: { dismiss() })
                         case .ideas: ActivityIdeasView(documentID: documentID, onSaved: { dismiss() })
                         case .destination: AddTripDestinationView(documentID: documentID, onContinue: {
                             if let choice = pendingChoice { pendingChoice = nil; choose(choice) }
@@ -462,10 +472,7 @@ struct TripAddFlowView: View {
             if hotel.checkOut <= hotel.checkIn { hotel.checkOut = TravelDay.adding(1, to: hotel.checkIn) }
             route = .hotel(hotel)
         case "flight":
-            var flight = FlightReservation()
-            flight.departureDay = document.startDate ?? stop?.arrival ?? flight.departureDay
-            flight.arrivalDay = flight.departureDay
-            route = .flight(flight)
+            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.24)) { addingFlight = true }
         default:
             guard let stop else { pendingChoice = choice; route = .destination; return }
             if choice == "ai" { route = .ideas; return }

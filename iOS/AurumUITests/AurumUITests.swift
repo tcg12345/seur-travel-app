@@ -447,6 +447,13 @@ final class AurumUITests: XCTestCase {
         let options = [("hotel", "hotel-record-save"), ("flight", "flight-record-save"), ("place", "event-save"), ("attraction", "event-save"), ("tour", "event-save"), ("concert", "event-save"), ("performance", "event-save"), ("sport", "event-save"), ("shopping", "event-save"), ("wellness", "event-save"), ("meeting", "event-save"), ("appointment", "event-save"), ("conference", "event-save"), ("celebration", "event-save"), ("transfer", "event-save"), ("train", "event-save"), ("ferry", "event-save"), ("freeTime", "event-save"), ("custom", "event-save")]
         for (option, save) in options {
             let choice = app.buttons["add-plan-" + option]; reveal(choice); choice.tap()
+            if option == "flight" {
+                XCTAssertTrue(app.textFields["flight-airline-query"].waitForExistence(timeout: 5))
+                app.buttons["flight-add-cancel"].tap()
+                XCTAssertTrue(app.buttons["journey-add"].waitForExistence(timeout: 5))
+                app.buttons["journey-add"].tap()
+                continue
+            }
             XCTAssertTrue(app.buttons[save].waitForExistence(timeout: 5), "No editor for " + option)
             app.buttons["Back"].firstMatch.tap()
             XCTAssertTrue(app.buttons["add-plan-" + option].waitForExistence(timeout: 5))
@@ -471,6 +478,7 @@ final class AurumUITests: XCTestCase {
         XCTAssertTrue(app.buttons["event-location-suggestion-0"].waitForExistence(timeout: 5)); app.buttons["event-location-suggestion-0"].tap()
         app.buttons["event-save"].tap(); XCTAssertTrue(app.buttons["journey-add"].waitForExistence(timeout: 8))
         app.buttons["journey-add"].tap(); app.buttons["add-plan-flight"].tap()
+        app.buttons["flight-manual"].tap()
         let airline = app.textFields["booking-airline"]; XCTAssertTrue(airline.waitForExistence(timeout: 5)); airline.tap(); airline.typeText("Air France\n")
         for identifier in ["booking-departure", "booking-arrival"] {
             let airport = app.textFields[identifier]; reveal(airport); airport.tap(); airport.typeText("Par")
@@ -518,9 +526,50 @@ final class AurumUITests: XCTestCase {
             XCTAssertTrue(app.buttons[choice == "journal" ? "trip-add-place" : "journey-add"].waitForExistence(timeout: 8))
         }
     }
+    func testTripFlightSearchSavesToTripAndMap() {
+        createAddFlowTrip()
+        app.terminate(); app.launchArguments = ["--ui-testing", "--preserve-state", "--map-testing", "--location-testing"]; app.launch()
+        app.tabBars.buttons["Travel"].tap(); app.staticTexts["Trip to Paris"].tap()
+        app.buttons["journey-add"].tap(); app.buttons["add-plan-flight"].tap()
+        XCTAssertTrue(app.textFields["flight-airline-query"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["flight-record-save"].exists)
+        app.buttons["flight-add-cancel"].tap()
+        XCTAssertTrue(app.buttons["journey-add"].waitForExistence(timeout: 5))
+        app.buttons["journey-add"].tap(); app.buttons["add-plan-flight"].tap()
+        let airline = app.textFields["flight-airline-query"]
+        XCTAssertTrue(airline.waitForExistence(timeout: 5)); airline.tap(); airline.typeText("British")
+        app.buttons["flight-airline-BA"].tap()
+        let number = app.textFields["flight-number-query"]
+        XCTAssertTrue(number.waitForExistence(timeout: 5)); number.tap(); number.typeText("178\n")
+        XCTAssertTrue(app.buttons["flight-find"].waitForExistence(timeout: 5))
+        app.buttons["flight-find"].tap()
+        let result = app.buttons["flight-result-BAW178-ui-test"]
+        XCTAssertTrue(result.waitForExistence(timeout: 8))
+        XCTAssertTrue(app.staticTexts["Tap a flight to add it to your trip."].exists)
+        capture("104 Shared flight search from trip")
+        result.tap()
+        XCTAssertTrue(app.buttons["journey-add"].waitForExistence(timeout: 8))
+        XCTAssertFalse(app.buttons["flight-record-save"].exists)
+        XCTAssertFalse(app.buttons["add-plan-flight"].exists)
+        let booking = app.staticTexts["JFK → LHR"]
+        reveal(booking); XCTAssertTrue(booking.waitForExistence(timeout: 5))
+        capture("105 Flight saved directly to trip")
+        app.terminate(); app.launch()
+        app.tabBars.buttons["Travel"].tap(); app.staticTexts["Trip to Paris"].tap()
+        reveal(booking); XCTAssertTrue(booking.waitForExistence(timeout: 5))
+        XCTAssertEqual(app.staticTexts.matching(identifier: "JFK → LHR").count, 1)
+        app.navigationBars.buttons["BackButton"].tap()
+        app.tabBars.buttons["Map"].firstMatch.tap()
+        app.buttons["map-section-Flights"].tap()
+        let flight = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "map-flight-")).firstMatch
+        XCTAssertTrue(flight.waitForExistence(timeout: 5))
+        XCTAssertTrue(flight.label.contains("Trip to Paris"))
+        XCTAssertEqual(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "map-flight-")).count, 1)
+    }
     func testFlightAirportsStayInline() {
         createAddFlowTrip()
         app.buttons["journey-add"].tap(); app.buttons["add-plan-flight"].tap()
+        app.buttons["flight-manual"].tap()
         XCTAssertTrue(app.buttons["flight-record-save"].waitForExistence(timeout: 5))
         let top = app.buttons["flight-record-save"].frame.minY
         XCTAssertFalse(app.buttons["Search flights"].exists)
