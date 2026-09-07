@@ -34,7 +34,7 @@ A branded HTML sharing page would require a Supabase custom domain or a separate
 
 ## Providers and limits
 
-Google Places and FlightAware credentials are configured as **Supabase Edge Function secrets** and have been verified with live requests. Flight history remains disabled pending account entitlement confirmation. Tripadvisor and OpenAI adapter routes are deployed but their keys have not been supplied/configured. Apple Maps discovery and the local concierge preview remain available.
+Google Places and FlightAware credentials are configured as **Supabase Edge Function secrets** and have been verified with live requests. Flight history remains disabled pending account entitlement confirmation. OpenAI and Tripadvisor secrets are now detected by the deployed function. Live verification on September 7, 2026: OpenAI hotel overview returned HTTP 200 with a valid app response; Tripadvisor location search was rejected upstream with HTTP 403 (exposed as HTTP 502 by the adapter). Tripadvisor access is not yet verified: check the key’s domain/IP restrictions and endpoint access. Domain-restricted Tripadvisor keys require a matching HTTP Referer header, which the current adapter does not send. Activity recommendations depend on Tripadvisor candidates as well as OpenAI, so that combined flow remains blocked. Apple Maps discovery and the local concierge preview remain available.
 
 Authenticated provider limits: autocomplete 60/minute per account, flights 20/minute per account with a 600/hour application cap, place search 30/minute and AI 10/hour per account. Auth and public routes have additional limits. These are application safeguards, not a provider billing guarantee.
 

@@ -315,3 +315,10 @@ The SwiftUI source uses native iOS 26 Liquid Glass APIs and system controls. The
 - Replaced black system-background cards and inconsistent card fills with one warm charcoal surface and a subtle bronze edge in dark mode. Applied across Discover, hotel/restaurant details, trips and journal, saved items, flight entry, Explore input/inset rows, concierge and account/social screens. Consolidated the earlier trip-only surface into the shared modifier.
 - Tinted and selected surfaces now tint an opaque base instead of blending into the canvas. Increase Contrast strengthens the fill and edge. Kept flat Explore/flight rows unboxed and preserved photo treatments, card dimensions and navigation.
 - Signed arm64 simulator build and git diff checks passed through terminal/source verification. No new tests or paid API calls were needed for this styling-only change. Installed on both existing user simulators without clearing saved data.
+
+
+## OpenAI and Tripadvisor secret verification — September 7, 2026
+
+- Confirmed the native app targets the active Seur Supabase project and deployed travel-api version 8 reads OPENAI_API_KEY and TRIPADVISOR_API_KEY. Public status reports both present; this checks presence only, not provider access. No provider secrets were retrieved or printed.
+- Used a disposable authenticated account for one Tripadvisor location search and one OpenAI hotel overview. Tripadvisor rejected search with upstream HTTP 403; the planned detail lookup was skipped. OpenAI returned HTTP 200 with nonempty text and the expected places array. The temporary account was successfully deleted. No Google or FlightAware calls were made.
+- Tripadvisor’s documented domain restrictions require a matching Referer header, absent from the deployed adapter. The configured allowlist is not available through the connected Supabase tools, so its exact restriction and the cause of the 403 remain unconfirmed. No secrets, provider restrictions or deployed code were changed.
