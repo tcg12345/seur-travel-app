@@ -4,6 +4,8 @@ import MapKit
 struct WorldMapView: View {
     @Environment(TravelStore.self) private var store
     @Environment(JourneyLibrary.self) private var library
+    @Environment(TravelAPI.self) private var api
+    @Namespace private var sectionSelection
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var camera: MapCameraPosition = .camera(MapCamera(centerCoordinate: .init(latitude: 22, longitude: 5), distance: 32_000_000))
     @State private var mapHeight: CGFloat = 800
@@ -26,8 +28,9 @@ struct WorldMapView: View {
     @State private var editingFlight = false
     @State private var newTrip = false
     @State private var flightInfo = false
+    @State private var addingFlight = false
     private var flights: [MapFlight] {
-        var values: [MapFlight] = []
+        var values = api.savedFlights.map { MapFlight(tripID: nil, tripTitle: "My flights", flight: $0) }
         for trip in library.documents { for flight in trip.flights { values.append(MapFlight(tripID: trip.id, tripTitle: trip.title, flight: flight)) } }
         return values.sorted { a, b in
             if a.flight.departureDay == b.flight.departureDay { return a.flight.departureTime < b.flight.departureTime }
@@ -49,8 +52,8 @@ struct WorldMapView: View {
             map.ignoresSafeArea()
             topControls.padding(.horizontal, 18).padding(.top, 8)
             if panelVisible {
-                PersistentMapPanel(detent: $detent, header: { panelHeader }, content: { panelContent })
-                    .ignoresSafeArea(edges: .bottom)
+                PersistentMapPanel(detent: $detent, contentID: selectedFlightID ?? mode, header: { panelHeader }, content: { panelContent })
+
             }
         }
         .safeAreaInset(edge: .bottom) {
@@ -63,12 +66,14 @@ struct WorldMapView: View {
             withTransaction(transaction) { detent = .height(260); panelVisible = true }
         }
         .onChange(of: selection) { _, value in selected(value) }
-        .onChange(of: mode) { selection = nil; if mode != "Flights" { selectedFlightID = nil; tracker = FlightTracker() }; if selectedFlightID == nil { resizePanel(.medium) } }
+        .onChange(of: mode) { selection = nil; if mode != "Flights" { selectedFlightID = nil; tracker = FlightTracker() } }
+        .task(id: api.account?.id) { await api.loadSavedFlights() }
         .navigationDestination(isPresented: $showSaved) { SavedView().toolbar(.visible, for: .navigationBar) }
         .sheet(item: $adding) { ExploreAddToTripView(place: $0) }
         .sheet(isPresented: $editingFlight) { if let selectedFlight { FlightReservationEditor(documentID: selectedFlight.tripID, reservation: selectedFlight.flight) } }
         .sheet(isPresented: $newTrip) { TripCreationView() }
         .sheet(isPresented: $flightInfo) { FlightDataInfoView() }
+        .sheet(isPresented: $addingFlight) { FlightAddView { flight in openFlight(MapFlight(tripID: nil, tripTitle: "My flights", flight: flight)) } }
     }
     private var map: some View {
         Map(position: $camera, selection: $selection) {
@@ -113,28 +118,43 @@ struct WorldMapView: View {
         }
     }
     private var panelHeader: some View {
-        VStack(spacing: 0) {
-            HStack {
-                if selectedFlight != nil { Button { selectedFlightID = nil; tracker = FlightTracker(); resizePanel(.medium) } label: { Label("All flights", systemImage: "chevron.left") }.font(.subheadline) }
-                else { Text(mode == "Explore" ? "A world of possibilities" : mode == "Trips" ? "Your journeys, connected" : "The journey between").font(.system(.title3, design: .serif)) }
-                Spacer(minLength: 6)
-                Button { resizePanel(detent == .large ? .height(260) : .large) } label: { Image(systemName: detent == .large ? "chevron.down" : "chevron.up").frame(width: 30, height: 34) }.accessibilityLabel(detent == .large ? "Collapse map panel" : "Expand map panel").accessibilityIdentifier("map-panel-expand")
-                Button { panelVisible = false } label: { Image(systemName: "xmark").font(.caption.weight(.semibold)).frame(width: 30, height: 34) }.accessibilityLabel("Close map panel").accessibilityIdentifier("map-panel-close")
-            }.padding(.horizontal, 20).padding(.top, 4).padding(.bottom, 12)
-            if selectedFlight == nil {
-                Picker("Map content", selection: $mode) { ForEach(["Explore", "Trips", "Flights"], id: \.self) { Text($0) } }.pickerStyle(.segmented).padding(.horizontal, 18).padding(.bottom, 12).accessibilityIdentifier("map-content")
+        HStack(spacing: 8) {
+            if selectedFlight != nil {
+                Button { selectedFlightID = nil; tracker = FlightTracker() } label: { Label("All flights", systemImage: "chevron.left") }.font(.subheadline.weight(.medium))
+                Spacer()
+            } else {
+                HStack(spacing: 2) {
+                    ForEach(["Explore", "Trips", "Flights"], id: \.self) { section in
+                        Button {
+                            withAnimation(reduceMotion ? nil : .smooth(duration: 0.25)) { mode = section }
+                        } label: {
+                            Text(section).font(.subheadline.weight(mode == section ? .semibold : .medium))
+                                .foregroundStyle(mode == section ? Color.primary : Color.secondary)
+                                .padding(.horizontal, 14).padding(.vertical, 12)
+                                .background { if mode == section { Capsule().fill(Color.primary.opacity(0.07)).matchedGeometryEffect(id: "map-section", in: sectionSelection) } }
+                        }.buttonStyle(.plain).accessibilityIdentifier("map-section-" + section)
+                            .accessibilityAddTraits(mode == section ? .isSelected : [])
+                    }
+                }
+                Spacer(minLength: 0)
             }
-        }
+            Button { resizePanel(detent == .large ? .height(260) : .large) } label: {
+                Image(systemName: detent == .large ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right").font(.caption.weight(.medium)).frame(width: 32, height: 44)
+            }.accessibilityLabel(detent == .large ? "Collapse map panel" : "Expand map panel").accessibilityIdentifier("map-panel-expand")
+            Menu {
+                Button("Close map panel", systemImage: "xmark") { panelVisible = false }.accessibilityIdentifier("map-panel-close")
+                Button("Show the globe", systemImage: "globe") { globe() }
+            } label: { Image(systemName: "ellipsis").frame(width: 28, height: 44) }.accessibilityLabel("Panel options").accessibilityIdentifier("map-panel-options")
+        }.padding(.horizontal, 16).padding(.bottom, 12)
     }
     private var panelContent: some View {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    if let selectedFlight { FlightDetailPanel(flight: selectedFlight, tracker: tracker, edit: { editingFlight = true }, track: { position in move(.camera(MapCamera(centerCoordinate: position.coordinate, distance: 500_000))); resizePanel(.medium) }).id(selectedFlight.id) }
-                    else if mode == "Explore" { explorePanel }
-                    else if mode == "Trips" { tripsPanel }
-                    else { flightsPanel }
-                }.padding(.horizontal, 20).padding(.bottom, 30)
-            }.scrollDismissesKeyboard(.interactively)
+        VStack(alignment: .leading, spacing: 18) {
+            if let selectedFlight { FlightDetailPanel(flight: selectedFlight, tracker: tracker, edit: { editingFlight = true }, track: { position in move(.camera(MapCamera(centerCoordinate: position.coordinate, distance: 500_000))); resizePanel(.medium) }).id(selectedFlight.id) }
+            else if mode == "Explore" { explorePanel }
+            else if mode == "Trips" { tripsPanel }
+            else { flightsPanel }
+        }.frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 20).padding(.bottom, 24)
+            .transition(.opacity).id(selectedFlightID ?? mode)
     }
 
     private var explorePanel: some View {
@@ -142,8 +162,15 @@ struct WorldMapView: View {
             LocationAutocompleteField("Search any city", text: $cityQuery, kind: .city, identifier: "world-city-search", onEdit: { if detent != .large { resizePanel(.large) } }, onSelect: { result in
                 guard let city = ExploreCity(result) else { return }; selectedCity = city; store.rememberExploreCity(city); move(.region(city.region)); resizePanel(.medium); Task { await browse(city) }
             }).padding(15).background(Color.cardSurface, in: .rect(cornerRadius: 19))
-            ScrollView(.horizontal) { HStack { ForEach([ExploreInterest.attractions, .restaurants, .museums, .parks, .cafes, .hotels]) { value in Button { interest = value; if let searchArea { Task { await browse(searchArea) } } } label: { Label(value.title, systemImage: value.symbol).font(.caption.weight(.medium)).padding(11).background(interest == value ? Color.bronze.opacity(0.18) : Color.cardSurface, in: .capsule) }.buttonStyle(.plain) } } }.scrollIndicators(.hidden)
-            Button { let city = ExploreCity(name: selectedCity?.name ?? "Map area", country: selectedCity?.country ?? "", latitude: center.latitude, longitude: center.longitude); Task { await browse(city) }; resizePanel(.medium) } label: { Label("Search this area", systemImage: "scope").frame(maxWidth: .infinity).padding(7) }.buttonStyle(.glass).accessibilityIdentifier("map-search-area")
+            HStack {
+                Menu {
+                    ForEach([ExploreInterest.attractions, .restaurants, .museums, .parks, .cafes, .hotels]) { value in
+                        Button(value.title, systemImage: value.symbol) { interest = value; if let searchArea { Task { await browse(searchArea) } } }
+                    }
+                } label: { Label(interest.title, systemImage: interest.symbol).font(.subheadline.weight(.medium)); Image(systemName: "chevron.down").font(.caption2) }
+                Spacer()
+                Button { let city = ExploreCity(name: selectedCity?.name ?? "Map area", country: selectedCity?.country ?? "", latitude: center.latitude, longitude: center.longitude); Task { await browse(city) }; resizePanel(.medium) } label: { Label("Search area", systemImage: "scope").font(.subheadline) }.accessibilityIdentifier("map-search-area")
+            }.padding(.vertical, 4)
             if let selectedCity { NavigationLink { CityGuideView(city: selectedCity).toolbar(.visible, for: .navigationBar) } label: { HStack { VStack(alignment: .leading, spacing: 5) { Text(selectedCity.name).font(.system(.title2, design: .serif)); Text("Open the full city guide").font(.caption) }; Spacer(); Image(systemName: "arrow.up.right") }.padding(17).background(Color.cardSurface, in: .rect(cornerRadius: 21)) }.accessibilityIdentifier("map-city-guide") }
             if let selected = selectedPlace { ExplorePlaceRow(place: selected, add: { adding = selected }) }
             if search.loading { ProgressView("Finding places around the map…") }
@@ -171,8 +198,16 @@ struct WorldMapView: View {
     }
     private var flightsPanel: some View {
         VStack(alignment: .leading, spacing: 16) {
-            HStack { Text("\(flights.count) saved \(flights.count == 1 ? "flight" : "flights")").font(.subheadline.weight(.medium)); Spacer(); Button { globe() } label: { Image(systemName: "globe") }.accessibilityLabel("Show all routes") }
-            if flights.isEmpty { Text("Your flights, beautifully connected.").font(.system(.title2, design: .serif)); Text("Add a flight to any trip in Travel. Its airport route and flight details will appear here.").font(.subheadline).foregroundStyle(.secondary); NavigationLink { TravelHubView().toolbar(.visible, for: .navigationBar) } label: { Label("Open trips", systemImage: "suitcase.rolling") }.buttonStyle(.glass) }
+            HStack(alignment: .center) {
+                VStack(alignment: .leading, spacing: 4) { Text("Your flights").font(.system(.title2, design: .serif)); Text("\(flights.count) saved · every journey in view").font(.caption).foregroundStyle(.secondary) }
+                Spacer()
+                Button { addingFlight = true } label: { Image(systemName: "plus").font(.title3.weight(.medium)).frame(width: 46, height: 46) }.buttonStyle(.glassProminent).accessibilityLabel("Add flight").accessibilityIdentifier("map-add-flight")
+            }
+            if flights.isEmpty {
+                Text("Follow a flight, with or without a trip.").font(.subheadline).foregroundStyle(.secondary)
+                Button("Find your flight") { addingFlight = true }.buttonStyle(.glass)
+            }
+            if let error = api.savedFlightsError { Text(error).font(.caption).foregroundStyle(.secondary); Button("Try again") { Task { await api.loadSavedFlights() } } }
             ForEach(flights) { flight in flightRow(flight) }
             Button("About live flight information") { flightInfo = true }.font(.caption)
             Text("Dashed lines are planned direct routes. Aircraft markers appear only after a position is reported by the connected provider.").font(.caption2).foregroundStyle(.secondary)
@@ -228,50 +263,121 @@ struct WorldMapView: View {
 
 /// This panel belongs to the map, so the original system tab bar never moves or changes owners.
 /// Drag state stays here, keeping continuous gesture updates out of the map renderer.
+// Content stops at the tab-bar safe area, while the same sheet material continues
+// behind the root's native tab bar to the physical bottom edge of the screen.
 private struct PersistentMapPanel<Header: View, Content: View>: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Binding var detent: PresentationDetent
+    var contentID: String
     @ViewBuilder var header: () -> Header
     @ViewBuilder var content: () -> Content
     @State private var translation: CGFloat = 0
-    private var spring: Animation? { reduceMotion ? nil : .spring(response: 0.36, dampingFraction: 0.86) }
+    private var spring: Animation? { reduceMotion ? nil : .spring(response: 0.38, dampingFraction: 0.88) }
     var body: some View {
-        GeometryReader { geometry in
-            let maximum = max(300, geometry.size.height - 8)
-            let compact = min(320.0, maximum * 0.48)
-            let medium = max(compact, maximum * 0.59)
+        GeometryReader { geo in
+            let maximum = max(300, geo.size.height - 8)
+            let compact = min(260.0, maximum * 0.48)
+            let medium = max(compact, maximum * 0.60)
             let resting = detent == .large ? maximum : detent == .medium ? medium : compact
             let height = min(maximum, max(compact, resting - translation))
             let progress = min(1, max(0, (height - compact) / max(1, maximum - compact)))
-            let shape = UnevenRoundedRectangle(topLeadingRadius: 32 - progress * 8, bottomLeadingRadius: 32 * (1 - progress), bottomTrailingRadius: 32 * (1 - progress), topTrailingRadius: 32 - progress * 8)
+            let shape = UnevenRoundedRectangle(topLeadingRadius: 30 - progress * 6, bottomLeadingRadius: 30 * (1 - progress), bottomTrailingRadius: 30 * (1 - progress), topTrailingRadius: 30 - progress * 6)
+            let change: (CGFloat) -> Void = { translation = $0 }
+            let end: (CGFloat, CGFloat) -> Void = { distance, velocity in
+                let projected = resting - distance - velocity * 0.18
+                let target = [compact, medium, maximum].min(by: { abs($0 - projected) < abs($1 - projected) }) ?? compact
+                withAnimation(spring) { translation = 0; detent = target == maximum ? .large : target == medium ? .medium : .height(260) }
+            }
             VStack(spacing: 0) {
                 VStack(spacing: 0) {
-                    Capsule().fill(.secondary.opacity(0.35)).frame(width: 36, height: 5).padding(.top, 10).padding(.bottom, 10)
-                        .accessibilityLabel("Resize map sheet")
-                        .accessibilityAdjustableAction { direction in withAnimation(spring) { detent = direction == .increment ? .large : .height(260) } }
+                    Capsule().fill(.secondary.opacity(0.25)).frame(width: 32, height: 4).padding(.top, 10).padding(.bottom, 7)
+                        .accessibilityLabel("Map panel height").accessibilityAdjustableAction { direction in withAnimation(spring) { detent = direction == .increment ? .large : .height(260) } }
                     header()
-                }
-                .contentShape(Rectangle())
-                .simultaneousGesture(DragGesture(minimumDistance: 6, coordinateSpace: .global).onChanged { value in
-                    guard abs(value.translation.height) > abs(value.translation.width) else { return }
-                    translation = value.translation.height
-                }.onEnded { value in
-                    let projected = resting - value.predictedEndTranslation.height
-                    let choices: [(CGFloat, PresentationDetent)] = [(compact, .height(260)), (medium, .medium), (maximum, .large)]
-                    let target = choices.min { abs($0.0 - projected) < abs($1.0 - projected) }!.1
-                    withAnimation(spring) { translation = 0; detent = target }
-                })
-                content().frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                // The single system tab bar is drawn above the map by the root TabView.
-                Color.clear.frame(height: max(98, geometry.safeAreaInsets.bottom + 8))
+                }.contentShape(Rectangle()).simultaneousGesture(DragGesture(minimumDistance: 8, coordinateSpace: .global)
+                    .onChanged { value in if abs(value.translation.height) > abs(value.translation.width) { change(value.translation.height) } }
+                    .onEnded { value in end(value.translation.height, value.velocity.height) })
+                ScrollView {
+                    content().background(MapScrollBridge(expanded: detent == .large, onDrag: change, onEnd: end).frame(width: 0, height: 0))
+                }.id(contentID).scrollDismissesKeyboard(.interactively).scrollBounceBehavior(.always)
+                    .accessibilityIdentifier("map-panel-scroll")
             }
             .frame(height: height, alignment: .top)
-            .background { shape.fill(Color.canvas.opacity(progress)).glassEffect(.regular, in: shape) }
-            .clipShape(shape)
-            .shadow(color: .black.opacity(0.10), radius: 18, y: -3)
+            .clipShape(.rect(topLeadingRadius: 30 - progress * 6, topTrailingRadius: 30 - progress * 6))
+            .background(alignment: .top) {
+                shape.fill(Color.canvas.opacity(0.3 + progress * 0.7))
+                    .frame(height: height + geo.safeAreaInsets.bottom)
+                    .glassEffect(.regular, in: shape)
+                    .shadow(color: .black.opacity(0.12), radius: 16, y: -2)
+                    .accessibilityIdentifier("map-panel-surface")
+            }
             .padding(.horizontal, 12 * (1 - progress))
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
             .animation(spring, value: detent)
+        }
+    }
+}
+
+// Observe the native scroll pan instead of adding a competing full-surface gesture.
+// A collapsed sheet consumes vertical movement; an expanded sheet scrolls normally
+// until a downward pull reaches the top. Buttons retain native cancellation behavior.
+private struct MapScrollBridge: UIViewRepresentable {
+    var expanded: Bool
+    var onDrag: (CGFloat) -> Void
+    var onEnd: (CGFloat, CGFloat) -> Void
+    func makeCoordinator() -> Coordinator { Coordinator(parent: self) }
+    func makeUIView(context: Context) -> Probe {
+        let probe = Probe(); probe.attach = { [weak coordinator = context.coordinator] view in coordinator?.attach(from: view) }; return probe
+    }
+    func updateUIView(_ view: Probe, context: Context) { context.coordinator.parent = self }
+    static func dismantleUIView(_ view: Probe, coordinator: Coordinator) { coordinator.detach() }
+    final class Probe: UIView {
+        var attach: ((UIView) -> Void)?
+        override func didMoveToWindow() { super.didMoveToWindow(); if window != nil { attach?(self) } }
+    }
+    final class Coordinator: NSObject {
+        var parent: MapScrollBridge
+        weak var scroll: UIScrollView?
+        private var observation: NSKeyValueObservation?
+        private var movingSheet = false
+        private var finishedSheetPan = false
+        private var origin: CGFloat = 0
+        init(parent: MapScrollBridge) { self.parent = parent }
+        func attach(from view: UIView) {
+            var ancestor = view.superview
+            while let current = ancestor {
+                if let candidate = current as? UIScrollView {
+                    guard scroll !== candidate else { return }; detach(); scroll = candidate
+                    candidate.alwaysBounceVertical = true
+                    candidate.panGestureRecognizer.addTarget(self, action: #selector(pan(_:)))
+                    observation = candidate.observe(\.contentOffset, options: [.new]) { [weak self] scroll, _ in
+                        guard let self, scroll.isDragging || scroll.isDecelerating else { return }
+                        if self.movingSheet || self.finishedSheetPan || !self.parent.expanded {
+                            let top = -scroll.adjustedContentInset.top
+                            if abs(scroll.contentOffset.y - top) > 0.1 { scroll.contentOffset.y = top }
+                        }
+                    }
+                    return
+                }
+                ancestor = current.superview
+            }
+        }
+        func detach() { observation = nil; scroll?.panGestureRecognizer.removeTarget(self, action: #selector(pan(_:))); scroll = nil }
+        @objc private func pan(_ gesture: UIPanGestureRecognizer) {
+            guard let scroll else { return }
+            let dy = gesture.translation(in: scroll.window).y
+            let velocity = gesture.velocity(in: scroll.window)
+            let top = -scroll.adjustedContentInset.top
+            switch gesture.state {
+            case .began:
+                finishedSheetPan = false; origin = 0; movingSheet = !parent.expanded || (scroll.contentOffset.y <= top + 1 && velocity.y > 0)
+            case .changed:
+                if !movingSheet && scroll.contentOffset.y <= top + 1 && velocity.y > 0 { movingSheet = true; origin = dy }
+                if movingSheet { scroll.contentOffset.y = top; parent.onDrag(dy - origin) }
+            case .ended, .cancelled:
+                if movingSheet { finishedSheetPan = true; scroll.setContentOffset(CGPoint(x: 0, y: top), animated: false); parent.onEnd(dy - origin, gesture.state == .cancelled ? 0 : velocity.y) }
+                movingSheet = false
+            default: break
+            }
         }
     }
 }

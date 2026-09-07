@@ -8,7 +8,17 @@ Map replaces the Saved tab. The globe connects worldwide city discovery, saved t
 - Explore: search any city, open its guide, choose an interest, or search around the current map center. Found places can be saved or added to an existing trip.
 - Trips: choose a trip to see its mapped destinations, plans, hotel stays, airports and journal places. Open the full trip from its card.
 - Flights: view saved flights and their direct great-circle airport routes, then tap a card or airport marker for details. Lines represent planned routes, not actual tracks. Invalid or missing coordinates are never replaced by invented positions.
-- The map panel starts at the bottom edge behind the original system navigation bar, floats inset at its compact height, and expands through medium to full height. Drag its handle/header or use the chevron. The original navigation bar stays in place; switching tabs requires no sheet dismissal or replacement bar. Map opens with the panel already lowered, without an entrance animation. You can also close the sheet and use “Explore your world” to reopen it. The exposed map remains interactive. The panel uses native Liquid Glass and scrolling, with isolated drag state and spring settling; it is an integrated panel rather than a modal sheet.
+- The map panel starts at the bottom edge behind the original system navigation bar, floats inset at its compact height, and expands through medium to full height. Swipe vertically anywhere in its content or header, or use the expand button. The same glass surface reaches the physical bottom edge behind the native bar; the scroll viewport ends above the bar so content stays readable. Expanded content scrolls normally, and a downward pull at the top lowers the panel. The original navigation bar stays in place; switching tabs requires no sheet dismissal or replacement bar. Map opens with the panel already lowered, without an entrance animation. The Explore / Trips / Flights switcher animates without changing sheet height; the Explore interest menu replaces the extra category tab row. You can also close the sheet and use “Explore your world” to reopen it. The exposed map remains interactive. The panel uses native Liquid Glass and scrolling, with isolated drag state and spring settling; it is an integrated panel rather than a modal sheet.
+
+## Add a flight directly
+
+Use **Flights → +** on the map. The native modal starts with airline autocomplete (name or code), flight number and local departure date. Route search accepts airport codes or airport autocomplete, resolving the selected airport to a FlightAware code. Any valid IATA/ICAO airline code can be entered even when absent from the suggestion catalog.
+
+Choose a returned departure to review its airline, airports, scheduled airport-local dates/times, price, booking link and notes before saving. A Back action returns to search. Manual entry supports later bookings and unreported schedules; live estimates never replace the booked schedule. Selected result airports are resolved before review so saved flights draw routes immediately.
+
+Standalone flights are private records in Supabase, independent of trip documents. Signed-in users can reload, edit and remove them from the map. They appear alongside flights already attached to trips. Guests get an in-flow sign-in entry point. Tracking and cloud storage need a connection; trip-local booking records still retain their existing offline behavior.
+
+Route lookup covers local dates from eight days ago through tomorrow, with one provider page of nonstop departures. Search by flight number when a departure is missing. Later dates offer manual entry. FlightAware controls coverage; this is tracking and schedule entry, not ticket purchase.
 
 ## Flight information
 

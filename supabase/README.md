@@ -61,3 +61,11 @@ Use `supabase secrets set --env-file <ignored-secret-file>` to configure provide
 The previous local SQLite database had zero users, cloud documents, friendships, conversations, messages or share links. A private snapshot is retained at ignored `backend/data/before-supabase.sqlite3`. There were therefore no existing backend accounts or cloud records to import. Device libraries are preserved and can be uploaded after the traveler signs in.
 
 `backend/` is the legacy Python implementation and test reference. It is not used by the shipped native client or required to run Seur Cloud. See `iOS/Validation.md` for the current build, live integration and security checks.
+
+## Standalone flights
+
+`travel_flights` stores private flight records under a composite `(owner_id, id)` key, with cascading account deletion, RLS and server-only grants. The Edge Function derives the owner from the authenticated session for every read, upsert and deletion. `/v1/my-flights` lists the owner's flights; `/v1/my-flights/:id` supports PUT and DELETE. No trip is created or required.
+
+New authenticated FlightAware routes: `/v1/flights/route` (origin, destination, local date), `/v1/flights/airport` (code) and `/v1/flights/airport-nearby` (selected airport coordinates). Lookups share existing provider rate limits; airport metadata is cached for 24 hours. Nearby airport normalization accepts both current and legacy FlightAware code fields. Route searches request one nonstop provider page and disclose their limited date window.
+
+Run `python3 supabase/tests/flights_smoke.py --providers` for disposable-account ownership/CRUD tests and four bounded live provider queries. Verified September 7, 2026: one BA178 departure, two JFK–LHR route results, airport details and autocomplete resolution. Temporary users and their flights are deleted afterward.

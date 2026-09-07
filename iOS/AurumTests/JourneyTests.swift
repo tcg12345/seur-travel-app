@@ -13,6 +13,25 @@ import MapKit
         d.events = [JourneyEvent(stopID: stop.id, place: PlaceRecord(id: "dinner", name: "Dinner", category: .restaurant), cost: TravelMoney(amount: Decimal(string: "85.50")!, currency: "EUR"))]
         return d
     }
+    func testFlightSearchConversionUsesScheduledAirportLocalTimes() throws {
+        var flight = FlightMapFixtures.snapshot
+        flight.originZone = "America/New_York"; flight.destinationZone = "Europe/London"
+        let saved = flight.reservation(airline: "British Airways")
+        XCTAssertEqual(saved.departureDay, "2026-09-06"); XCTAssertEqual(saved.departureTime, "18:00")
+        XCTAssertEqual(saved.arrivalDay, "2026-09-07"); XCTAssertEqual(saved.arrivalTime, "06:00")
+        XCTAssertEqual(saved.flightNumber, "BA178")
+        XCTAssertNil(MapFlight(tripID: nil, tripTitle: "My flights", flight: saved).route)
+        flight.scheduledIn = nil; flight.scheduledOn = nil
+        XCTAssertEqual(flight.reservation(airline: "BA").arrivalTime, "")
+    }
+    func testAirlineAutocompleteSupportsNamesCodesAndUnlistedCodes() {
+        XCTAssertEqual(FlightAirline.matches("delta").first?.code, "DL")
+        XCTAssertTrue(FlightAirline.matches("BA").contains { $0.name == "British Airways" })
+        XCTAssertEqual(FlightAirline.matches("ZZZ").first?.code, "ZZZ")
+        XCTAssertEqual(FlightAirline.identified(by: "BA178")?.name, "British Airways")
+        XCTAssertEqual(FlightAddView.airportCode(" jfk "), "JFK")
+        XCTAssertNil(FlightAddView.airportCode("New York"))
+    }
     func testLegacyTripPreparesRouteFromExistingChoices() throws {
         var trip = JourneyDocument(kind: .trip, title: "Old trip", destination: "Paris", startDate: "2026-10-01", endDate: "2026-10-04")
         trip.places = [RatedPlace(place: PlaceRecord(name: "A favourite table", category: .restaurant), overall: 9)]

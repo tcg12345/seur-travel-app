@@ -16,9 +16,11 @@ private struct APIProblem: Codable { var error: String }
 private struct EmptyReply: Codable { var ok: Bool }
 
 @MainActor @Observable final class TravelAPI {
-    var baseURL: String { didSet { if oldValue != baseURL { defaults.set(baseURL, forKey: "aurum.backendURL"); account = nil; token = nil } } }
+    var baseURL: String { didSet { if oldValue != baseURL { defaults.set(baseURL, forKey: "aurum.backendURL"); account = nil; token = nil; savedFlights = [] } } }
     private(set) var account: TravelAccount?
     private(set) var status: TravelServiceStatus?
+    private(set) var savedFlights: [FlightReservation] = []
+    var savedFlightsError: String?
     private var token: String?
     private let defaults = UserDefaults.standard
     init() {
@@ -56,11 +58,63 @@ private struct EmptyReply: Codable { var ok: Bool }
     }
     func deleteAccount() async throws {
         let _: EmptyReply = try await request("/v1/account", method: "DELETE", body: [:])
-        Self.deleteToken(for: baseURL); token = nil; account = nil
+        Self.deleteToken(for: baseURL); token = nil; account = nil; savedFlights = []; savedFlightsError = nil
     }
     func logout() async {
         if token != nil { let _: EmptyReply? = try? await request("/v1/auth/logout", method: "POST", body: [:]) }
-        Self.deleteToken(for: baseURL); token = nil; account = nil
+        Self.deleteToken(for: baseURL); token = nil; account = nil; savedFlights = []; savedFlightsError = nil
+    }
+    func loadSavedFlights() async {
+        #if DEBUG
+        if FlightMapFixtures.enabled { return }
+        #endif
+        guard isSignedIn else { savedFlights = []; return }
+        let user = account?.id
+        do {
+            let values: [FlightReservation] = try await request("/v1/my-flights")
+            guard account?.id == user else { return }
+            savedFlights = values; savedFlightsError = nil
+        } catch { if account?.id == user { savedFlightsError = error.localizedDescription } }
+    }
+    func saveFlight(_ flight: FlightReservation) async throws {
+        let user = account?.id, server = baseURL
+        let saved: FlightReservation
+        #if DEBUG
+        if FlightMapFixtures.enabled { saved = flight }
+        else { saved = try await request("/v1/my-flights/" + flight.id.uuidString, method: "PUT", encodable: flight) }
+        #else
+        saved = try await request("/v1/my-flights/" + flight.id.uuidString, method: "PUT", encodable: flight)
+        #endif
+        guard user == account?.id && server == baseURL else { return }
+        savedFlights.removeAll { $0.id == saved.id }; savedFlights.insert(saved, at: 0); savedFlightsError = nil
+    }
+    func removeFlight(_ id: UUID) async throws {
+        let user = account?.id, server = baseURL
+        #if DEBUG
+        if !FlightMapFixtures.enabled { let _: EmptyReply = try await request("/v1/my-flights/" + id.uuidString, method: "DELETE") }
+        #else
+        let _: EmptyReply = try await request("/v1/my-flights/" + id.uuidString, method: "DELETE")
+        #endif
+        guard user == account?.id && server == baseURL else { return }
+        savedFlights.removeAll { $0.id == id }
+    }
+    func flightRoute(origin: String, destination: String, day: String) async throws -> FlightFeed {
+        #if DEBUG
+        if FlightMapFixtures.enabled { return FlightMapFixtures.feed }
+        #endif
+        return try await request("/v1/flights/route", query: ["origin": origin, "destination": destination, "date": day])
+    }
+    func nearbyFlightAirport(latitude: Double, longitude: Double) async throws -> FlightAirport {
+        #if DEBUG
+        if FlightMapFixtures.enabled { return .init(code: "CDG", name: "Paris Charles de Gaulle", latitude: 49.0097, longitude: 2.5479, timeZone: "Europe/Paris") }
+        #endif
+        return try await request("/v1/flights/airport-nearby", query: ["latitude": String(latitude), "longitude": String(longitude)])
+    }
+    func flightAirport(_ code: String) async throws -> FlightAirport {
+        #if DEBUG
+        if FlightMapFixtures.enabled { return code == "JFK" ? .init(code: "JFK", name: "John F. Kennedy International", latitude: 40.6413, longitude: -73.7781, timeZone: "America/New_York") : .init(code: "LHR", name: "London Heathrow", latitude: 51.47, longitude: -0.4543, timeZone: "Europe/London") }
+        #endif
+        return try await request("/v1/flights/airport", query: ["code": code])
     }
     func flightStatus(_ ident: String, day: String) async throws -> FlightFeed {
         #if DEBUG
@@ -125,7 +179,7 @@ private struct EmptyReply: Codable { var ok: Bool }
         guard let response = response as? HTTPURLResponse else { throw JourneyError.message("The server did not return an HTTP response.") }
         guard (200..<300).contains(response.statusCode) else {
             if response.statusCode == 401 && token == requestToken && baseURL == requestServer {
-                Self.deleteToken(for: requestServer); token = nil; account = nil
+                Self.deleteToken(for: requestServer); token = nil; account = nil; savedFlights = []; savedFlightsError = nil
             }
             throw JourneyError.message((try? JSONDecoder().decode(APIProblem.self, from: data))?.error ?? "Request failed (\(response.statusCode)).")
         }

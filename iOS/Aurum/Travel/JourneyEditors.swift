@@ -241,13 +241,16 @@ struct HotelReservationEditor: View {
 
 struct FlightReservationEditor: View {
     @Environment(JourneyLibrary.self) private var library
+    @Environment(TravelAPI.self) private var api
     @Environment(\.dismiss) private var dismiss
-    let documentID: UUID
+    let documentID: UUID?
     @State var reservation: FlightReservation
+    var onCancel: (() -> Void)? = nil
     var onSaved: () -> Void = {}
     @State private var search = false
     @State private var error: String?
     @State private var delete = false
+    @State private var saving = false
     var body: some View {
         NavigationStack {
             Form {
@@ -257,9 +260,9 @@ struct FlightReservationEditor: View {
                 Section("Booking") { MoneyFields(cost: $reservation.cost); TextField("Booking link", text: $reservation.bookingLink).keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled(); TextField("Notes", text: $reservation.notes, axis: .vertical).lineLimit(3...6) }
                 Section { Text("Times are stored exactly as airport-local values, including overnight and date-line crossings. Confirm them against your airline booking.").font(.caption).foregroundStyle(.secondary) }
                 if let error { Section { Text(error).foregroundStyle(.red) } }
-                if library.documents.first(where: { $0.id == documentID })?.flights.contains(where: { $0.id == reservation.id }) == true { Section { Button("Remove flight record", role: .destructive) { delete = true } } }
-            }.scrollDismissesKeyboard(.interactively).scrollContentBackground(.hidden).background(Color.canvas).navigationTitle("Your flight booking").navigationBarTitleDisplayMode(.inline)
-                .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }; ToolbarItem(placement: .confirmationAction) { Button("Save") { save() }.accessibilityIdentifier("flight-record-save") } }
+                if library.documents.first(where: { $0.id == documentID })?.flights.contains(where: { $0.id == reservation.id }) == true || (documentID == nil && api.savedFlights.contains(where: { $0.id == reservation.id })) { Section { Button("Remove flight record", role: .destructive) { delete = true } } }
+            }.scrollDismissesKeyboard(.interactively).scrollContentBackground(.hidden).background(Color.canvas).navigationTitle(documentID == nil ? "Review flight" : "Your flight booking").navigationBarTitleDisplayMode(.inline)
+                .toolbar { ToolbarItem(placement: .cancellationAction) { Button(onCancel == nil ? "Cancel" : "Back") { if let onCancel { onCancel() } else { dismiss() } }.disabled(saving) }; ToolbarItem(placement: .confirmationAction) { Button(saving ? "Saving…" : "Save") { save() }.disabled(saving).accessibilityIdentifier("flight-record-save") } }
                 .sheet(isPresented: $search) { FlightLookupView { selection in
                     let flight = selection.search
                     reservation.departureAirport = flight.origin; reservation.arrivalAirport = flight.destination
@@ -271,7 +274,23 @@ struct FlightReservationEditor: View {
                 .confirmationDialog("Remove this flight record?", isPresented: $delete, titleVisibility: .visible) { Button("Remove record", role: .destructive) { save(remove: true) } }
         }
     }
-    private func save(remove: Bool = false) { guard var d = library.documents.first(where: { $0.id == documentID }) else { return }; d.flights.removeAll { $0.id == reservation.id }; if !remove { d.flights.append(reservation) }; if library.save(d) { onSaved(); dismiss() } else { error = library.error } }
+    private func save(remove: Bool = false) {
+        guard !saving else { return }
+        if let documentID {
+            guard var d = library.documents.first(where: { $0.id == documentID }) else { error = "This trip is no longer available."; return }
+            d.flights.removeAll { $0.id == reservation.id }; if !remove { d.flights.append(reservation) }
+            if library.save(d) { onSaved(); dismiss() } else { error = library.error }
+        } else {
+            var validation = JourneyDocument(title: "Flight"); validation.flights = [reservation]
+            if !remove, let problem = validation.validationError() { error = problem; return }
+            saving = true
+            Task {
+                do { if remove { try await api.removeFlight(reservation.id) } else { try await api.saveFlight(reservation) }; onSaved(); dismiss() }
+                catch { self.error = error.localizedDescription }
+                saving = false
+            }
+        }
+    }
 }
 
 struct RatedPlaceEditor: View {
