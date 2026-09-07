@@ -11,7 +11,6 @@ struct WorldMapView: View {
     @State private var mapHeight: CGFloat = 800
     @State private var center = CLLocationCoordinate2D(latitude: 22, longitude: 5)
     @State private var mode = "Explore"
-    @State private var panelVisible = true
     @State private var detent: PresentationDetent = .height(260)
     @State private var showSaved = false
     @State private var satellite = true
@@ -52,19 +51,13 @@ struct WorldMapView: View {
         ZStack(alignment: .top) {
             map.ignoresSafeArea()
             topControls.padding(.horizontal, 18).padding(.top, 8)
-            if panelVisible {
-                PersistentMapPanel(detent: $detent, contentID: selectedFlightID ?? (mode + (addedFlightNumber ?? "")), flightDetail: selectedFlightID != nil, header: { panelHeader }, content: { panelContent })
-
-            }
-        }
-        .safeAreaInset(edge: .bottom) {
-            if !panelVisible { Button { panelVisible = true } label: { Label("Explore your world", systemImage: "line.3.horizontal").frame(maxWidth: .infinity).padding(14) }.buttonStyle(.glassProminent).padding(.horizontal, 22).padding(.bottom, 8).accessibilityIdentifier("map-show-panel") }
+            PersistentMapPanel(detent: $detent, contentID: selectedFlightID ?? (mode + (addedFlightNumber ?? "")), flightDetail: selectedFlightID != nil, header: { panelHeader }, content: { panelContent })
         }
         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { mapHeight = $0 }
         .toolbar(.hidden, for: .navigationBar)
         .onChange(of: store.selectedTab) { _, _ in
             var transaction = Transaction(); transaction.disablesAnimations = true
-            withTransaction(transaction) { detent = .height(260); panelVisible = true }
+            withTransaction(transaction) { detent = .height(260) }
         }
         .onChange(of: selection) { _, value in selected(value) }
         .onChange(of: mode) { selection = nil; if mode != "Flights" { selectedFlightID = nil; tracker = FlightTracker() } }
@@ -106,7 +99,7 @@ struct WorldMapView: View {
                 Annotation("Reported aircraft position", coordinate: position.coordinate) { Image(systemName: "location.north.fill").rotationEffect(.degrees(position.heading ?? 0)).font(.title2).foregroundStyle(.white).padding(12).background(Color.bronze, in: .circle) }
             }
         }.mapStyle(satellite ? .hybrid(elevation: .realistic, pointsOfInterest: .excludingAll) : .standard(elevation: .realistic, pointsOfInterest: .excludingAll))
-            .safeAreaPadding(.bottom, panelVisible && mode != "Explore" ? mapHeight * (selectedFlightID == nil ? 0.59 : 0.76) : 0)
+            .safeAreaPadding(.bottom, mode != "Explore" ? mapHeight * (selectedFlightID == nil ? 0.59 : 0.76) : 0)
             .onMapCameraChange(frequency: .onEnd) { center = $0.region.center }
             .accessibilityIdentifier("world-map")
     }
@@ -114,7 +107,7 @@ struct WorldMapView: View {
         HStack(spacing: 10) {
             HStack(spacing: 8) { Image(systemName: "globe.europe.africa"); Text("Your world").font(.system(.headline, design: .serif)) }.padding(.horizontal, 17).padding(.vertical, 13).glassEffect(.regular, in: .capsule)
             Spacer()
-            Button { panelVisible = false; showSaved = true } label: { Image(systemName: "bookmark").frame(width: 44, height: 44) }.buttonStyle(.glass).accessibilityLabel("Saved places and collections").accessibilityIdentifier("map-saved")
+            Button { showSaved = true } label: { Image(systemName: "bookmark").frame(width: 44, height: 44) }.buttonStyle(.glass).accessibilityLabel("Saved places and collections").accessibilityIdentifier("map-saved")
             Menu {
                 Button(satellite ? "Standard map" : "Satellite globe", systemImage: "map") { satellite.toggle() }
                 Button("Show the globe", systemImage: "globe") { globe() }

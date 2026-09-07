@@ -224,3 +224,8 @@ The SwiftUI source uses native iOS 26 Liquid Glass APIs and system controls. The
 
 - Removed the bottom sheet's expand button and three-dot actions menu. Dragging the sheet and its accessible height adjustment remain available. Updated existing UI checks to resize through the handle.
 - The simulator build and existing expand/collapse/tab-navigation regression passed in `/tmp/SeurMapHeaderQA.xcresult`, including assertions that both removed buttons are absent. Both existing simulator installations were updated without changing their app identifiers or saved data.
+
+## Always-visible map sheet — September 7, 2026
+
+- Removed the map panel's hidden state and the “Explore your world” recovery button. Opening Saved places no longer hides the panel, so returning to Map always reveals the existing sheet.
+- The simulator build and expanded existing navigation regression passed in `/tmp/SeurPersistentMapQA.xcresult`, including returning from Saved places with visible, usable sheet controls and no recovery button. Both existing simulator apps were updated with saved data preserved.

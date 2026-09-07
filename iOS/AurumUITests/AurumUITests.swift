@@ -61,6 +61,13 @@ final class AurumUITests: XCTestCase {
         XCTAssertFalse(app.buttons["map-panel-options"].exists)
         resizeMapPanel(expanded: false)
         expectation(for: NSPredicate { _, _ in expand.frame.minY > compactY - 50 }, evaluatedWith: expand); waitForExpectations(timeout: 8)
+        app.buttons["map-saved"].tap()
+        XCTAssertTrue(app.navigationBars["Saved places"].waitForExistence(timeout: 5))
+        app.navigationBars.buttons["BackButton"].tap()
+        XCTAssertTrue(app.scrollViews["map-panel-scroll"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["map-section-Explore"].isHittable)
+        XCTAssertFalse(app.buttons["map-show-panel"].exists)
+        capture("101 Map sheet remains visible after Saved places")
     }
     func testMapSectionSwitchKeepsLayoutAndSearch() {
         app.terminate(); app.launchArguments = ["--ui-testing", "--map-testing", "--location-testing", "--city-testing", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryL"]; app.launch()
