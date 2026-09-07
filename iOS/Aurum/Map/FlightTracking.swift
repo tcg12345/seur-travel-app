@@ -337,18 +337,11 @@ struct FlightAddView: View {
                 NavigationStack {
                     Form {
                         Section {
-                            VStack(alignment: .leading, spacing: 10) {
-                                Image(systemName: "airplane.circle").font(.system(size: 40, weight: .ultraLight)).foregroundStyle(Color.bronze)
-                                Text("Every flight.\nOne beautiful view.").font(.system(size: 30, weight: .regular, design: .serif))
-                                Text("Find your departure and save it to your map. No trip needed.").font(.subheadline).foregroundStyle(.secondary)
-                            }.padding(.vertical, 8)
-                        }.listRowBackground(Color.clear).listRowInsets(EdgeInsets(top: 0, leading: 4, bottom: 4, trailing: 4))
-                        Section {
                             Picker("Find by", selection: $method) { Text("Flight number").tag("Flight number"); Text("Route").tag("Route") }.pickerStyle(.segmented).accessibilityIdentifier("flight-search-method")
                         }.listRowBackground(Color.clear).listRowInsets(EdgeInsets())
-                        if needsAccount { Section { Button { accountSheet = true } label: { Label("Sign in to find and save flights", systemImage: "person.crop.circle") } } }
+                        if needsAccount { Section { Button { accountSheet = true } label: { Label("Sign in to search flights", systemImage: "person.crop.circle") } } }
                         if method == "Flight number" { airlineSection } else { routeSection }
-                        Section { DatePicker("Departure date", selection: $day, displayedComponents: .date).accessibilityIdentifier("flight-search-date") } footer: { Text("Use the local date at your departure airport.") }
+                        Section { DatePicker("Departure date", selection: $day, displayedComponents: .date).accessibilityIdentifier("flight-search-date") } footer: { Text("Departure airport’s local date.") }
                         Section {
                             Button { Task { await search() } } label: { HStack { Spacer(); if loading { ProgressView() }; Text(loading ? "Finding flights…" : "Find flight").fontWeight(.semibold); Spacer() } }.disabled(!canSearch || loading || preparing != nil).accessibilityIdentifier("flight-find")
                         }
@@ -357,7 +350,8 @@ struct FlightAddView: View {
                         Section {
                             Button { draft = FlightReservation(airline: airline?.name ?? "", flightNumber: (airline?.code ?? "") + number.uppercased(), departureAirport: origin, arrivalAirport: destination, departureDay: TravelDay.key(day), arrivalDay: TravelDay.key(day)) } label: { Label("Enter flight manually", systemImage: "square.and.pencil") }.disabled(preparing != nil).accessibilityIdentifier("flight-manual")
                         } footer: { Text("Have a booking for a later date? Add its confirmed schedule now. Live details appear when the provider reports them.") }
-                    }.scrollDismissesKeyboard(.interactively).scrollContentBackground(.hidden).background(Color.canvas)
+                    }.listSectionSpacing(18).contentMargins(.top, 12, for: .scrollContent)
+                        .scrollDismissesKeyboard(.interactively).scrollContentBackground(.hidden).background(Color.canvas)
                         .navigationTitle("Add a flight").navigationBarTitleDisplayMode(.inline)
                         .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
                 }
