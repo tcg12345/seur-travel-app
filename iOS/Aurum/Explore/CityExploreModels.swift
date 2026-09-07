@@ -102,6 +102,32 @@ struct ExploreSection: Identifiable {
 
 enum ExploreSort: String, CaseIterable { case suggested = "Suggested", distance = "Distance from center", name = "Name A–Z" }
 
+enum DiningPricePreference: String, CaseIterable, Identifiable {
+    case any = "Any price", budget = "Budget", moderate = "Moderate", upscale = "Upscale", fineDining = "Fine dining"
+    var id: String { rawValue }
+    var query: String {
+        switch self {
+        case .any: ""
+        case .budget: "inexpensive"
+        case .moderate: "moderately priced"
+        case .upscale: "upscale"
+        case .fineDining: "fine dining"
+        }
+    }
+}
+
+struct DiningSearchPreferences: Equatable {
+    var cuisine = "Any cuisine"
+    var price: DiningPricePreference = .any
+    static let cuisines = ["Any cuisine", "French", "Italian", "Japanese", "Chinese", "Indian", "Thai", "Mexican", "Mediterranean", "Middle Eastern", "Korean", "Vietnamese", "Spanish", "Greek", "American", "Vegetarian", "Vegan", "Seafood"]
+    var active: Bool { cuisine != "Any cuisine" || price != .any }
+    var summary: String { [cuisine == "Any cuisine" ? nil : cuisine, price == .any ? nil : price.rawValue].compactMap { $0 }.joined(separator: " · ") }
+    func searchTerm(_ text: String = "", interest: ExploreInterest) -> String {
+        guard interest == .restaurants, active else { return text }
+        return [price.query, cuisine == "Any cuisine" ? "" : cuisine, "restaurants", text.trimmingCharacters(in: .whitespacesAndNewlines)].filter { !$0.isEmpty }.joined(separator: " ")
+    }
+}
+
 @MainActor @Observable final class CityExploreModel {
     typealias Search = @MainActor (ExploreCity, ExploreInterest, String, Bool) async throws -> [ExplorePlace]
     private(set) var sections: [ExploreSection] = []

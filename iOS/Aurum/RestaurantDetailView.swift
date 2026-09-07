@@ -17,6 +17,7 @@ struct RestaurantDetailView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let place: RestaurantPlace
     @State private var existingTrip = false
+    @State private var compactAdd = false
     @State private var planner = false
     @State private var journal = false
     @State private var concierge = false
@@ -52,6 +53,9 @@ struct RestaurantDetailView: View {
                 }.padding(24).background(Color.canvas, in: UnevenRoundedRectangle(topLeadingRadius: 32, topTrailingRadius: 32)).padding(.top, -28)
             }
         }
+        .onScrollGeometryChange(for: CGFloat.self) { $0.contentOffset.y + $0.contentInsets.top } action: { _, offset in
+            if offset > 80 { compactAdd = true } else if offset < 24 { compactAdd = false }
+        }
         .background(Color.canvas).ignoresSafeArea(edges: .top)
         .navigationBarTitleDisplayMode(.inline).toolbar(.hidden, for: .tabBar)
         .toolbar {
@@ -64,14 +68,8 @@ struct RestaurantDetailView: View {
             }
         }
         .safeAreaInset(edge: .bottom) {
-            HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("A table to look forward to").font(.subheadline.weight(.medium))
-                    Text("Start with a dining plan").font(.caption2).foregroundStyle(.secondary)
-                }.frame(maxWidth: .infinity, alignment: .leading)
-                Button { planner = true } label: { Label("Plan a visit", systemImage: "arrow.up.right").font(.subheadline.weight(.semibold)).padding(.vertical, 10) }
-                    .buttonStyle(.glassProminent).accessibilityIdentifier("restaurant-plan")
-            }.padding(14).glassEffect(.regular, in: .rect(cornerRadius: 27)).padding(.horizontal, 16).padding(.bottom, 8)
+            PlaceTripAction(title: "Plan a visit", compact: compactAdd, identifier: "restaurant-plan") { planner = true }
+                .frame(maxWidth: .infinity, alignment: .trailing).padding(.horizontal, 20).frame(height: 70)
         }
         .sensoryFeedback(.selection, trigger: saved)
         .sheet(isPresented: $existingTrip) {

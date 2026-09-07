@@ -386,6 +386,20 @@ import MapKit
 }
 
 @MainActor final class CityExplorerTests: XCTestCase {
+    func testDiningPreferencesRefineRestaurantSearchWithoutLeakingToOtherInterests() {
+        var preferences = DiningSearchPreferences()
+        XCTAssertEqual(preferences.searchTerm("rooftop", interest: .restaurants), "rooftop")
+        preferences.cuisine = "Italian"
+        preferences.price = .budget
+        XCTAssertEqual(preferences.searchTerm(" rooftop ", interest: .restaurants), "inexpensive Italian restaurants rooftop")
+        XCTAssertEqual(preferences.searchTerm("gardens", interest: .parks), "gardens")
+        XCTAssertEqual(preferences.searchTerm(interest: .restaurants), "inexpensive Italian restaurants")
+        XCTAssertTrue(preferences.active)
+        preferences = DiningSearchPreferences()
+        XCTAssertFalse(preferences.active)
+        XCTAssertEqual(preferences.searchTerm(interest: .restaurants), "")
+    }
+
     let lisbon = ExploreCity(name: "Lisbon", country: "Portugal", latitude: 38.7223, longitude: -9.1393)
     func sample(_ id: String, category: PlaceCategory = .museum) -> ExplorePlace {
         ExplorePlace(record: PlaceRecord(id: id, name: "Place " + id, category: category, city: "Lisbon", address: "Lisbon, Portugal", website: "https://example.com", latitude: 38.72, longitude: -9.14, source: "Test"), city: lisbon)

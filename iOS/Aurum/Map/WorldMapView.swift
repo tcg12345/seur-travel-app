@@ -19,6 +19,15 @@ struct WorldMapView: View {
     @State private var cityQuery = ""
     @State private var selectedCity: ExploreCity?
     @State private var interest: ExploreInterest = .attractions
+    @State private var diningFilters = DiningSearchPreferences()
+    @State private var showExploreFilters = false
+    @State private var exploreSort: ExploreSort = .suggested
+    @State private var websiteOnly = false
+    @State private var savedOnly = false
+    private var visiblePlaces: [ExplorePlace] {
+        search.visible(sort: exploreSort, savedOnly: savedOnly, websiteOnly: websiteOnly, savedIDs: Set(store.savedDiscoveries.map(\.id)))
+    }
+    private var exploreFiltersActive: Bool { (interest == .restaurants && diningFilters.active) || websiteOnly || savedOnly || exploreSort != .suggested }
     @State private var search = CityExploreModel()
     @State private var searchArea: ExploreCity?
     @State private var tripID: UUID?
@@ -44,7 +53,7 @@ struct WorldMapView: View {
     private var cities: [ExploreCity] { var seen = Set<String>(); return (store.savedExploreCities + store.recentExploreCities + ExploreCity.collection).filter { seen.insert($0.id).inserted } }
     private var places: [ExplorePlace] {
         var seen = Set<String>()
-        return (search.places + store.savedDiscoveries).filter { $0.record.hasCoordinate && seen.insert($0.id).inserted }
+        return (searchArea == nil ? store.savedDiscoveries : visiblePlaces).filter { $0.record.hasCoordinate && seen.insert($0.id).inserted }
     }
     private var tripPlaces: [PlaceRecord] { var seen = Set<String>(); return (trip.map { [$0] } ?? library.documents).flatMap(\.mapPlaces).filter { $0.hasCoordinate && seen.insert($0.id).inserted } }
     private var routes: [MapFlight] { if let selectedFlight { return [selectedFlight] }; if mode == "Trips", let tripID { return flights.filter { $0.tripID == tripID } }; return flights }
@@ -77,6 +86,22 @@ struct WorldMapView: View {
         .sheet(item: $adding) { ExploreAddToTripView(place: $0) }
         .sheet(isPresented: $editingFlight) { if let selectedFlight { FlightReservationEditor(documentID: selectedFlight.tripID, reservation: selectedFlight.flight) } }
         .sheet(isPresented: $newTrip) { TripCreationView() }
+        .sheet(isPresented: $showExploreFilters) {
+            NavigationStack {
+                Form {
+                    if interest == .restaurants { DiningFilterFields(preferences: $diningFilters) }
+                    Section("Results") {
+                        Picker("Sort places", selection: $exploreSort) { ForEach(ExploreSort.allCases, id: \.self) { Text($0.rawValue).tag($0) } }
+                        Toggle("With a website", isOn: $websiteOnly)
+                        Toggle("Only saved places", isOn: $savedOnly)
+                    }
+                    Section { Button("Reset filters") { diningFilters = DiningSearchPreferences(); exploreSort = .suggested; websiteOnly = false; savedOnly = false } }
+                }.navigationTitle(interest == .restaurants ? "Restaurant filters" : "Explore filters")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { showExploreFilters = false } } }
+            }.presentationDetents([.large])
+        }
+        .onChange(of: diningFilters) { if let searchArea, interest == .restaurants { Task { await browse(searchArea) } } }
         .sheet(isPresented: $flightInfo) { FlightDataInfoView() }
         .sheet(isPresented: $addingFlight) { FlightAddView { flight in
             mode = "Flights"; selectedFlightID = nil; tracker = FlightTracker()
@@ -175,12 +200,23 @@ struct WorldMapView: View {
                 Spacer()
                 Button { let city = ExploreCity(name: selectedCity?.name ?? "Map area", country: selectedCity?.country ?? "", latitude: center.latitude, longitude: center.longitude); Task { await browse(city) }; resizePanel(.medium) } label: { Label("Search area", systemImage: "scope").font(.subheadline) }.accessibilityIdentifier("map-search-area")
             }.padding(.vertical, 4)
+            HStack(spacing: 10) {
+                Button { showExploreFilters = true } label: {
+                    Label(exploreFiltersActive ? "Filters •" : "Filters", systemImage: "slider.horizontal.3")
+                        .font(.subheadline.weight(.medium)).padding(.vertical, 7)
+                }.buttonStyle(.glass).accessibilityIdentifier("map-explore-filters")
+                if interest == .restaurants && diningFilters.active {
+                    Text(diningFilters.summary).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                }
+                Spacer(minLength: 0)
+                if exploreFiltersActive { Button("Reset") { diningFilters = DiningSearchPreferences(); exploreSort = .suggested; websiteOnly = false; savedOnly = false }.font(.caption) }
+            }
             if let selectedCity { NavigationLink { CityGuideView(city: selectedCity).toolbar(.visible, for: .navigationBar) } label: { HStack { VStack(alignment: .leading, spacing: 5) { Text(selectedCity.name).font(.system(.title2, design: .serif)); Text("City guide").font(.caption) }; Spacer(); Image(systemName: "arrow.up.right") }.padding(17).background(Color.cardSurface, in: .rect(cornerRadius: 21)) }.accessibilityIdentifier("map-city-guide") }
             if let selected = selectedPlace { ExplorePlaceRow(place: selected, add: { adding = selected }) }
             if search.loading { ProgressView("Finding places…") }
             if let error = search.sections.first(where: { $0.error != nil })?.error { Text(error).font(.caption).foregroundStyle(.secondary) }
-            if searchArea != nil && !search.loading && search.places.isEmpty { Text("No places found. Try another area.").font(.subheadline).foregroundStyle(.secondary) }
-            ForEach(search.places) { place in ExplorePlaceRow(place: place, add: { adding = place }) }
+            if searchArea != nil && !search.loading && visiblePlaces.isEmpty { Text(exploreFiltersActive ? "No places match. Try changing your filters or searching another area." : "No places found. Try another area.").font(.subheadline).foregroundStyle(.secondary) }
+            ForEach(visiblePlaces) { place in ExplorePlaceRow(place: place, add: { adding = place }) }
             if searchArea == nil { NavigationLink { CityExplorerView().toolbar(.visible, for: .navigationBar) } label: { HStack { Label("City guides", systemImage: "globe.europe.africa"); Spacer(); Image(systemName: "chevron.right").font(.caption) }.font(.subheadline).padding(.vertical, 8) } }
         }
     }
@@ -224,7 +260,7 @@ struct WorldMapView: View {
         if let flight = flights.first(where: { value == "flight:" + $0.id }) { openFlight(flight) }
         if value.hasPrefix("tripplace:") { resizePanel(.medium) }
     }
-    private func browse(_ city: ExploreCity) async { searchArea = city; await search.load(city: city, interest: interest, term: "", wider: false) }
+    private func browse(_ city: ExploreCity) async { searchArea = city; await search.load(city: city, interest: interest, term: diningFilters.searchTerm(interest: interest), wider: false) }
     private func openFlight(_ value: MapFlight) {
         mode = "Flights"; selectFlight(value)
     }
