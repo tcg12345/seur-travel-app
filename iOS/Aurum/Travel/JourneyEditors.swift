@@ -321,41 +321,68 @@ struct RatedPlaceEditor: View {
     @State private var processing = false
     @State private var error: String?
     @State private var delete = false
+    @State private var moreDetails = false
+    private var existingEntry: Bool { library.documents.first(where: { $0.id == documentID })?.places.contains(where: { $0.id == rated.id }) == true }
     var body: some View {
         TripEditorNavigation {
             Form {
-                PlaceFields(place: $rated.place, context: library.documents.first(where: { $0.id == documentID })?.destination ?? "")
-                Section("Your overall rating") { scoreControl("Overall", score: $rated.overall); Text("Zero means not rated yet. Your ratings are separate from provider reviews.").font(.caption).foregroundStyle(.secondary) }
-                Section("A closer look") {
-                    ForEach(rated.place.category.scoreCategories, id: \.self) { category in scoreControl(category, score: Binding(get: { rated.scores[category] ?? 0 }, set: { rated.scores[category] = $0 })) }
+                Section {
+                    Text(existingEntry ? "Update your memories here. Save entry keeps your changes." : "Start with the place you visited. The details below are optional, so you can add more later.")
+                        .font(.subheadline).foregroundStyle(.secondary)
                 }
-                Section("The visit") {
-                    Toggle("Add visit date", isOn: $hasDate)
-                    if hasDate { DayField(title: "Visited on", value: Binding(get: { rated.visitedOn ?? TravelDay.key(.now) }, set: { rated.visitedOn = $0 })) }
-                    Picker("Price range", selection: $rated.priceRange) { Text("Not specified").tag(""); ForEach(["$", "$$", "$$$", "$$$$"], id: \.self) { Text($0) } }
-                    if rated.place.category == .restaurant { Picker("Michelin stars at time of visit", selection: Binding(get: { rated.michelinStars ?? -1 }, set: { rated.michelinStars = $0 < 0 ? nil : $0 })) { Text("Not recorded").tag(-1); ForEach(0...3, id: \.self) { Text("\($0) stars").tag($0) } }; Text("A personal record, not a verified current award.").font(.caption).foregroundStyle(.secondary) }
-                    TextField("What made it memorable?", text: $rated.notes, axis: .vertical).lineLimit(4...10).accessibilityIdentifier("rated-notes")
+                PlaceFields(place: $rated.place, context: library.documents.first(where: { $0.id == documentID })?.destination ?? "", journalEntry: true)
+                Section("Your visit · optional") {
+                    Toggle("Add a visit date", isOn: $hasDate).accessibilityIdentifier("rated-has-date")
+                    if hasDate { DayField(title: "Visited on", value: Binding(get: { rated.visitedOn ?? TravelDay.key(.now) }, set: { rated.visitedOn = $0 })).accessibilityIdentifier("rated-visit-date") }
+                    TextField("What did you love? What would you remember for next time?", text: $rated.notes, axis: .vertical)
+                        .lineLimit(3...8).accessibilityLabel("Visit notes").accessibilityIdentifier("rated-notes")
                 }
-                Section("Your photographs") {
-                    ScrollView(.horizontal) { HStack { ForEach(rated.photos) { photo in
+                Section {
+                    scoreControl("Overall", score: $rated.overall)
+                } header: { Text("Your rating · optional") }
+                footer: { Text("Rate your experience out of 10. Leave it unrated if you prefer.") }
+                Section("Photos · optional") {
+                    if !rated.photos.isEmpty { ScrollView(.horizontal) { HStack { ForEach(rated.photos) { photo in
                         if let image = UIImage(data: photo.jpeg) { Image(uiImage: image).resizable().scaledToFill().frame(width: 110, height: 110).clipped().clipShape(.rect(cornerRadius: 16)).overlay(alignment: .topTrailing) { Button { rated.photos.removeAll { $0.id == photo.id } } label: { Image(systemName: "xmark.circle.fill").symbolRenderingMode(.palette).foregroundStyle(.white, .black.opacity(0.7)).padding(5) }.buttonStyle(.plain).accessibilityLabel("Remove photo") } }
-                    } } }
-                    PhotosPicker(selection: $photoItems, maxSelectionCount: max(0, 6 - rated.photos.count), matching: .images) { Label(processing ? "Preparing photos…" : "Add photos", systemImage: "photo.badge.plus") }.disabled(processing || rated.photos.count >= 6)
+                    } } } }
+                    PhotosPicker(selection: $photoItems, maxSelectionCount: max(0, 6 - rated.photos.count), matching: .images) { Label(processing ? "Preparing photos…" : "Choose photos", systemImage: "photo.badge.plus") }.disabled(processing || rated.photos.count >= 6).accessibilityIdentifier("rated-add-photos")
                     Text("Up to six photos per place. Photos are included when you explicitly share this journal.").font(.caption).foregroundStyle(.secondary)
                 }
+                Section {
+                    DisclosureGroup("Detailed ratings & more", isExpanded: $moreDetails) {
+                        ForEach(rated.place.category.scoreCategories, id: \.self) { category in
+                            scoreControl(category, score: Binding(get: { rated.scores[category] ?? 0 }, set: { rated.scores[category] = $0 }))
+                        }
+                        Picker("Price range", selection: $rated.priceRange) { Text("Not specified").tag(""); ForEach(["$", "$$", "$$$", "$$$$"], id: \.self) { Text($0) } }
+                        if rated.place.category == .restaurant {
+                            Picker("Michelin stars at time of visit", selection: Binding(get: { rated.michelinStars ?? -1 }, set: { rated.michelinStars = $0 < 0 ? nil : $0 })) {
+                                Text("Not recorded").tag(-1); ForEach(0...3, id: \.self) { Text("\($0) stars").tag($0) }
+                            }
+                            Text("Your personal record, not a verified current award.").font(.caption).foregroundStyle(.secondary)
+                        }
+                    }.accessibilityIdentifier("rated-more-details")
+                }
                 if let error { Section { Text(error).foregroundStyle(.red) } }
-                if library.documents.first(where: { $0.id == documentID })?.places.contains(where: { $0.id == rated.id }) == true { Section { Button("Remove this place", role: .destructive) { delete = true } } }
-            }.scrollDismissesKeyboard(.interactively).scrollContentBackground(.hidden).background(Color.canvas).navigationTitle("A place to remember").navigationBarTitleDisplayMode(.inline)
-                .toolbar { ToolbarItem(placement: .cancellationAction) { TripEditorBackButton() }; ToolbarItem(placement: .confirmationAction) { Button("Save") { save() }.disabled(processing).accessibilityIdentifier("rated-save") } }
+                if existingEntry { Section { Button("Delete journal entry", role: .destructive) { delete = true } } }
+            }.scrollDismissesKeyboard(.interactively).scrollContentBackground(.hidden).background(Color.canvas)
+                .navigationTitle(existingEntry ? "Edit journal entry" : "New journal entry").navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) { TripEditorBackButton() }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Save entry") { save() }
+                            .disabled(processing || rated.place.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                            .accessibilityIdentifier("rated-save")
+                    }
+                }
                 .onAppear { hasDate = rated.visitedOn != nil }
                 .onChange(of: hasDate) { if hasDate { rated.visitedOn = rated.visitedOn ?? TravelDay.key(.now) } }
                 .onChange(of: photoItems) { Task { await importPhotos() } }
                 .onChange(of: rated.place.category) { rated.scores = [:]; rated.michelinStars = nil }
-                .confirmationDialog("Remove this place and its photos?", isPresented: $delete, titleVisibility: .visible) { Button("Remove place", role: .destructive) { save(remove: true) } }
+                .confirmationDialog("Delete this journal entry and its photos?", isPresented: $delete, titleVisibility: .visible) { Button("Delete entry", role: .destructive) { save(remove: true) } }
         }
     }
     private func scoreControl(_ title: String, score: Binding<Double>) -> some View { VStack(alignment: .leading, spacing: 8) { HStack { Text(title); Spacer(); Text(score.wrappedValue == 0 ? "To rate" : String(format: "%.1f / 10", score.wrappedValue)).foregroundStyle(Color.bronze).monospacedDigit(); Stepper("Adjust " + title, value: score, in: 0...10, step: 0.1).labelsHidden().fixedSize().accessibilityIdentifier(title + "-stepper") }; Slider(value: score, in: 0...10, step: 0.1).accessibilityLabel(title + " rating").accessibilityValue(String(format: "%.1f", score.wrappedValue)) } }
-    private func save(remove: Bool = false) { guard var d = library.documents.first(where: { $0.id == documentID }) else { return }; if !hasDate { rated.visitedOn = nil }; d.places.removeAll { $0.id == rated.id }; if !remove { d.places.append(rated) }; if library.save(d) { onSaved(); dismiss() } else { error = library.error } }
+    private func save(remove: Bool = false) { guard var d = library.documents.first(where: { $0.id == documentID }) else { error = "This trip is no longer available."; return }; if !hasDate { rated.visitedOn = nil }; d.places.removeAll { $0.id == rated.id }; if !remove { d.places.append(rated) }; if library.save(d) { onSaved(); dismiss() } else { error = library.error } }
     private func importPhotos() async {
         guard !photoItems.isEmpty else { return }; processing = true; defer { processing = false; photoItems = [] }
         do { for item in photoItems.prefix(6 - rated.photos.count) {

@@ -106,6 +106,7 @@ struct JourneyDetailView: View {
     @State private var share = false
     @State private var importing = false
     @State private var savedRatings = false
+    @State private var journalPlanPicker = false
     @State private var deleting = false
     @State private var exportURL: ExportedJourney?
     @State private var error: String?
@@ -136,10 +137,8 @@ struct JourneyDetailView: View {
                         ToolbarItem(placement: .topBarTrailing) {
                             Menu {
                                 Button("Edit journey", systemImage: "pencil") { editInfo = true }
-                                Button("Add planned places to journal", systemImage: "star.bubble") {
-                                    var updated = document
-                                    let count = updated.addPlannedPlacesToJournal()
-                                    if library.save(updated) { chapter = "Journal"; error = count > 0 ? "Added \(count) restaurants and attractions to rate. Your plans and existing ratings are preserved." : "Your planned restaurants and attractions are already in the journal, or there are none to add yet." }
+                                Button("Log a visit from your plan", systemImage: "square.and.pencil") {
+                                    chapter = "Journal"; journalPlanPicker = true
                                 }.accessibilityIdentifier("trip-journal-planned")
                                 Button("Import places from a trip", systemImage: "square.and.arrow.down") { importing = true }
                                 Button("Add a rated restaurant", systemImage: "star") { savedRatings = true }
@@ -164,6 +163,7 @@ struct JourneyDetailView: View {
                     .sheet(item: $hotel) { HotelReservationEditor(documentID: id, reservation: $0) }
                     .sheet(item: $flight) { FlightReservationEditor(documentID: id, reservation: $0) }
                     .sheet(item: $rated) { RatedPlaceEditor(documentID: id, rated: $0) }
+                    .sheet(isPresented: $journalPlanPicker) { JournalPlanPlacesView(documentID: id) }
                     .sheet(isPresented: $share) { JourneyShareView(documentID: id) }
                     .sheet(isPresented: $importing) { ItineraryIntoTripView(tripID: id) }
                     .sheet(isPresented: $savedRatings) { RatedRestaurantImportView(tripID: id) }
@@ -333,7 +333,7 @@ struct JourneyDetailView: View {
         VStack(alignment: .leading, spacing: 22) {
             VStack(alignment: .leading, spacing: 8) {
                 Text("Your visits & memories").font(.title2.weight(.semibold))
-                Text("Photos, notes and personal ratings from the places you’ve visited.")
+                Text("Choose a place you visited, add your photos, notes or rating, and save your entry.")
                     .font(.subheadline).foregroundStyle(.secondary)
             }.accessibilityIdentifier("trip-journal-intro")
             if !d.places.isEmpty { HStack {
@@ -343,19 +343,24 @@ struct JourneyDetailView: View {
                 Divider().frame(height: 32)
                 metric("\(d.stops.count)", "Destinations")
             }.padding(.vertical, 12) }
-            if !d.plannedPlacesToRate.isEmpty {
-                Button {
-                    var updated = d; updated.addPlannedPlacesToJournal()
-                    _ = library.save(updated)
-                } label: { Label("Add places from your plan", systemImage: "calendar.badge.checkmark").font(.subheadline) }.accessibilityIdentifier("trip-journal-planned")
-                Text("Bring over a restaurant or attraction, then add your memories and ratings.").font(.caption).foregroundStyle(.secondary)
+            if d.events.contains(where: { $0.isPlaceVisit }) || !d.hotels.isEmpty {
+                Button { journalPlanPicker = true } label: {
+                    HStack(spacing: 14) {
+                        Image(systemName: "calendar.badge.checkmark").font(.title3).foregroundStyle(Color.bronze)
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text("From your plan").font(.subheadline.weight(.semibold)).foregroundStyle(.primary)
+                            Text("Choose a place you visited and add its details.").font(.caption).foregroundStyle(.secondary)
+                        }.frame(maxWidth: .infinity, alignment: .leading)
+                        Image(systemName: "chevron.right").font(.caption).foregroundStyle(Color.bronze)
+                    }.padding(16).modifier(TripItemSurface(cornerRadius: 20))
+                }.buttonStyle(PressStyle()).accessibilityIdentifier("trip-journal-planned")
             }
-            HStack {
+            if !d.places.isEmpty { HStack {
                 Menu { Button("All places") { placeFilter = nil }; ForEach(PlaceCategory.allCases) { category in Button(category.title) { placeFilter = category } } } label: { Label(placeFilter?.title ?? "All places", systemImage: "line.3.horizontal.decrease") }
                 Spacer()
                 Button { placeGrid.toggle() } label: { Image(systemName: placeGrid ? "list.bullet" : "square.grid.2x2").frame(width: 35, height: 35) }.buttonStyle(.glass)
-            }
-            if d.places.isEmpty { ContentUnavailableView("Your first memory", systemImage: "camera.on.rectangle", description: Text("After a visit, tap Log a visit to save what you loved, add photos and leave your own rating.")) }
+            } }
+            if d.places.isEmpty { ContentUnavailableView("Start with a visit", systemImage: "camera.on.rectangle", description: Text("Tap Log a visit to find a place, or choose one from your plan. You can save a few details now and add more later.")) }
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: placeGrid ? 2 : 1), spacing: 16) {
                 ForEach(d.places.filter { placeFilter == nil || $0.place.category == placeFilter }) { place in
                     Button { rated = place } label: {
@@ -365,11 +370,66 @@ struct JourneyDetailView: View {
                             Text(place.place.name).font(.system(.headline, design: .serif)).foregroundStyle(.primary)
                             Text(place.place.category.title + (place.visitedOn.map { " · " + TravelDay.label($0) } ?? "")).font(.caption).foregroundStyle(.secondary)
                             if !place.notes.isEmpty { Text(place.notes).font(.caption).foregroundStyle(.secondary).lineLimit(3) }
+                            Divider()
+                            HStack {
+                                Label(place.overall == 0 && place.notes.isEmpty && place.photos.isEmpty && place.visitedOn == nil ? "Add visit details" : "Edit entry", systemImage: "square.and.pencil")
+                                Spacer(minLength: 0)
+                                Image(systemName: "chevron.right")
+                            }.font(.caption.weight(.semibold)).foregroundStyle(Color.bronze)
                         }.frame(maxWidth: .infinity, alignment: .leading).padding(18).modifier(TripItemSurface(cornerRadius: 23))
-                    }.buttonStyle(PressStyle())
+                    }.buttonStyle(PressStyle()).accessibilityIdentifier("journal-entry-" + place.id.uuidString)
                 }
             }
             if !d.places.isEmpty { SectionHeading(title: "Your trip, on the map"); JourneyMapView(places: d.places.filter { placeFilter == nil || $0.place.category == placeFilter }.map(\.place)).frame(height: 320).clipShape(.rect(cornerRadius: 25)) }
+        }
+    }
+}
+
+/// Choosing a planned place opens its details before anything is added to the journal.
+private struct JournalPlanPlacesView: View {
+    @Environment(JourneyLibrary.self) private var library
+    @Environment(\.dismiss) private var dismiss
+    let documentID: UUID
+    @State private var selected: RatedPlace?
+    private var document: JourneyDocument? { library.documents.first { $0.id == documentID } }
+    private var places: [PlaceRecord] {
+        guard let document else { return [] }
+        var seen = Set<String>()
+        return (document.events.filter { $0.isPlaceVisit }.map(\.place) + document.hotels.map(\.place))
+            .filter { !$0.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && seen.insert($0.source + "::" + $0.id).inserted }
+    }
+    private func entry(for place: PlaceRecord) -> RatedPlace? {
+        document?.places.first { $0.place.id == place.id && $0.place.source == place.source }
+    }
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    Text("Choose a place you visited. Add your rating, notes or photos on the next screen.")
+                        .font(.subheadline).foregroundStyle(.secondary)
+                }
+                ForEach(places, id: \.self) { place in
+                    Button { selected = entry(for: place) ?? RatedPlace(place: place) } label: {
+                        HStack(spacing: 14) {
+                            Image(systemName: place.category.symbol).foregroundStyle(Color.bronze).frame(width: 26)
+                            VStack(alignment: .leading, spacing: 5) {
+                                Text(place.name).font(.headline).foregroundStyle(.primary)
+                                Text(entry(for: place) == nil ? "Add visit details" : "Edit existing journal entry")
+                                    .font(.caption).foregroundStyle(.secondary)
+                            }.frame(maxWidth: .infinity, alignment: .leading)
+                            Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary)
+                        }.padding(.vertical, 6)
+                    }.accessibilityIdentifier("journal-plan-place-" + place.id)
+                }
+                if places.isEmpty { Text("No places in this plan yet. Use Log a visit in Journal to find a place.").foregroundStyle(.secondary) }
+            }
+            .scrollContentBackground(.hidden).background(Color.canvas)
+            .navigationTitle("Where did you go?").navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } } }
+            .navigationDestination(item: $selected) { value in
+                RatedPlaceEditor(documentID: documentID, rated: value, onSaved: { dismiss() })
+                    .environment(\.tripEditorEmbedded, true)
+            }
         }
     }
 }

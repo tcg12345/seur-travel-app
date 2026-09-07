@@ -689,10 +689,27 @@ final class AurumUITests: XCTestCase {
         capture("43 Unified trip plan")
         app.buttons["Journal"].tap()
         app.buttons["trip-journal-planned"].tap()
+        XCTAssertTrue(app.navigationBars["Where did you go?"].waitForExistence(timeout: 5))
+        app.buttons["Close"].tap()
+        XCTAssertEqual(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "journal-entry-")).count, 1)
+        app.buttons["trip-journal-planned"].tap()
+        let plannedPlace = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "journal-plan-place-")).firstMatch
+        XCTAssertTrue(plannedPlace.waitForExistence(timeout: 5)); plannedPlace.tap()
+        XCTAssertTrue(app.navigationBars["New journal entry"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.textFields["place-name"].value as? String, "Dinner by the river")
+        let notes = app.descendants(matching: .any).matching(identifier: "rated-notes").firstMatch
+        reveal(notes); notes.tap(); notes.typeText("A beautiful evening by the water.")
+        app.buttons["rated-save"].tap()
+        XCTAssertTrue(app.buttons["trip-add-place"].waitForExistence(timeout: 5))
         reveal(app.staticTexts["Dinner by the river"])
         XCTAssertTrue(app.staticTexts["Dinner by the river"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["A favourite cafe"].exists)
+        XCTAssertTrue(app.staticTexts["A beautiful evening by the water."].exists)
         reveal(app.buttons["trip-journal-planned"]); app.buttons["trip-journal-planned"].tap()
+        XCTAssertTrue(plannedPlace.waitForExistence(timeout: 5)); plannedPlace.tap()
+        XCTAssertTrue(app.navigationBars["Edit journal entry"].waitForExistence(timeout: 5))
+        XCTAssertEqual(notes.value as? String, "A beautiful evening by the water.")
+        app.buttons["rated-save"].tap()
         reveal(app.staticTexts["Dinner by the river"])
         XCTAssertEqual(app.staticTexts.matching(identifier: "Dinner by the river").count, 1)
         capture("44 Journal and planned places")
@@ -709,22 +726,42 @@ final class AurumUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Dinner by the river"].exists)
     }
     func testTripJournalLogging() {
-        app.tabBars.buttons["Travel"].tap()
-        app.buttons["travel-create"].tap()
+        let travel = app.tabBars.buttons["Travel"]
+        XCTAssertTrue(travel.waitForExistence(timeout: 5)); travel.tap()
+        let create = app.buttons["travel-new-trip"]
+        XCTAssertTrue(create.waitForExistence(timeout: 5)); create.tap()
+        XCTAssertTrue(app.textFields["trip-destination"].waitForExistence(timeout: 5))
         app.textFields["trip-destination"].tap(); app.textFields["trip-destination"].typeText("Paris")
         app.buttons["journey-save"].tap(); app.staticTexts["Trip to Paris"].tap()
         app.buttons["Journal"].tap(); app.buttons["trip-add-place"].tap()
+        XCTAssertFalse(app.buttons["rated-save"].isEnabled)
         app.textFields["place-name"].tap(); app.textFields["place-name"].typeText("My favorite table\n")
+        let date = app.switches["rated-has-date"]; reveal(date)
+        date.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)).tap()
+        XCTAssertEqual(date.value as? String, "1")
+        XCTAssertTrue(app.staticTexts["Visited on"].waitForExistence(timeout: 3))
+        let notes = app.descendants(matching: .any).matching(identifier: "rated-notes").firstMatch
+        reveal(notes); notes.tap(); notes.typeText("Try the tasting menu next time.")
         let rating = app.steppers["Overall-stepper"]
         reveal(rating)
         XCTAssertTrue(rating.isHittable)
         let increase = rating.coordinate(withNormalizedOffset: CGVector(dx: 0.8, dy: 0.5))
         increase.tap(); increase.tap(); increase.tap()
         capture("18 Personal rating editor")
+        let photos = app.buttons["rated-add-photos"]; reveal(photos)
+        XCTAssertTrue(photos.isHittable)
+        XCTAssertFalse(app.steppers["Food & drink-stepper"].exists)
+        capture("107 Simple journal details and photos")
         app.buttons["rated-save"].tap()
         XCTAssertTrue(app.staticTexts["My favorite table"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["0.3"].exists)
+        XCTAssertTrue(app.staticTexts["Try the tasting menu next time."].exists)
         capture("16 Trip journal")
+        let entry = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "journal-entry-")).firstMatch
+        reveal(entry); entry.tap()
+        XCTAssertTrue(app.navigationBars["Edit journal entry"].waitForExistence(timeout: 5))
+        XCTAssertEqual(notes.value as? String, "Try the tasting menu next time.")
+        XCTAssertEqual(app.switches["rated-has-date"].value as? String, "1")
     }
     @MainActor func testTravelBackendAccountConnection() async throws {
         var probe = URLRequest(url: URL(string: "http://localhost:8788/v1/status")!); probe.timeoutInterval = 2

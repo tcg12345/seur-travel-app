@@ -26,11 +26,15 @@ struct PlaceFields: View {
     var optional = false
     var identifier = "place-name"
     var suggestionSymbol: String?
+    var journalEntry = false
     private var category: PlaceCategory { fixedCategory ?? place.category }
-    private var title: String { optional ? "Location · optional" : category == .hotel ? "Your hotel" : category == .restaurant ? "Your restaurant" : "Your place" }
-    private var prompt: String { optional ? "Search for a venue or address" : category == .hotel ? "Search hotel name" : category == .restaurant ? "Search restaurant name" : "Search for a place" }
+    private var title: String { journalEntry ? "Place you visited" : optional ? "Location · optional" : category == .hotel ? "Your hotel" : category == .restaurant ? "Your restaurant" : "Your place" }
+    private var prompt: String { journalEntry ? "Search for a place you visited" : optional ? "Search for a venue or address" : category == .hotel ? "Search hotel name" : category == .restaurant ? "Search restaurant name" : "Search for a place" }
     var body: some View {
         Section {
+            if journalEntry && fixedCategory == nil {
+                Picker("Type of place", selection: $place.category) { ForEach(PlaceCategory.allCases) { Text($0.title).tag($0) } }.pickerStyle(.menu)
+            }
             HStack(alignment: .top, spacing: 12) {
                 Image(systemName: "magnifyingglass").foregroundStyle(Color.bronze).padding(.top, 2)
                 LocationAutocompleteField(prompt, text: $place.name, kind: .place, identifier: identifier, category: category, searchContext: context, suggestionSymbol: suggestionSymbol, onEdit: {
@@ -54,7 +58,7 @@ struct PlaceFields: View {
                     if place.source != "Manual entry" { Text(place.source).font(.caption2).foregroundStyle(.secondary) }
                 }.padding(.vertical, 3)
             }
-            if fixedCategory == nil { Picker("Type of place", selection: $place.category) { ForEach(PlaceCategory.allCases) { Text($0.title).tag($0) } }.pickerStyle(.menu) }
+            if fixedCategory == nil && !journalEntry { Picker("Type of place", selection: $place.category) { ForEach(PlaceCategory.allCases) { Text($0.title).tag($0) } }.pickerStyle(.menu) }
         } header: { Text(title) } footer: {
             if !place.hasCoordinate { Text(optional ? "Leave blank for online plans or free time. Choosing a suggestion adds its location automatically." : "Choose a suggestion to include it on your map. You can also save a name now and choose its location later.") }
         }
