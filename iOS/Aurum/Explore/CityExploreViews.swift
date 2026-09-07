@@ -310,6 +310,7 @@ struct ExplorePlaceDetailView: View {
                     Button(action: openMaps) { Label("Directions", systemImage: "location").frame(maxWidth: .infinity).padding(.vertical, 10) }.buttonStyle(.glass)
                     if let url = validatedURL(place.record.website) { Link(destination: url) { Label(place.isCollection ? "Hotel site" : "Website", systemImage: "globe").frame(maxWidth: .infinity).padding(.vertical, 10) }.buttonStyle(.glass) }
                 }.font(.subheadline)
+                TripadvisorDetailsLink(place: place.record)
                 if !place.record.overview.isEmpty { VStack(alignment: .leading, spacing: 12) { SectionHeading(title: "A little more to discover"); Text(place.record.overview).font(.body).foregroundStyle(.secondary).lineSpacing(5) } }
                 VStack(alignment: .leading, spacing: 18) {
                     SectionHeading(title: "The useful details")
@@ -482,5 +483,123 @@ struct PlaceTripAction: View {
         }.buttonStyle(.glassProminent).buttonBorderShape(.capsule)
             .animation(reduceMotion ? nil : .smooth(duration: 0.24), value: compact)
             .accessibilityLabel(title).accessibilityValue(compact ? "Compact" : "Expanded").accessibilityIdentifier(identifier)
+    }
+}
+
+/// Provider content stays in this temporary view. Saving a place or adding it to
+/// a trip continues to use the original Apple Maps/collection record.
+struct TripadvisorDetailsLink: View {
+    let place: PlaceRecord
+    var body: some View {
+        NavigationLink { TripadvisorPlaceView(place: place) } label: {
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text("Ratings & more details").font(.subheadline.weight(.semibold)).foregroundStyle(.primary)
+                    Text("Look up this place on Tripadvisor").font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer()
+                Image(systemName: "chevron.right").font(.caption).foregroundStyle(Color.bronze)
+            }.padding(.vertical, 12).contentShape(.rect)
+        }.buttonStyle(.plain).accessibilityIdentifier("place-tripadvisor-details")
+    }
+}
+
+private struct TripadvisorBrand: View {
+    var body: some View {
+        Image("TripadvisorLogo").resizable().scaledToFit().frame(width: 140, height: 30)
+            .padding(8).background(.white, in: .rect(cornerRadius: 8))
+            .accessibilityLabel("Tripadvisor")
+    }
+}
+
+private struct TripadvisorPlaceView: View {
+    @Environment(TravelAPI.self) private var api
+    let place: PlaceRecord
+    @State private var matches: [PlaceRecord]?
+    @State private var loading = false
+    @State private var error: String?
+    @State private var attempt = 0
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                Text(place.name).font(.title2.weight(.semibold))
+                if !api.isSignedIn {
+                    Text("Sign in to look up ratings and details. You can keep using Apple Maps without an account.").foregroundStyle(.secondary)
+                    NavigationLink("Sign in") { TravelAccountView() }.buttonStyle(.glass)
+                } else {
+                    TripadvisorBrand()
+                    Text("Choose the matching place. Check the address before opening its details.").font(.subheadline).foregroundStyle(.secondary)
+                    if loading { ProgressView("Finding this place…") }
+                    if let error {
+                        Text(error).font(.subheadline).foregroundStyle(.secondary)
+                        Button("Try again") { attempt += 1 }.buttonStyle(.glass).disabled(loading)
+                    }
+                    if let matches {
+                        if matches.isEmpty { Text("No matching places found. Apple Maps details are still available on the previous page.").foregroundStyle(.secondary) }
+                        ForEach(matches) { match in
+                            NavigationLink { TripadvisorRecordView(placeID: match.id) } label: {
+                                HStack(spacing: 12) {
+                                    VStack(alignment: .leading, spacing: 6) {
+                                        Text(match.name).font(.headline).foregroundStyle(.primary)
+                                        Text(match.address).font(.subheadline).foregroundStyle(.secondary)
+                                    }
+                                    Spacer(); Image(systemName: "chevron.right").font(.caption)
+                                }.padding(.vertical, 12).contentShape(.rect)
+                            }.buttonStyle(.plain)
+                            Divider()
+                        }
+                    }
+                }
+            }.frame(maxWidth: .infinity, alignment: .leading).padding(22)
+        }.background(Color.canvas).navigationTitle("Place details").navigationBarTitleDisplayMode(.inline)
+            .task(id: "\(api.isSignedIn)-\(attempt)") {
+                guard api.isSignedIn, matches == nil else { return }
+                loading = true; error = nil
+                defer { loading = false }
+                do {
+                    let query = String((place.name + " " + (place.city.isEmpty ? place.address : place.city)).prefix(200))
+                    let result = try await api.searchPlaces(query, category: place.category)
+                    try Task.checkCancellation(); matches = result
+                } catch { if !Task.isCancelled { self.error = error.localizedDescription } }
+            }
+    }
+}
+
+private struct TripadvisorRecordView: View {
+    @Environment(TravelAPI.self) private var api
+    let placeID: String
+    @State private var detail: PlaceRecord?
+    @State private var error: String?
+    @State private var attempt = 0
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                TripadvisorBrand()
+                if let detail {
+                    Text(detail.name).font(.title2.weight(.semibold))
+                    Text(detail.address).font(.subheadline).foregroundStyle(.secondary)
+                    if let rating = detail.rating, let imageURL = validatedURL(detail.ratingImageURL ?? "") {
+                        AsyncImage(url: imageURL) { image in
+                            image.resizable().scaledToFit().frame(width: 110, height: 24)
+                                .padding(8).background(.white, in: .rect(cornerRadius: 6))
+                                .accessibilityLabel(String(format: "Tripadvisor rating %.1f out of 5", rating))
+                        } placeholder: { EmptyView() }
+                    }
+                    if !detail.overview.isEmpty { Text(detail.overview).font(.body).foregroundStyle(.secondary).lineSpacing(4) }
+                    if !detail.phone.isEmpty { Label(detail.phone, systemImage: "phone").font(.subheadline).textSelection(.enabled) }
+                    if let website = validatedURL(detail.website) { Link("Visit website", destination: website) }
+                    if let source = validatedURL(detail.sourceURL ?? "") { Link("Read reviews on Tripadvisor", destination: source).font(.subheadline.weight(.semibold)) }
+                } else if let error {
+                    Text(error).foregroundStyle(.secondary)
+                    Button("Try again") { attempt += 1 }.buttonStyle(.glass)
+                } else { ProgressView("Loading details…") }
+            }.frame(maxWidth: .infinity, alignment: .leading).padding(22)
+        }.background(Color.canvas).navigationTitle("Tripadvisor").navigationBarTitleDisplayMode(.inline)
+            .task(id: attempt) {
+                guard detail == nil else { return }
+                error = nil
+                do { let result = try await api.placeDetails(placeID); try Task.checkCancellation(); detail = result }
+                catch { if !Task.isCancelled { self.error = error.localizedDescription } }
+            }
     }
 }

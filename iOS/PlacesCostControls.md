@@ -17,3 +17,16 @@ The current flow ends with Apple resolution, not Google Place Details. Adding a 
 - Manual app testing retains normal Apple search; use the Google fallback only when deliberately checking it. That explicit action can be billable.
 
 These protections apply to the updated app. Existing older clients and other consumers of the Google project are unaffected. For a project-wide backstop, set appropriate request quotas in Google Cloud and billing alerts; review [Google's usage and quota documentation](https://developers.google.com/maps/documentation/places/web-service/usage-and-billing). No cloud quota or billing settings were changed here.
+
+
+## Apple-first recommendations and optional Tripadvisor
+
+Activity ideas first resolve the destination and search its region with native MapKit (one destination lookup and at most two regional searches). The app deduplicates and sends at most eight mapped candidates to the authenticated AI route. Supabase validates and sanitizes that shortlist, makes one OpenAI request, and returns only selected candidate IDs in the model’s suggested order. Empty results make no OpenAI request. No Google or Tripadvisor calls are made as part of this flow; the former Tripadvisor search plus up to five detail calls have been removed. Older clients without a shortlist receive an update-required response rather than triggering paid fallback searches.
+
+Apple Maps Server API is not required for this native app flow, and no additional Apple credential is needed. If future jobs need to discover places without an active iPhone, add a separately authenticated server-side Apple search adapter then. Do not move working native searches to the backend merely to duplicate them.
+
+Place, restaurant and hotel pages provide a secondary **Ratings & more details** link. Opening it makes one Tripadvisor name/city search; the user confirms the matching address before requesting one location detail. No detail request is made for every search result or map pin. Provider content lives only in that view and never overwrites saved Apple/collection records. Content is attributed with the official Tripadvisor logo, provider-supplied rating bubbles and a source link. No review/photo API endpoints are requested.
+
+`TravelAPI` blocks live Tripadvisor and OpenAI calls during XCTest/UI tests as well as Google calls. Backend provider tests replace fetch with stubs and run without network permission. Manual bounded provider smoke checks are separate from automated app tests.
+
+For domain-restricted Tripadvisor keys, configure `TRIPADVISOR_REFERER` in Supabase with an HTTPS URL whose exact hostname is allowed in Tripadvisor (for example, `https://your-allowed-domain.example/`). The backend sends it only to Tripadvisor; it does not accept client-provided referring domains. See [Tripadvisor security](https://tripadvisor-content-api.readme.io/reference/api-security). Do not guess the allowed domain or remove key restrictions.

@@ -41,6 +41,7 @@ struct RestaurantDetailView: View {
                             .font(.body).foregroundStyle(.secondary).lineSpacing(5)
                     }
                     essentials
+                    TripadvisorDetailsLink(place: PlaceRecord(name: venue.name, category: .restaurant, city: hotel.city, address: hotel.address))
                     conciergeCard
                     visitCard
                     location

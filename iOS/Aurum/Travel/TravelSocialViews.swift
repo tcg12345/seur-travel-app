@@ -199,7 +199,7 @@ private struct TravelServicesSettingsView: View {
                 LabeledContent("Apple Maps", value: "Available")
                 LabeledContent("FlightAware", value: api.status?.flightTracking == true ? "Connected" : "Unavailable")
                 LabeledContent("Google Places", value: api.status?.googlePlaces == true ? "Connected" : "Apple Maps fallback")
-                LabeledContent("Tripadvisor", value: api.status?.tripadvisor == true ? "Connected" : "Unavailable")
+                LabeledContent("Tripadvisor", value: api.status?.tripadvisor == true ? "Configured" : "Unavailable")
                 LabeledContent("AI recommendations", value: api.status?.ai == true ? "Connected" : "Unavailable")
                 LabeledContent("Public links", value: api.status?.publicSharing == true ? "Available" : "Unavailable")
             }

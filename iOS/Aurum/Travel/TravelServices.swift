@@ -160,11 +160,22 @@ private struct EmptyReply: Codable { var ok: Bool }
         }
     }
     func searchPlaces(_ query: String, category: PlaceCategory) async throws -> [PlaceRecord] {
-        try await request("/v1/places/search", query: ["q": query, "category": category == .hotel ? "hotels" : category == .restaurant || category == .bar || category == .cafe ? "restaurants" : "attractions"])
+        try requirePaidProviderAccess()
+        return try await request("/v1/places/search", query: ["q": query, "category": category == .hotel ? "hotels" : category == .restaurant || category == .bar || category == .cafe ? "restaurants" : "attractions"])
     }
-    func placeDetails(_ id: String) async throws -> PlaceRecord { try await request("/v1/places/\(id)") }
-    func recommendations(city: String, interests: String) async throws -> AITravelResponse { try await request("/v1/ai/activities", method: "POST", body: ["city": city, "interests": interests]) }
-    func hotelOverview(_ place: PlaceRecord) async throws -> AITravelResponse { try await request("/v1/ai/hotel", method: "POST", encodable: place) }
+    func placeDetails(_ id: String) async throws -> PlaceRecord { try requirePaidProviderAccess(); return try await request("/v1/places/\(id)") }
+    func recommendations(city: String, interests: String) async throws -> AITravelResponse {
+        try requirePaidProviderAccess()
+        let payload = try await AppleActivityIdeas.prepare(city: city, interests: interests)
+        try Task.checkCancellation()
+        guard !payload.candidates.isEmpty else { return AITravelResponse(text: "No places were found in Apple Maps. Try another destination or different interests.", places: []) }
+        return try await request("/v1/ai/activities", method: "POST", encodable: payload)
+    }
+    private func requirePaidProviderAccess() throws {
+        guard !PlaceSearchTestPolicy.blocksPaidRequests else { throw JourneyError.message("Live paid place and AI requests are disabled during automated tests.") }
+        guard isSignedIn else { throw JourneyError.message("Sign in to your travel account to use this feature.") }
+    }
+    func hotelOverview(_ place: PlaceRecord) async throws -> AITravelResponse { try requirePaidProviderAccess(); return try await request("/v1/ai/hotel", method: "POST", encodable: place) }
     func friends() async throws -> [TravelFriend] { try await request("/v1/friends") }
     func requestFriend(_ handle: String) async throws { let _: EmptyReply = try await request("/v1/friends", method: "POST", body: ["handle": handle]) }
     func respondFriend(_ id: String, accept: Bool) async throws { let _: EmptyReply = try await request("/v1/friends/\(id)", method: accept ? "PUT" : "DELETE", body: [:]) }
@@ -230,5 +241,39 @@ private struct EmptyReply: Codable { var ok: Bool }
     }
     static func record(_ item: MKMapItem, fallbackName: String, category: PlaceCategory = .other) -> PlaceRecord {
         PlaceRecord(id: item.identifier?.rawValue ?? UUID().uuidString, name: item.name ?? fallbackName, category: category, city: item.addressRepresentations?.cityName ?? "", address: item.address?.fullAddress ?? item.addressRepresentations?.fullAddress(includingRegion: true, singleLine: true) ?? "", phone: item.phoneNumber ?? "", website: item.url?.absoluteString ?? "", latitude: item.location.coordinate.latitude, longitude: item.location.coordinate.longitude, source: "Apple Maps")
+    }
+}
+
+
+struct ActivityIdeasRequest: Encodable {
+    let city: String
+    let interests: String
+    let candidates: [PlaceRecord]
+}
+
+@MainActor enum AppleActivityIdeas {
+    typealias Search = (String, String) async throws -> [PlaceRecord]
+    static func prepare(city: String, interests: String, search: Search = findPlaces) async throws -> ActivityIdeasRequest {
+        let city = city.trimmingCharacters(in: .whitespacesAndNewlines)
+        let interests = interests.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard (2...100).contains(city.count), interests.count <= 1000 else { throw JourneyError.message("Enter a destination and up to 1,000 characters of interests.") }
+        try Task.checkCancellation()
+        let found = try await search(city, interests)
+        try Task.checkCancellation()
+        var seen = Set<String>()
+        let candidates = found.filter { $0.source == "Apple Maps" && $0.hasCoordinate && !$0.name.isEmpty && seen.insert($0.id).inserted }.prefix(8)
+        return ActivityIdeasRequest(city: city, interests: interests, candidates: Array(candidates))
+    }
+    private static func findPlaces(city: String, interests: String) async throws -> [PlaceRecord] {
+        let destinations = try await ApplePlaceSearch.search(city, citiesOnly: true)
+        try Task.checkCancellation()
+        guard let destination = destinations.first(where: \.hasCoordinate) else { return [] }
+        let region = ExploreCity(name: city, country: "", latitude: destination.latitude!, longitude: destination.longitude!)
+        // At most two regional searches; no search-per-keystroke or paid fallback.
+        let preferred = try await CityExploreSearch.search(city: region, interest: .attractions, term: interests.isEmpty ? "attractions" : interests, wider: false)
+        try Task.checkCancellation()
+        if preferred.count >= 8 || interests.isEmpty { return preferred.map(\.record) }
+        let highlights = try await CityExploreSearch.search(city: region, interest: .attractions, term: "", wider: false)
+        return (preferred + highlights).map(\.record)
     }
 }

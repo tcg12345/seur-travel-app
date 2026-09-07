@@ -24,6 +24,7 @@ struct HotelDetailView: View {
                         Divider().frame(height: 35)
                         detailStat(hotel.price.hasPrefix("$") ? hotel.price : "Luxury", "Price band")
                     }.padding(.vertical, 18).cardSurface(cornerRadius: 22)
+                    TripadvisorDetailsLink(place: PlaceRecord(name: hotel.name, category: .hotel, city: hotel.city, address: hotel.address))
                     Text(hotel.description).font(.body).foregroundStyle(.secondary).lineSpacing(5)
                     HStack(alignment: .top) {
                         SectionHeading(title: "A stay with great taste.", subtitle: "Restaurants, bars & places to linger.")

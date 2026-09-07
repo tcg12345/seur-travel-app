@@ -351,7 +351,7 @@ export async function handler(req: Request): Promise<Response> {
       return json(
         path.endsWith("hotel")
           ? await overview(body)
-          : await recommend(body.city, body.interests),
+          : await recommend(body.city, body.interests, body.candidates),
       );
     }
     const match = path.match(

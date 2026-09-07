@@ -78,15 +78,16 @@ struct ActivityIdeasView: View {
     @State private var error: String?
     @State private var loading = false
     @State private var event: JourneyEvent?
+    @State private var work: Task<Void, Never>?
     var body: some View {
         TripEditorNavigation {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     Eyebrow(text: "Your AI travel editor")
                     Editorial("A little inspiration.\nA very personal day.", size: 33)
-                    LocationAutocompleteField("Destination", text: $city, identifier: "ideas-destination").padding(16).cardSurface(cornerRadius: 18)
-                    TextField("What do you love?", text: $interests, axis: .vertical).lineLimit(3...6).padding(15).cardSurface(cornerRadius: 18)
-                    Button { Task { loading = true; error = nil; defer { loading = false }; do { response = try await api.recommendations(city: city, interests: interests) } catch { self.error = error.localizedDescription } } } label: { Label(loading ? "Gathering ideas…" : "Find my inspiration", systemImage: "sparkles").frame(maxWidth: .infinity).padding(.vertical, 11) }.buttonStyle(.glassProminent).disabled(loading || city.isEmpty)
+                    LocationAutocompleteField("Destination", text: $city, identifier: "ideas-destination").disabled(loading).padding(16).cardSurface(cornerRadius: 18)
+                    TextField("What do you love?", text: $interests, axis: .vertical).lineLimit(3...6).disabled(loading).padding(15).cardSurface(cornerRadius: 18)
+                    Button { work = Task { loading = true; error = nil; response = nil; defer { loading = false }; do { let result = try await api.recommendations(city: city, interests: interests); try Task.checkCancellation(); response = result } catch { if !Task.isCancelled { self.error = error.localizedDescription } } } } label: { Label(loading ? "Gathering ideas…" : "Find my inspiration", systemImage: "sparkles").frame(maxWidth: .infinity).padding(.vertical, 11) }.buttonStyle(.glassProminent).disabled(loading || city.isEmpty)
                     if let error { Text(error).font(.subheadline).foregroundStyle(.red) }
                     if let response {
                         Text(response.text).font(.body).lineSpacing(5)
@@ -95,12 +96,13 @@ struct ActivityIdeasView: View {
                                 HStack { VStack(alignment: .leading, spacing: 6) { Text(place.name).font(.system(.headline, design: .serif)); Text(place.address).font(.caption).foregroundStyle(.secondary) }; Spacer(); Image(systemName: "plus.circle") }.padding(18).cardSurface(cornerRadius: 22)
                             }.buttonStyle(.plain)
                         }
-                        Text("AI suggestions use provider search results. Review the place and choose its day/time before adding. Confirm hours and availability with the venue.").font(.caption).foregroundStyle(.secondary)
+                        Text("Places come from Apple Maps; AI helps arrange your day. Review the place and choose its day/time before adding. Confirm hours and availability with the venue.").font(.caption).foregroundStyle(.secondary)
                     }
                 }.padding(24)
             }.background(Color.canvas).navigationTitle("Ideas for your days").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
-                .onAppear { city = library.documents.first(where: { $0.id == documentID })?.stops.first?.name ?? "" }
+                .onAppear { if city.isEmpty { city = library.documents.first(where: { $0.id == documentID })?.stops.first?.name ?? "" } }
+                .onDisappear { work?.cancel() }
                 .navigationDestination(item: $event) { JourneyEventEditor(documentID: documentID, event: $0, onSaved: onSaved).environment(\.tripEditorEmbedded, true) }
         }
     }

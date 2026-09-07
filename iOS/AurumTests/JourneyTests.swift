@@ -607,3 +607,32 @@ import MapKit
         XCTAssertNil(tracker.position); XCTAssertNil(tracker.history); XCTAssertNil(tracker.selected)
     }
 }
+
+@MainActor final class AppleActivityIdeasTests: XCTestCase {
+    func testShortlistDeduplicatesBoundsAndRetainsAppleCoordinates() async throws {
+        let places = (0..<12).map { PlaceRecord(id: "apple-\($0)", name: "Museum \($0)", category: .museum, latitude: 48.85, longitude: 2.35, source: "Apple Maps") }
+        var searches = 0
+        let payload = try await AppleActivityIdeas.prepare(city: " Paris ", interests: " Art ") { city, interests in
+            searches += 1; XCTAssertEqual(city, "Paris"); XCTAssertEqual(interests, "Art")
+            return [places[0], places[0], PlaceRecord(name: "Unmapped")] + places
+        }
+        XCTAssertEqual(searches, 1); XCTAssertEqual(payload.candidates.count, 8)
+        XCTAssertEqual(Set(payload.candidates.map(\.id)).count, 8)
+        XCTAssertTrue(payload.candidates.allSatisfy { $0.hasCoordinate && $0.source == "Apple Maps" })
+    }
+    func testInvalidInputDoesNotSearchAndEmptySearchStaysEmpty() async throws {
+        do {
+            _ = try await AppleActivityIdeas.prepare(city: "x", interests: "") { _, _ in XCTFail("Invalid input searched"); return [] }
+            XCTFail("Invalid city accepted")
+        } catch {}
+        let payload = try await AppleActivityIdeas.prepare(city: "Paris", interests: "") { _, _ in [] }
+        XCTAssertTrue(payload.candidates.isEmpty)
+    }
+    func testPaidPlacesAndAIBlockedInAutomatedTests() async {
+        let api = TravelAPI()
+        do { _ = try await api.searchPlaces("Museum Paris", category: .museum); XCTFail("Tripadvisor should be blocked") } catch { XCTAssertTrue(error.localizedDescription.contains("automated tests")) }
+        do { _ = try await api.placeDetails("123"); XCTFail("Tripadvisor details should be blocked") } catch { XCTAssertTrue(error.localizedDescription.contains("automated tests")) }
+        do { _ = try await api.recommendations(city: "Paris", interests: "Art"); XCTFail("AI should be blocked") } catch { XCTAssertTrue(error.localizedDescription.contains("automated tests")) }
+        do { _ = try await api.hotelOverview(PlaceRecord(name: "Hotel")); XCTFail("Hotel AI should be blocked") } catch { XCTAssertTrue(error.localizedDescription.contains("automated tests")) }
+    }
+}
