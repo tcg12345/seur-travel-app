@@ -193,7 +193,7 @@ struct OnboardingView: View {
 extension View {
     func onboardingPrimary() -> some View {
         self.font(.headline).dynamicTypeSize(...DynamicTypeSize.accessibility1).foregroundStyle(.white).padding(20).frame(maxWidth: .infinity)
-            .background(Color(red: 0.24, green: 0.34, blue: 0.30), in: .capsule)
+            .background(Color.brandBronze, in: .capsule)
     }
     func onboardingChoice(_ selected: Bool) -> some View {
         self.foregroundStyle(.primary).frame(maxWidth: .infinity, alignment: .leading)

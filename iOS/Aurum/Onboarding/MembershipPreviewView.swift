@@ -65,7 +65,7 @@ struct MembershipPreviewView: View {
     }
     private var membershipCard: some View {
         ZStack(alignment: .bottomLeading) {
-            RoundedRectangle(cornerRadius: 27).fill(LinearGradient(colors: [Color(red: 0.12, green: 0.23, blue: 0.20), Color(red: 0.35, green: 0.44, blue: 0.37)], startPoint: .topLeading, endPoint: .bottomTrailing))
+            RoundedRectangle(cornerRadius: 27).fill(LinearGradient(colors: [Color.brandInk, Color.brandBronze], startPoint: .topLeading, endPoint: .bottomTrailing))
             Image(systemName: "globe.europe.africa").font(.system(size: 150, weight: .ultraLight)).foregroundStyle(.white.opacity(0.09)).rotationEffect(.degrees(-15)).frame(maxWidth: .infinity, alignment: .trailing).padding(.trailing, 10).accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 30) {
                 HStack(spacing: 10) { SeurLogo(size: 30); Text("SEUR").font(.system(size: 11, weight: .medium)).tracking(4); Spacer(); Image(systemName: "sparkle").font(.title2) }

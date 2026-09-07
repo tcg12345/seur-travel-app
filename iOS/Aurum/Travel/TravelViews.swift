@@ -73,7 +73,7 @@ struct TravelHubView: View {
 private struct JourneyCard: View {
     let document: JourneyDocument
     var compact = false
-    private var accent: Color { Color(red: 0.19, green: 0.31, blue: 0.29) }
+    private var accent: Color { Color.brandInk }
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             ZStack(alignment: .bottomLeading) {

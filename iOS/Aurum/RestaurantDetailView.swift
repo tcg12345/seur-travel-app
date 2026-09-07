@@ -91,7 +91,7 @@ struct RestaurantDetailView: View {
         ZStack(alignment: .bottomLeading) {
             if hotel.image != nil { HotelPhoto(hotel: hotel) }
             else {
-                Rectangle().fill(LinearGradient(colors: [Color(red: 0.18, green: 0.23, blue: 0.21), Color(red: 0.35, green: 0.30, blue: 0.22)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                Rectangle().fill(LinearGradient(colors: [Color.brandInk, Color(red: 0.35, green: 0.30, blue: 0.22)], startPoint: .topLeading, endPoint: .bottomTrailing))
                 Image(systemName: symbol).font(.system(size: 86, weight: .ultraLight)).foregroundStyle(.white.opacity(0.55)).frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             LinearGradient(colors: [.clear, .black.opacity(0.65)], startPoint: .center, endPoint: .bottom)
