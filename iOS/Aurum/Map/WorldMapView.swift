@@ -8,6 +8,9 @@ struct WorldMapView: View {
     @Namespace private var sectionSelection
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var camera: MapCameraPosition = .camera(MapCamera(centerCoordinate: .init(latitude: 22, longitude: 5), distance: 32_000_000))
+    #if DEBUG
+    @State private var cameraProbe = ""
+    #endif
     @State private var mapHeight: CGFloat = 800
     @State private var mapBottomInset: CGFloat = 0
     @State private var center = CLLocationCoordinate2D(latitude: 22, longitude: 5)
@@ -79,18 +82,22 @@ struct WorldMapView: View {
     private var tripPlaces: [PlaceRecord] { var seen = Set<String>(); return (trip.map { [$0] } ?? library.documents).flatMap(\.mapPlaces).filter { $0.hasCoordinate && seen.insert($0.id).inserted } }
     private var routes: [MapFlight] { if let selectedFlight { return [selectedFlight] }; if mode == "Trips", let tripID { return flights.filter { $0.tripID == tripID } }; return flights }
     private var mapBottomPadding: CGFloat {
-        let layout = MapPanelLayout(availableHeight: mapHeight, flightDetail: selectedFlightID != nil)
-        // Keep the camera's usable area identical across Explore, Trips and Flights.
-        // Native attribution sits just above the resting sheet, clear of the tab bar.
-        // A fully expanded sheet covers the map. Keep a useful viewport
-        // instead of squeezing MapKit into the few points left above the sheet.
-        let mapDetent: PresentationDetent = detent == .large ? .medium : detent
-        return layout.height(for: mapDetent) + mapBottomInset + 8
+        // Sheet movement must never change MapKit's viewport: changing its safe
+        // area makes it refit the camera during the panel's spring animation.
+        // Reserve only the compact panel, regardless of section or detail state.
+        let layout = MapPanelLayout(availableHeight: mapHeight, flightDetail: false)
+        return layout.compact + mapBottomInset + 8
     }
     var body: some View {
         ZStack(alignment: .top) {
             map.ignoresSafeArea()
             topControls.padding(.horizontal, 18).padding(.top, 8)
+            #if DEBUG
+            if FlightMapFixtures.enabled {
+                Text(cameraProbe).font(.system(size: 1)).foregroundStyle(.clear).frame(width: 1, height: 1)
+                    .accessibilityIdentifier("map-camera-probe").accessibilityLabel(cameraProbe).allowsHitTesting(false)
+            }
+            #endif
             PersistentMapPanel(detent: $detent, contentID: selectedFlightID ?? (mode + (addedFlightNumber ?? "")), flightDetail: selectedFlightID != nil, header: { panelHeader }, content: { panelContent })
         }
         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { mapHeight = $0 }
@@ -172,7 +179,14 @@ struct WorldMapView: View {
             }
         }.mapStyle(satellite ? .hybrid(elevation: .realistic, pointsOfInterest: .excludingAll) : .standard(elevation: .realistic, pointsOfInterest: .excludingAll))
             .safeAreaPadding(.bottom, mapBottomPadding)
-            .onMapCameraChange(frequency: .onEnd) { center = $0.region.center }
+            .onMapCameraChange(frequency: .onEnd) { context in
+                center = context.region.center
+                #if DEBUG
+                if FlightMapFixtures.enabled {
+                    cameraProbe = [context.camera.centerCoordinate.latitude, context.camera.centerCoordinate.longitude, context.camera.distance, context.camera.heading, context.camera.pitch].map { String($0) }.joined(separator: ",")
+                }
+                #endif
+            }
             .accessibilityIdentifier("world-map")
     }
     private var topControls: some View {
@@ -470,13 +484,16 @@ private struct PersistentMapPanel<Header: View, Content: View>: View {
             .frame(height: height, alignment: .top)
             .clipShape(.rect(topLeadingRadius: 30 - progress * 6, topTrailingRadius: 30 - progress * 6))
             .background(alignment: .top) {
-                shape.fill(Color.canvas.opacity(0.3 + progress * 0.7))
+                // A large refractive glass surface distorts moving map tiles.
+                // Standard material keeps the sheet translucent without that lens.
+                shape.fill(.regularMaterial)
+                    .overlay { shape.fill(Color.canvas.opacity(0.7 + progress * 0.3)) }
                     .frame(height: height + geo.safeAreaInsets.bottom)
-                    .glassEffect(.regular, in: shape)
                     .shadow(color: .black.opacity(0.12), radius: 16, y: -2)
                     .accessibilityIdentifier("map-panel-surface")
             }
-            .padding(.horizontal, 12 * (1 - progress))
+            // Fixed width prevents text and result rows reflowing on every drag frame.
+            .padding(.horizontal, 12)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
             .animation(spring, value: detent)
         }

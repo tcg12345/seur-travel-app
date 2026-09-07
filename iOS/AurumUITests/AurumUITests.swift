@@ -30,6 +30,35 @@ final class AurumUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Open trip"].waitForExistence(timeout: 5))
         app.buttons["map-saved"].tap(); XCTAssertTrue(app.navigationBars["Saved places"].waitForExistence(timeout: 5))
     }
+    func testSheetDraggingPreservesMapCameraAndViewport() {
+        app.terminate(); app.launchArguments = ["--ui-testing", "--map-testing", "--location-testing", "--city-testing"]; app.launch()
+        app.tabBars.buttons["Map"].tap()
+        XCTAssertTrue(app.buttons["map-section-Explore"].waitForExistence(timeout: 8))
+        let probe = app.staticTexts["map-camera-probe"]
+        XCTAssertTrue(probe.waitForExistence(timeout: 8))
+        func camera() -> [Double] { probe.label.split(separator: ",").compactMap { Double($0) } }
+        expectation(for: NSPredicate { _, _ in camera().count == 5 }, evaluatedWith: probe); waitForExpectations(timeout: 8)
+        RunLoop.current.run(until: Date().addingTimeInterval(1))
+        let baseline = camera(), tabY = app.tabBars.firstMatch.frame.minY
+        guard baseline.count == 5 else { return XCTFail("Missing camera measurement") }
+        for section in ["Explore", "Trips", "Flights"] {
+            app.buttons["map-section-" + section].tap()
+            for expanded in [true, false] {
+                resizeMapPanel(expanded: expanded)
+                RunLoop.current.run(until: Date().addingTimeInterval(0.8))
+                let current = camera()
+                XCTAssertEqual(current.count, 5)
+                guard current.count == 5 else { continue }
+                XCTAssertEqual(current[0], baseline[0], accuracy: 0.0001, "Sheet moved map latitude")
+                XCTAssertEqual(current[1], baseline[1], accuracy: 0.0001, "Sheet moved map longitude")
+                XCTAssertEqual(current[2], baseline[2], accuracy: 20, "Sheet changed map zoom")
+                XCTAssertEqual(current[3], baseline[3], accuracy: 0.01)
+                XCTAssertEqual(current[4], baseline[4], accuracy: 0.01)
+                XCTAssertEqual(app.tabBars.firstMatch.frame.minY, tabY, accuracy: 2)
+                XCTAssertEqual(app.scrollViews.matching(identifier: "map-panel-scroll").count, 1)
+            }
+        }
+    }
     func testNativeMapSheetExpandsAndReturnsToTabBar() {
         let originalBarY = app.tabBars.firstMatch.frame.minY
         app.tabBars.buttons["Map"].firstMatch.tap()
