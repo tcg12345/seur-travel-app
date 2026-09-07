@@ -12,6 +12,73 @@ final class AurumUITests: XCTestCase {
         app.tabBars.buttons["Map"].firstMatch.tap()
         if app.buttons["map-saved"].waitForExistence(timeout: 2) { app.buttons["map-saved"].tap() }
     }
+    private func openWishlist(preserve: Bool = false) {
+        app.terminate(); app.launchArguments = ["--ui-testing", "--map-testing", "--location-testing", "--city-testing"] + (preserve ? ["--preserve-state"] : []); app.launch()
+        app.tabBars.buttons["Travel"].tap()
+        XCTAssertTrue(app.buttons["travel-section-Wishlist"].waitForExistence(timeout: 8)); app.buttons["travel-section-Wishlist"].tap()
+    }
+    private func firstWishlistItem() -> XCUIElement { app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "wishlist-item-")).firstMatch }
+    func testWishlistCustomIdeaPersistencePlanningAndRemoval() {
+        openWishlist()
+        app.buttons["wishlist-add"].tap()
+        let name = app.textFields["wishlist-name"]; XCTAssertTrue(name.waitForExistence(timeout: 5)); name.tap(); name.typeText("An evening at the museum")
+        app.textFields["wishlist-destination"].tap(); app.textFields["wishlist-destination"].typeText("London")
+        let notes = app.descendants(matching: .any).matching(identifier: "wishlist-notes").firstMatch
+        notes.tap(); notes.typeText("Go after lunch")
+        app.swipeUp()
+        let collection = app.textFields["wishlist-collection"]; collection.tap(); collection.typeText("Summer")
+        app.buttons["wishlist-save"].tap()
+        let item = firstWishlistItem(); XCTAssertTrue(item.waitForExistence(timeout: 5)); item.tap()
+        XCTAssertTrue(app.staticTexts["wishlist-notes-display"].waitForExistence(timeout: 5))
+        app.buttons["wishlist-top-pick"].tap()
+        XCTAssertEqual(app.buttons["wishlist-top-pick"].value as? String, "Selected")
+        app.buttons["wishlist-plan"].tap()
+        let trip = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "wishlist-trip-")).firstMatch
+        XCTAssertTrue(trip.waitForExistence(timeout: 5)); trip.tap()
+        XCTAssertTrue(app.buttons["event-save"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.textFields["place-name"].value as? String, "An evening at the museum")
+        app.buttons["event-save"].tap()
+        XCTAssertTrue(app.buttons["wishlist-planned-trip"].waitForExistence(timeout: 8))
+        openWishlist(preserve: true)
+        firstWishlistItem().tap()
+        XCTAssertEqual(app.staticTexts["wishlist-notes-display"].label, "Go after lunch")
+        XCTAssertEqual(app.buttons["wishlist-top-pick"].value as? String, "Selected")
+        app.buttons["wishlist-planned-trip"].tap()
+        XCTAssertTrue(app.staticTexts["An evening at the museum"].waitForExistence(timeout: 8))
+        app.navigationBars.buttons.firstMatch.tap()
+        let remove = app.buttons["wishlist-remove"]; reveal(remove); remove.tap()
+        let confirms = app.buttons.matching(identifier: "wishlist-confirm-remove"); XCTAssertTrue(confirms.firstMatch.waitForExistence(timeout: 5)); let confirm = confirms.allElementsBoundByIndex.first { $0.isHittable }; XCTAssertNotNil(confirm); confirm?.tap()
+        XCTAssertTrue(app.otherElements["wishlist-empty"].waitForExistence(timeout: 5) || !firstWishlistItem().exists)
+        app.buttons["travel-section-Trips"].tap()
+        app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Map QA journey")).firstMatch.tap()
+        XCTAssertTrue(app.staticTexts["An evening at the museum"].waitForExistence(timeout: 5))
+    }
+    func testWishlistSavedHotelAndNewTripContinuation() {
+        app.terminate(); app.launchArguments = ["--ui-testing", "--location-testing", "--city-testing"]; app.launch()
+        let hotel = app.buttons["hero-hotel"]; reveal(hotel); hotel.tap()
+        XCTAssertTrue(app.buttons["detail-save"].waitForExistence(timeout: 5)); app.buttons["detail-save"].tap()
+        app.navigationBars.buttons.firstMatch.tap(); app.tabBars.buttons["Travel"].tap(); app.buttons["travel-section-Wishlist"].tap()
+        let item = firstWishlistItem(); XCTAssertTrue(item.waitForExistence(timeout: 5)); item.tap()
+        XCTAssertTrue(app.buttons["wishlist-source"].waitForExistence(timeout: 5))
+        app.buttons["wishlist-plan"].tap(); app.buttons["wishlist-new-trip"].tap()
+        let destination = app.textFields["trip-destination"]; XCTAssertTrue(destination.waitForExistence(timeout: 5))
+        XCTAssertEqual(destination.value as? String, "Bangkok")
+        app.buttons["journey-save"].tap()
+        XCTAssertTrue(app.buttons["hotel-record-save"].waitForExistence(timeout: 8))
+        app.buttons["hotel-record-save"].tap()
+        XCTAssertTrue(app.buttons["wishlist-planned-trip"].waitForExistence(timeout: 8))
+        app.navigationBars.buttons.firstMatch.tap()
+        app.buttons["wishlist-add"].tap()
+        app.textFields["wishlist-name"].tap(); app.textFields["wishlist-name"].typeText("Paris")
+        app.buttons["wishlist-kind"].tap(); app.buttons["Destinations"].tap()
+        app.buttons["wishlist-save"].tap()
+        let paris = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@", "wishlist-item-", "Paris")).firstMatch
+        XCTAssertTrue(paris.waitForExistence(timeout: 5)); paris.tap(); app.buttons["wishlist-plan"].tap()
+        XCTAssertTrue(app.textFields["trip-destination"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.textFields["trip-destination"].value as? String, "Paris")
+        app.buttons["journey-save"].tap()
+        XCTAssertTrue(app.buttons["wishlist-planned-trip"].waitForExistence(timeout: 5))
+    }
     func testDiscoverClearStartingPointAndCategoryDestinations() {
         app.terminate(); app.launchArguments = ["--ui-testing", "--location-testing", "--city-testing"]; app.launch()
         let start = app.buttons["explore-cities"]

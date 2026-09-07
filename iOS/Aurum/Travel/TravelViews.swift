@@ -10,13 +10,27 @@ struct TravelHubView: View {
     @State private var newJourney = false
     @State private var account = false
     @State private var filter = "All"
+    @State private var section = "Trips"
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private var documents: [JourneyDocument] {
         library.documents.filter { (query.isEmpty || ($0.title + " " + $0.routeLabel).localizedCaseInsensitiveContains(query)) && (filter == "All" || $0.visibility.title == filter) }.sorted { $0.updatedAt > $1.updatedAt }
     }
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
-                Group {
+                HStack(spacing: 28) {
+                    ForEach(["Trips", "Wishlist"], id: \.self) { title in
+                        Button { withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) { section = title; query = "" } } label: {
+                            VStack(spacing: 10) {
+                                Text(title).font(.headline).foregroundStyle(section == title ? Color.bronze : .secondary)
+                                Capsule().fill(section == title ? Color.bronze : .clear).frame(height: 3)
+                            }.fixedSize(horizontal: true, vertical: false)
+                        }.buttonStyle(.plain).accessibilityIdentifier("travel-section-" + title).accessibilityAddTraits(section == title ? .isSelected : [])
+                    }
+                    Spacer()
+                }
+                if section == "Wishlist" { WishlistContent(query: query) }
+                else { Group {
                     if !library.documents.isEmpty { HStack {
                         Menu { Picker("Show", selection: $filter) { ForEach(["All", "Private", "Friends", "Public"], id: \.self) { Text($0) } } } label: { Label(filter == "All" ? "All trips" : filter, systemImage: "line.3.horizontal.decrease") }.font(.subheadline)
                         Spacer()
@@ -42,10 +56,10 @@ struct TravelHubView: View {
                     if !store.plans.isEmpty {
                         NavigationLink { TripsView() } label: { Label("Earlier saved plans · \(store.plans.count)", systemImage: "tray.full").font(.subheadline).frame(maxWidth: .infinity).padding(18).cardSurface(cornerRadius: 22) }
                     }
-                }
+                } }
             }.padding(22)
         }.background(Color.canvas).navigationTitle("Travel").navigationBarTitleDisplayMode(.inline)
-            .searchable(text: $query, prompt: "Search trips or destinations")
+            .searchable(text: $query, prompt: section == "Wishlist" ? "Search ideas, destinations or notes" : "Search trips or destinations")
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) { Button { account = true } label: { if api.isSignedIn { Image(systemName: "person.crop.circle") } else { Text("Sign in").font(.subheadline.weight(.medium)) } }.accessibilityLabel("Travel account") }
                 ToolbarItem(placement: .topBarTrailing) {
@@ -53,7 +67,7 @@ struct TravelHubView: View {
                         .accessibilityLabel("New trip").accessibilityIdentifier("travel-new-trip")
                 }
             }
-            .sheet(isPresented: $newJourney) { TripCreationView() }
+            .sheet(isPresented: $newJourney) { TripCreationView(onCreated: { _ in section = "Trips"; query = "" }) }
             .navigationDestination(isPresented: $account) { TravelAccountPage() }
             .alert("Travel", isPresented: Binding(get: { library.error != nil }, set: { if !$0 { library.error = nil } })) { Button("OK") { library.error = nil } } message: { Text(library.error ?? "") }
     }

@@ -126,3 +126,7 @@ Flight detail pages now offer **Follow flight** for push alerts and **Show on Lo
 ## Friends
 
 The dedicated Friends tab contains shared trip discovery, invitations, friend profiles, private/group conversations, date-overlap hints, saved trip shortcuts and itinerary sharing controls. Shared itineraries have a readable day-by-day preview. Search is available from magnifying-glass buttons in Discover and Map so all five primary tabs remain visible. See [Friends.md](Friends.md) for sharing behavior and privacy details.
+
+## Travel wishlist
+
+Travel now includes a Wishlist section for saved places, destinations and personal ideas. Add notes, organize collections, mark Top picks, search/filter and turn ideas into existing or new trips. The wishlist uses existing bookmarks and private on-device storage. See [Wishlist.md](Wishlist.md) for behavior and storage details.

@@ -2,6 +2,9 @@ import SwiftUI
 import PhotosUI
 
 struct TripCreationView: View {
+    var initialDestination = ""
+    var initialCity: ExploreCity? = nil
+    var onCreated: (UUID) -> Void = { _ in }
     @Environment(JourneyLibrary.self) private var library
     @Environment(\.dismiss) private var dismiss
     @State private var destination = ""
@@ -31,6 +34,13 @@ struct TripCreationView: View {
                     }
                 }
                 .onChange(of: departure) { returnDate = min(max(returnDate, earliestReturn), latestReturn) }
+                .onAppear {
+                    guard destination.isEmpty else { return }; destination = initialDestination
+                    if let city = initialCity {
+                        destination = city.name
+                        selectedLocation = LocationSelection(text: city.name, place: PlaceRecord(name: city.name, city: city.name, latitude: city.latitude, longitude: city.longitude), country: city.country)
+                    }
+                }
         }
     }
     private func create() {
@@ -39,7 +49,7 @@ struct TripCreationView: View {
         guard !location.isEmpty else { return }
         let stop = JourneyStop(name: location, country: selectedLocation?.country ?? "", arrival: start, nights: TravelDay.distance(start, end), latitude: selectedLocation?.place.latitude, longitude: selectedLocation?.place.longitude)
         let trip = JourneyDocument(title: "Trip to " + location, destination: location, startDate: start, endDate: end, stops: [stop])
-        if library.save(trip) { dismiss() } else { error = library.error }
+        if library.save(trip) { onCreated(trip.id); dismiss() } else { error = library.error }
     }
 }
 

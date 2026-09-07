@@ -41,6 +41,8 @@
 		E58B6F7B84D2F0BEB760DE2F = {isa = PBXBuildFile; fileRef = A83868A5C4D4A6D4E16A7BAD; };
 		E00C8144E339AB95024F11CC = {isa = PBXBuildFile; fileRef = 1738930E36556D057A6BA22B; };
 		F0C92F8648BCC2FE9CAE6C13 = {isa = PBXBuildFile; fileRef = F1415C84BDA17552F762D95B; settings = {ATTRIBUTES = (RemoveHeadersOnCopy,); }; };
+		AA7700000000000000000003 /* Travel/WishlistModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA7700000000000000000001; };
+		AA7700000000000000000004 /* Travel/WishlistViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA7700000000000000000002; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -102,6 +104,8 @@
 		BC54F3EFA3903674332C60B3 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Travel/DestinationWeather.swift; sourceTree = "<group>"; };
 		1738930E36556D057A6BA22B = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Map/FlightLiveActivityWidget.swift; sourceTree = "<group>"; };
 		F1415C84BDA17552F762D95B = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; path = SeurFlightActivity.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		AA7700000000000000000001 /* Travel/WishlistModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Travel/WishlistModels.swift; sourceTree = "<group>"; };
+		AA7700000000000000000002 /* Travel/WishlistViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Travel/WishlistViews.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -146,6 +150,8 @@
 				22F9BCD5A91D6B8F81C701D5 /* Onboarding/OnboardingView.swift */,
 				1BD9635E44F55FE5166EA77B /* Onboarding/OnboardingState.swift */,
 				F6A6ABC622C8A615B5E97F17 /* DesignSystem.swift */,
+				AA7700000000000000000001 /* Travel/WishlistModels.swift */,
+				AA7700000000000000000002 /* Travel/WishlistViews.swift */,
 				B941FFDDBFA04FFC50847F9C /* DiscoverView.swift */,
 				3B3E0A51725C543883C8532C /* HotelDetailView.swift */,
 				BAE6B937772308D1F0321F01 /* JourneysView.swift */,
@@ -332,6 +338,8 @@
 				6E6434C18A018DB4A502A6AE /* Onboarding/OnboardingView.swift in Sources */,
 				0A188AE6033B645CEA0B28AD /* Onboarding/OnboardingState.swift in Sources */,
 				8C6C64A5FA7FCD1367ADBDCB /* DesignSystem.swift in Sources */,
+				AA7700000000000000000003 /* Travel/WishlistModels.swift in Sources */,
+				AA7700000000000000000004 /* Travel/WishlistViews.swift in Sources */,
 				D85A7146F885996C903E05C6 /* DiscoverView.swift in Sources */,
 				5662376140F9D0F8AAB8A7A4 /* HotelDetailView.swift in Sources */,
 				9BA7778106424EA359EA9DC8 /* JourneysView.swift in Sources */,
