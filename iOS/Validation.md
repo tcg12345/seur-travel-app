@@ -368,3 +368,10 @@ The SwiftUI source uses native iOS 26 Liquid Glass APIs and system controls. The
 - Replaced the large moving refractive glass sheet with standard material and a canvas tint. The sheet keeps a constant horizontal inset so its content does not change width and reflow throughout a drag. Drag translation remains local to the sheet.
 - Terminal-driven UI regression passed with zero failures: repeated expand/collapse gestures in Explore, Trips and Flights preserved camera latitude/longitude within 0.0001 degrees, camera distance within 20 meters, heading/pitch within 0.01 degrees, the system tab bar position and a single scroll surface. DEBUG-only camera measurement is available only in the map test fixture mode. No screenshots were taken by this test.
 - Signed iPhone build passed. This verifies camera stability and gesture regression; physical-device frame timing and network-dependent map tile rendering were not benchmarked.
+
+## Subtle, readable trip weather and an off switch — September 7, 2026
+
+- Weather now uses a flat accented row, a larger condition symbol and explicit High/Low labels with aligned, rounded temperatures and locale-appropriate units. This fixes the excessive decimal digits that looked like coordinates. No geographic coordinates are displayed.
+- Apple Weather attribution remains linked as required by WeatherKit. The small mark uses template rendering with the system secondary foreground, preserving contrast in either appearance without a button background.
+- Discover → profile → Trip weather is a persistent, default-on toggle alongside Appearance. Turning it off hides all destination-weather rows and rain suggestions, cancels pending service tasks, clears the forecast cache and prevents new weather fetches. Other trip features remain usable.
+- Four focused Apple feature tests passed, including whole-degree Fahrenheit/Celsius output, persistent preference behavior and existing activity/weather-window coverage. Signed iPhone build passed after the explicit High/Low label adjustment. Verification used terminal checks; no live weather requests or screenshots were needed.

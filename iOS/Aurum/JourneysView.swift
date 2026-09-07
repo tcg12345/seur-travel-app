@@ -205,6 +205,8 @@ struct ProfileView: View {
                 }.padding(22).cardSurface(cornerRadius: 25)
                 VStack(spacing: 20) {
                     Picker("Appearance", selection: $appearance) { Text("System").tag("System"); Text("Light").tag("Light"); Text("Dark").tag("Dark") }
+                    Divider()
+                    WeatherSettingsToggle()
                 }.font(.subheadline).padding(22).cardSurface(cornerRadius: 25)
                 VStack(alignment: .leading, spacing: 16) {
                     Button { preferences = true } label: { Label("Your travel preferences", systemImage: "slider.horizontal.3").frame(maxWidth: .infinity, alignment: .leading) }.accessibilityIdentifier("profile-preferences")

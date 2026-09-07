@@ -672,6 +672,23 @@ import MapKit
         flight.cancelled = true
         XCTAssertEqual(FlightNotifications.state(flight).phase, "cancelled")
     }
+    func testWeatherTemperaturesAreRoundedAndUseLocalUnits() {
+        let value = Measurement(value: 76.160895, unit: UnitTemperature.fahrenheit)
+        let us = WeatherDisplay.temperature(value, locale: Locale(identifier: "en_US"))
+        let uk = WeatherDisplay.temperature(value, locale: Locale(identifier: "en_GB"))
+        XCTAssertTrue(us.contains("76")); XCTAssertTrue(us.contains("F")); XCTAssertFalse(us.contains("160895"))
+        XCTAssertTrue(uk.contains("25")); XCTAssertTrue(uk.contains("C")); XCTAssertFalse(uk.contains("."))
+    }
+    func testWeatherPreferenceDefaultsOnAndPersistsOff() {
+        let name = "seur.weather.tests." + UUID().uuidString
+        let defaults = UserDefaults(suiteName: name)!
+        defer { defaults.removePersistentDomain(forName: name) }
+        XCTAssertTrue(WeatherPreferences.isEnabled(in: defaults))
+        defaults.set(false, forKey: WeatherPreferences.key)
+        XCTAssertFalse(WeatherPreferences.isEnabled(in: UserDefaults(suiteName: name)!))
+        defaults.set(true, forKey: WeatherPreferences.key)
+        XCTAssertTrue(WeatherPreferences.isEnabled(in: defaults))
+    }
     func testWeatherAvoidsRequestsForFlexibleAndDistantDates() {
         let now = TravelDay.date("2026-09-07")!
         XCTAssertFalse(DestinationWeatherService.canForecast(day: nil, now: now))

@@ -2,6 +2,30 @@ import SwiftUI
 import WeatherKit
 import MapKit
 
+enum WeatherPreferences {
+    static let key = "seur.weather.enabled"
+    static func isEnabled(in defaults: UserDefaults = .standard) -> Bool { defaults.object(forKey: key) as? Bool ?? true }
+}
+
+enum WeatherDisplay {
+    static func temperature(_ value: Measurement<UnitTemperature>, locale: Locale = .current) -> String {
+        value.formatted(.measurement(width: .abbreviated, usage: .weather, numberFormatStyle: .number.precision(.fractionLength(0))).locale(locale))
+    }
+}
+
+struct WeatherSettingsToggle: View {
+    @AppStorage(WeatherPreferences.key) private var weatherEnabled = true
+    var body: some View {
+        Toggle(isOn: $weatherEnabled) {
+            VStack(alignment: .leading, spacing: 4) {
+                Label("Trip weather", systemImage: "cloud.sun")
+                Text("Show daily forecasts and rain-aware suggestions in your trips.").font(.caption).foregroundStyle(.secondary)
+            }
+        }.accessibilityIdentifier("settings-trip-weather")
+            .onChange(of: weatherEnabled) { if !weatherEnabled { DestinationWeatherService.shared.clear() } }
+    }
+}
+
 struct DestinationForecast {
     var days: [DayWeather]
     var zone: TimeZone
@@ -16,7 +40,11 @@ struct DestinationForecast {
     static let shared = DestinationWeatherService()
     private var cache: [String: DestinationForecast] = [:]
     private var pending: [String: Task<DestinationForecast, Error>] = [:]
+    func clear() {
+        pending.values.forEach { $0.cancel() }; pending = [:]; cache = [:]
+    }
     func forecast(city: String, latitude: Double?, longitude: Double?) async throws -> DestinationForecast {
+        guard WeatherPreferences.isEnabled() else { throw JourneyError.message("Trip weather is turned off.") }
         guard !FlightNotifications.testing else { throw JourneyError.message("Weather is disabled during automated tests.") }
         let key = city.lowercased() + "|" + String(latitude ?? 999) + "|" + String(longitude ?? 999)
         if let value = cache[key], value.fetchedAt.timeIntervalSinceNow > -1800 { return value }
@@ -27,7 +55,10 @@ struct DestinationForecast {
             let result = try await MKLocalSearch(request: request).start()
             guard let place = result.mapItems.first, let zone = place.timeZone else { throw JourneyError.message("Weather isn’t available for this destination yet.") }
             let location = latitude.flatMap { lat in longitude.map { CLLocation(latitude: lat, longitude: $0) } } ?? place.location
+            try Task.checkCancellation()
+            guard WeatherPreferences.isEnabled() else { throw CancellationError() }
             let forecast = try await WeatherService.shared.weather(for: location, including: .daily)
+            try Task.checkCancellation()
             let attribution = try await WeatherService.shared.attribution
             return DestinationForecast(days: Array(forecast), zone: zone, attribution: attribution, fetchedAt: .now)
         }
@@ -35,6 +66,8 @@ struct DestinationForecast {
         defer { pending[key] = nil }
         let value = try await task.value
         if cache.count >= 30 { cache.removeAll() }
+        try Task.checkCancellation()
+        guard WeatherPreferences.isEnabled() else { throw CancellationError() }
         cache[key] = value; return value
     }
     static func canForecast(day: String?, now: Date = .now) -> Bool {
@@ -47,6 +80,7 @@ struct DestinationForecast {
 struct DestinationWeatherRow: View {
     @Environment(TravelStore.self) private var store
     @Environment(\.colorScheme) private var scheme
+    @AppStorage(WeatherPreferences.key) private var weatherEnabled = true
     let city: String
     let day: String?
     var tripID: UUID?
@@ -57,22 +91,38 @@ struct DestinationWeatherRow: View {
     @State private var loading = false
     private var weather: DayWeather? { day.flatMap { forecast?.day($0) } }
     var body: some View {
-        if !FlightNotifications.testing {
+        if weatherEnabled && !FlightNotifications.testing {
             VStack(alignment: .leading, spacing: 8) {
                 if let weather, let forecast {
-                    HStack(spacing: 9) {
+                    HStack(alignment: .center, spacing: 12) {
                         Image(systemName: weather.symbolName).symbolRenderingMode(.multicolor)
-                        Text(weather.condition.description).lineLimit(1)
-                        Spacer(minLength: 8)
-                        Text(weather.highTemperature.formatted(.measurement(width: .narrow, usage: .weather)) + " / " + weather.lowTemperature.formatted(.measurement(width: .narrow, usage: .weather))).monospacedDigit()
-                    }.font(.caption)
+                            .font(.system(size: 24, weight: .medium)).frame(width: 30).accessibilityHidden(true)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(weather.condition.description).font(.subheadline.weight(.medium)).fixedSize(horizontal: false, vertical: true)
+                            Label("\(Int((weather.precipitationChance * 100).rounded()))% chance of rain", systemImage: "drop")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                        Spacer(minLength: 4)
+                        VStack(alignment: .trailing, spacing: 4) {
+                            HStack(spacing: 6) {
+                                Text("High").font(.caption).foregroundStyle(.secondary)
+                                Text(WeatherDisplay.temperature(weather.highTemperature)).font(.headline).foregroundStyle(Color.bronze)
+                            }.accessibilityElement(children: .combine)
+                            HStack(spacing: 6) {
+                                Text("Low").font(.caption).foregroundStyle(.secondary)
+                                Text(WeatherDisplay.temperature(weather.lowTemperature)).font(.headline).foregroundStyle(FlightDisplay.blue)
+                            }.accessibilityElement(children: .combine)
+                        }.monospacedDigit().fixedSize()
+                    }
                     HStack {
-                        Label("\(Int((weather.precipitationChance * 100).rounded()))% rain", systemImage: "drop")
                         Spacer()
                         Link(destination: forecast.attribution.legalPageURL) {
-                            AsyncImage(url: scheme == .dark ? forecast.attribution.combinedMarkLightURL : forecast.attribution.combinedMarkDarkURL) { image in image.resizable().scaledToFit() } placeholder: { Text("Apple Weather") }.frame(width: 82, height: 14)
-                        }.accessibilityLabel("Apple Weather attribution")
-                    }.font(.caption2).foregroundStyle(.secondary)
+                            AsyncImage(url: scheme == .dark ? forecast.attribution.combinedMarkLightURL : forecast.attribution.combinedMarkDarkURL) { image in
+                                image.renderingMode(.template).resizable().scaledToFit()
+                            } placeholder: { Text("Apple Weather").font(.caption2) }
+                                .foregroundStyle(.secondary).frame(width: 72, height: 12).padding(.vertical, 6)
+                        }.buttonStyle(.plain).accessibilityLabel("Apple Weather data sources")
+                    }
                     if weather.precipitationChance >= 0.5 {
                         Button("Plan an indoor alternative", systemImage: "sparkles") {
                             store.concierge.selectedTripID = tripID
@@ -85,14 +135,19 @@ struct DestinationWeatherRow: View {
                 else if let error { HStack { Text(error).font(.caption2).foregroundStyle(.secondary); Button("Retry") { Task { await load() } }.font(.caption2) } }
                 else if day == nil { Text("Choose dates to see the forecast").font(.caption2).foregroundStyle(.secondary) }
                 else if let day, day >= TravelDay.key(.now) { Text("Forecast available closer to your trip").font(.caption2).foregroundStyle(.secondary) }
-            }.task(id: city + (day ?? "")) { await load() }
+            }.padding(.leading, 12).padding(.vertical, 6)
+                .overlay(alignment: .leading) { RoundedRectangle(cornerRadius: 1).fill(FlightDisplay.blue.opacity(0.4)).frame(width: 2).padding(.vertical, 6) }
+                .task(id: city + (day ?? "")) { await load() }
         }
     }
     private func load() async {
-        guard DestinationWeatherService.canForecast(day: day) else { return }
+        guard weatherEnabled, DestinationWeatherService.canForecast(day: day) else { return }
         loading = true; error = nil
         defer { loading = false }
-        do { forecast = try await DestinationWeatherService.shared.forecast(city: city, latitude: latitude, longitude: longitude) }
-        catch { self.error = "Weather unavailable right now." }
+        do {
+            let value = try await DestinationWeatherService.shared.forecast(city: city, latitude: latitude, longitude: longitude)
+            guard !Task.isCancelled, weatherEnabled else { return }
+            forecast = value
+        } catch { if !Task.isCancelled, weatherEnabled { self.error = "Weather unavailable right now." } }
     }
 }

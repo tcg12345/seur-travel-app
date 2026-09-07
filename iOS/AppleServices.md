@@ -31,3 +31,7 @@ See `Validation.md` for actual results. Automated tests never use real Apple or 
 ## Aircraft positions on the map
 
 Map → Flights → open a saved flight to show its last reported aircraft position automatically after departure. If multiple operating departures match, choose the correct one first. The visible Show on map action centers the aircraft. Position reports refresh every 90 seconds while the flight is open and Map is active. This uses the existing FlightAware position endpoint, independently of push-notification permission. The map labels older reports as last-known; it does not simulate live movement between reports. Missing provider coverage is shown explicitly.
+
+## Weather appearance and preference
+
+Daily forecasts display explicit High and Low temperatures, rounded to whole degrees in the device locale’s weather unit. The small Apple Weather mark links to data-source attribution and adapts its foreground to light/dark appearance. Turn forecasts off through **Discover → profile → Trip weather**, alongside Appearance. The preference persists on the device; disabling it hides forecast rows and weather-based suggestions and stops new forecast requests.
