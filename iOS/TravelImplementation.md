@@ -19,11 +19,11 @@ The backend is deployed entirely on Supabase: Postgres, Auth, private photo Stor
 Google Flights opens external live search; booking-record details are entered manually. No supplier booking or payment is performed. See `../supabase/README.md` for architecture, security and deployment details.
 
 ## Trip add flow and Places search
-The add chooser remains mounted while each selection opens its own native editor. Saving dismisses the editor and chooser in order; cancelling returns to the chooser. Hotels and flights appear first and inherit trip dates. Restaurant and activity are separate choices; all custom event types remain available. Legacy trips without routes receive a minimal destination/date step and resume the original add choice.
+The add chooser and editors share one native sheet and navigation stack. Selecting a category pushes its editor within that sheet; Back returns to the chooser and Save closes the flow. Hotels and flights appear first and inherit trip dates. Restaurants, activities and optional event venues use one inline autocomplete field with a read-only address and map-ready confirmation. Coordinates are resolved automatically and never appear as editable fields. Notes, booking details, prices and duration remain available in expandable sections. Horizontal day cards support repeated events. Flight airports and schedule lookup stay inline, with native local-time pickers. Legacy trips without routes complete a minimal destination/date step within the same sheet and resume the original add choice.
 
 Google Places autocomplete is configured in Supabase Edge Function secrets. Google suggestions are transient and attributed; selected queries are resolved independently with Apple Maps for saved location records and pins. The app falls back to native Apple suggestions if the backend is unavailable. Hotel, restaurant, activity, event-venue and airport coordinates participate in the trip map and persist with local records. No credentials are packaged in the app or source archives.
 
-Existing dated trips without stops now prepare their route from the destination and dates already saved. Undated trips receive the minimal destination/date sheet and then continue into the original selected event editor. Existing IDs, journals and bookings are preserved.
+Existing dated trips without stops now prepare their route from the destination and dates already saved. Undated trips receive the minimal destination/date step and then continue into the original selected event editor. Existing IDs, journals and bookings are preserved.
 
 ## City discovery integration
 

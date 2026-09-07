@@ -334,13 +334,13 @@ struct ItineraryItemChooser: View {
     @Environment(\.dismiss) private var dismiss
     let select: (String) -> Void
     var body: some View {
-        NavigationStack {
+        TripEditorNavigation {
             ScrollView {
                 VStack(alignment: .leading, spacing: 28) {
                     VStack(alignment: .leading, spacing: 10) {
                         Eyebrow(text: "A day, beautifully considered")
-                        Editorial("What’s on your agenda?", size: 32)
-                        Text("From a table for two to a moment that’s entirely yours.").font(.subheadline).foregroundStyle(.secondary)
+                        Editorial("Make room for more.", size: 30)
+                        Text("Choose what you’d like to add. We’ll take care of the details.").font(.subheadline).foregroundStyle(.secondary)
                     }.padding(.top, 8)
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Stays & flights").font(.subheadline.weight(.semibold))
@@ -369,49 +369,47 @@ struct ItineraryItemChooser: View {
             VStack(alignment: .leading, spacing: 14) {
                 Image(systemName: symbol).font(.title3).foregroundStyle(Color.bronze)
                 Text(title).font(.subheadline.weight(.medium)).foregroundStyle(.primary).fixedSize(horizontal: false, vertical: true)
-            }.frame(maxWidth: .infinity, minHeight: 88, alignment: .topLeading).padding(16).background(Color.cardSurface, in: .rect(cornerRadius: 21))
+            }.frame(maxWidth: .infinity, minHeight: 64, alignment: .topLeading).padding(16).background(Color.cardSurface, in: .rect(cornerRadius: 21))
         }.buttonStyle(PressStyle()).accessibilityIdentifier("add-plan-" + value)
     }
 }
 
-/// Keep the chooser mounted while presenting an editor. There is no race between sibling sheets.
+/// The chooser and each editor share one modal and one native navigation stack.
 struct TripAddFlowView: View {
     @Environment(JourneyLibrary.self) private var library
     @Environment(\.dismiss) private var dismiss
     let documentID: UUID
     var day: JourneyAgendaDay?
     @State private var route: AddRoute?
-    @State private var saved = false
     @State private var pendingChoice: String?
     private var document: JourneyDocument? { library.documents.first { $0.id == documentID } }
-    private enum AddRoute: Identifiable {
+    private enum AddRoute: Hashable, Identifiable {
         case event(JourneyEvent), hotel(HotelReservation), flight(FlightReservation), ideas, destination
         var id: String {
             switch self { case .event(let item): "event-" + item.id.uuidString; case .hotel(let item): "hotel-" + item.id.uuidString; case .flight(let item): "flight-" + item.id.uuidString; case .ideas: "ideas"; case .destination: "destination" }
         }
     }
     var body: some View {
-        ItineraryItemChooser(select: choose)
-            .sheet(item: $route, onDismiss: {
-                if saved { dismiss() }
-                else if let choice = pendingChoice {
-                    pendingChoice = nil
-                    if document?.stops.isEmpty == false { choose(choice) }
+        NavigationStack {
+            ItineraryItemChooser(select: choose)
+                .navigationDestination(item: $route) { route in
+                    Group {
+                        switch route {
+                        case .event(let value): JourneyEventEditor(documentID: documentID, event: value, onSaved: { dismiss() })
+                        case .hotel(let value): HotelReservationEditor(documentID: documentID, reservation: value, onSaved: { dismiss() })
+                        case .flight(let value): FlightReservationEditor(documentID: documentID, reservation: value, onSaved: { dismiss() })
+                        case .ideas: ActivityIdeasView(documentID: documentID, onSaved: { dismiss() })
+                        case .destination: AddTripDestinationView(documentID: documentID, onContinue: {
+                            if let choice = pendingChoice { pendingChoice = nil; choose(choice) }
+                        })
+                        }
+                    }.id(route.id)
                 }
-            }) { route in
-                switch route {
-                case .event(let value): JourneyEventEditor(documentID: documentID, event: value, onSaved: { saved = true })
-                case .hotel(let value): HotelReservationEditor(documentID: documentID, reservation: value, onSaved: { saved = true })
-                case .flight(let value): FlightReservationEditor(documentID: documentID, reservation: value, onSaved: { saved = true })
-                case .ideas: ActivityIdeasView(documentID: documentID)
-                case .destination: AddTripDestinationView(documentID: documentID)
-                }
-            }
+        }.environment(\.tripEditorEmbedded, true).presentationDragIndicator(.visible)
     }
     private func choose(_ choice: String) {
         guard var document else { return }
         if document.preparePlanningRoute(), !library.save(document) { return }
-        saved = false
         let stop = document.stops.first(where: { $0.id == day?.stopID }) ?? document.stops.first
         switch choice {
         case "hotel":
@@ -442,13 +440,14 @@ struct AddTripDestinationView: View {
     @Environment(\.dismiss) private var dismiss
     let documentID: UUID
     var fallbackDestination = ""
+    var onContinue: (() -> Void)? = nil
     @State private var destination = ""
     @State private var selection: LocationSelection?
     @State private var start = TravelDay.key(.now)
     @State private var end = TravelDay.adding(3, to: TravelDay.key(.now))
     @State private var error: String?
     var body: some View {
-        NavigationStack {
+        TripEditorNavigation {
             Form {
                 Section { LocationAutocompleteField("Destination", text: $destination, identifier: "add-trip-destination", onEdit: { selection = nil }) { selection = $0 } }
                 Section("Travel dates") { DayField(title: "Arrival", value: $start); DayField(title: "Departure", value: $end) }
@@ -461,7 +460,7 @@ struct AddTripDestinationView: View {
                         guard end > start else { error = "Choose a departure after your arrival."; return }
                         document.dateMode = .dates; document.startDate = start; document.endDate = end; document.destination = destination.trimmingCharacters(in: .whitespacesAndNewlines)
                         document.stops.append(JourneyStop(name: destination.trimmingCharacters(in: .whitespacesAndNewlines), country: selection?.country ?? "", arrival: start, nights: TravelDay.distance(start, end), latitude: selection?.place.latitude, longitude: selection?.place.longitude))
-                        if library.save(document) { dismiss() } else { error = library.error }
+                        if library.save(document) { if let onContinue { onContinue() } else { dismiss() } } else { error = library.error }
                     }.disabled(destination.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty).accessibilityIdentifier("add-trip-continue") }
                 }
                 .onAppear { if let document = library.documents.first(where: { $0.id == documentID }) { destination = document.destination.isEmpty ? fallbackDestination : document.destination; start = document.startDate ?? start; end = document.endDate ?? TravelDay.adding(3, to: start) } }

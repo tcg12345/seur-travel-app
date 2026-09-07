@@ -93,7 +93,7 @@ struct JourneyEditor: View {
                 }
                 .onAppear { hasDates = document.startDate != nil }
                 .onChange(of: hasDates) { if hasDates { document.startDate = document.startDate ?? TravelDay.key(.now); document.endDate = document.endDate ?? document.startDate } }
-                .sheet(item: $stop) { value in StopEditor(stop: value, mode: document.dateMode) { edited in if let i = document.stops.firstIndex(where: { $0.id == edited.id }) { document.stops[i] = edited } else { document.stops.append(edited) } } }
+                .navigationDestination(item: $stop) { value in StopEditor(stop: value, mode: document.dateMode) { edited in if let i = document.stops.firstIndex(where: { $0.id == edited.id }) { document.stops[i] = edited } else { document.stops.append(edited) } }.environment(\.tripEditorEmbedded, true) }
         }
     }
     private func reflowDates() { guard !document.stops.isEmpty else { return }; for i in document.stops.indices.dropFirst() { document.stops[i].arrival = document.stops[i - 1].departure } }
@@ -111,7 +111,7 @@ private struct StopEditor: View {
     let mode: JourneyDateMode
     var save: (JourneyStop) -> Void
     var body: some View {
-        NavigationStack {
+        TripEditorNavigation {
             Form {
                 Section {
                     LocationAutocompleteField("City or destination", text: $stop.name, kind: .city, identifier: "stop-name", onEdit: { stop.latitude = nil; stop.longitude = nil; stop.country = ""; stop.code = "" }) { selected in
@@ -128,7 +128,7 @@ private struct StopEditor: View {
                     Stepper("\(stop.nights) nights", value: $stop.nights, in: 1...365).accessibilityIdentifier("stop-nights")
                 }
             }.scrollDismissesKeyboard(.interactively).scrollContentBackground(.hidden).background(Color.canvas).navigationTitle("A place to linger").navigationBarTitleDisplayMode(.inline)
-                .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }; ToolbarItem(placement: .confirmationAction) { Button("Add to route") { save(stop); dismiss() }.disabled(stop.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty).accessibilityIdentifier("stop-save") } }
+                .toolbar { ToolbarItem(placement: .cancellationAction) { TripEditorBackButton() }; ToolbarItem(placement: .confirmationAction) { Button("Add to route") { save(stop); dismiss() }.disabled(stop.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty).accessibilityIdentifier("stop-save") } }
         }
     }
 }
@@ -141,62 +141,71 @@ struct JourneyEventEditor: View {
     var onSaved: () -> Void = {}
     @State private var days: Set<Int> = []
     @State private var links = ""
-    @State private var searchingPlace = false
+    @State private var moreDetails = false
+    @State private var initialized = false
     @State private var error: String?
     @State private var delete = false
     private var document: JourneyDocument? { library.documents.first { $0.id == documentID } }
     var body: some View {
-        NavigationStack {
+        TripEditorNavigation {
             Form {
-                if event.isPlaceVisit { PlaceFields(place: $event.place) { searchingPlace = true } }
+                if event.isPlaceVisit { PlaceFields(place: $event.place, fixedCategory: event.place.category == .restaurant ? .restaurant : nil, context: document?.stops.first(where: { $0.id == event.stopID })?.name ?? "") }
                 else {
                     Section(event.kind?.title ?? "Your event") {
                         Picker("Event type", selection: Binding(get: { event.kind ?? .custom }, set: { event.kind = $0 })) {
                             ForEach(ItineraryItemKind.allCases.filter { $0 != .place }) { Label($0.title, systemImage: $0.symbol).tag($0) }
-                        }
+                        }.pickerStyle(.menu)
                         TextField(event.kind?.titlePrompt ?? "Event title", text: Binding(get: { event.title ?? "" }, set: { event.title = $0 })).accessibilityIdentifier("event-title")
-                        TextField("People / guests (optional)", text: Binding(get: { event.attendees ?? "" }, set: { event.attendees = $0 }))
                     }
-                    Section {
-                        LocationAutocompleteField("Venue or address (optional)", text: $event.place.name, kind: .place, identifier: "event-location", category: .other, onEdit: {
-                            let name = event.place.name; event.place = PlaceRecord(name: name, category: .other)
-                        }) { selection in event.place = selection.place; event.place.category = .other }
-                        if event.place.hasCoordinate { Label("Ready for your trip map", systemImage: "checkmark.circle.fill").font(.caption).foregroundStyle(Color.bronze) }
-                        if !event.place.address.isEmpty { Text(event.place.address).font(.caption).foregroundStyle(.secondary) }
-                    } header: { Text("Location") } footer: { Text("Leave blank for online plans or free time. Add a meeting or ticket link below.") }
+                    PlaceFields(place: $event.place, fixedCategory: .other, context: document?.stops.first(where: { $0.id == event.stopID })?.name ?? "", optional: true, identifier: "event-location")
                 }
                 if let document {
-                    Section("When & where") {
-                        Picker("Destination", selection: $event.stopID) { ForEach(document.stops) { Text($0.name).tag($0.id) } }
+                    Section("When") {
+                        if document.stops.count > 1 { Picker("In", selection: $event.stopID) { ForEach(document.stops) { Text($0.name).tag($0.id) } }.pickerStyle(.menu) }
+                        if let stop = document.stops.first(where: { $0.id == event.stopID }) {
+                            ScrollView(.horizontal) {
+                                LazyHStack(spacing: 8) {
+                                    ForEach(0...stop.nights, id: \.self) { day in
+                                        Button { if days.contains(day) { days.remove(day) } else { days.insert(day) } } label: {
+                                            VStack(spacing: 7) {
+                                                Text("Day \(day + 1)").font(.caption.weight(.semibold))
+                                                Text(document.dateMode == .dates ? TravelDay.localDate(TravelDay.adding(day, to: stop.arrival)).formatted(.dateTime.month(.abbreviated).day()) : stop.name).font(.caption2).lineLimit(1)
+                                                Image(systemName: days.contains(day) ? "checkmark.circle.fill" : "circle").font(.subheadline)
+                                            }.foregroundStyle(days.contains(day) ? Color.white : Color.primary).frame(width: 76).padding(.vertical, 12)
+                                                .background(days.contains(day) ? Color.bronze : Color.primary.opacity(0.04), in: .rect(cornerRadius: 17))
+                                        }.buttonStyle(.plain).accessibilityIdentifier("event-day-\(day)").accessibilityValue(days.contains(day) ? "Selected" : "Not selected")
+                                    }
+                                }
+                            }.scrollIndicators(.hidden).padding(.vertical, 5)
+                            Text(days.count > 1 ? "Repeats on \(days.count) selected days" : "Select one or more days in \(stop.name)").font(.caption).foregroundStyle(.secondary)
+                        }
                         Toggle("All day", isOn: Binding(get: { event.allDay ?? false }, set: { event.allDay = $0 })).accessibilityIdentifier("event-all-day")
                         if event.allDay != true {
-                        DatePicker("Start time", selection: Binding(get: { Calendar.current.startOfDay(for: .now).addingTimeInterval(Double(event.minute * 60)) }, set: { let c = Calendar.current.dateComponents([.hour, .minute], from: $0); event.minute = (c.hour ?? 0) * 60 + (c.minute ?? 0) }), displayedComponents: .hourAndMinute)
-                        Toggle("Set duration", isOn: Binding(get: { event.durationMinutes != nil }, set: { event.durationMinutes = $0 ? 60 : nil })).accessibilityIdentifier("event-duration-toggle")
-                        if event.durationMinutes != nil {
-                            Stepper("Duration: \(event.durationMinutes ?? 60) min", value: Binding(get: { event.durationMinutes ?? 60 }, set: { event.durationMinutes = $0 }), in: 1...1440, step: 15)
-                            if let end = event.endTimeLabel { LabeledContent("Ends", value: end).foregroundStyle(.secondary) }
+                            DatePicker("Time", selection: Binding(get: { Calendar.current.startOfDay(for: .now).addingTimeInterval(Double(event.minute * 60)) }, set: { let c = Calendar.current.dateComponents([.hour, .minute], from: $0); event.minute = (c.hour ?? 0) * 60 + (c.minute ?? 0) }), displayedComponents: .hourAndMinute)
                         }
-                        }
-                        if let stop = document.stops.first(where: { $0.id == event.stopID }) {
-                            ForEach(0...stop.nights, id: \.self) { day in
-                                Button { if days.contains(day) { days.remove(day) } else { days.insert(day) } } label: {
-                                    HStack { Text(document.dateMode == .dates ? TravelDay.label(TravelDay.adding(day, to: stop.arrival)) : "Day \(day + 1) in \(stop.name)").foregroundStyle(.primary); Spacer(); Image(systemName: days.contains(day) ? "checkmark.circle.fill" : "circle").foregroundStyle(Color.bronze) }.contentShape(.rect)
-                                }.buttonStyle(.plain).accessibilityIdentifier("event-day-\(day)").accessibilityValue(days.contains(day) ? "Selected" : "Not selected")
-                            }
-                        }
-                        Text("Select several days to add this event to each. The price applies to each occurrence.").font(.caption).foregroundStyle(.secondary)
                     }
                 }
-                Section("Details") { TextField("Description (optional)", text: $event.description, axis: .vertical).lineLimit(3...6); TextField("Links, one per line", text: $links, axis: .vertical).textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL) }
-                Section("Price per occurrence") { MoneyFields(cost: $event.cost) }
+                Section {
+                    DisclosureGroup("More details", isExpanded: $moreDetails) {
+                        TextField("Notes or special requests", text: $event.description, axis: .vertical).lineLimit(2...5).accessibilityIdentifier("event-notes")
+                        TextField("People or guests", text: Binding(get: { event.attendees ?? "" }, set: { event.attendees = $0 }))
+                        TextField("Booking or meeting links · one per line", text: $links, axis: .vertical).textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL)
+                        if event.allDay != true {
+                            Toggle("Set duration", isOn: Binding(get: { event.durationMinutes != nil }, set: { event.durationMinutes = $0 ? 60 : nil })).accessibilityIdentifier("event-duration-toggle")
+                            if event.durationMinutes != nil { Stepper("\(event.durationMinutes ?? 60) minutes", value: Binding(get: { event.durationMinutes ?? 60 }, set: { event.durationMinutes = $0 }), in: 1...1440, step: 15); if let end = event.endTimeLabel { LabeledContent("Ends", value: end).foregroundStyle(.secondary) } }
+                        }
+                        MoneyFields(cost: $event.cost)
+                        if event.cost != nil && days.count > 1 { Text("This price is counted once for each selected day.").font(.caption).foregroundStyle(.secondary) }
+                    }
+                }
                 if let error { Section { Text(error).foregroundStyle(.red) } }
                 if document?.events.contains(where: { $0.id == event.id }) == true { Section { Button("Delete this occurrence", role: .destructive) { delete = true } } }
             }.scrollDismissesKeyboard(.interactively).scrollContentBackground(.hidden).background(Color.canvas).navigationTitle(event.isPlaceVisit ? (event.place.category == .restaurant ? "Your restaurant visit" : "Your activity") : event.categoryTitle).navigationBarTitleDisplayMode(.inline)
-                .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }; ToolbarItem(placement: .confirmationAction) { Button("Save") { save() }.accessibilityIdentifier("event-save") } }
-                .onAppear { days = [event.day]; links = event.links.joined(separator: "\n") }
+                .toolbar { ToolbarItem(placement: .cancellationAction) { TripEditorBackButton() }; ToolbarItem(placement: .confirmationAction) { Button("Save") { save() }.accessibilityIdentifier("event-save") } }
+                .onAppear { guard !initialized else { return }; initialized = true; days = [event.day]; links = event.links.joined(separator: "\n"); moreDetails = !event.description.isEmpty || !event.links.isEmpty || event.cost != nil || event.durationMinutes != nil || event.attendees?.isEmpty == false }
                 .onChange(of: event.stopID) { days = [0] }
                 .confirmationDialog("Delete this event?", isPresented: $delete, titleVisibility: .visible) { Button("Delete occurrence", role: .destructive) { guard var d = document else { return }; d.events.removeAll { $0.id == event.id }; if library.save(d) { onSaved(); dismiss() } } }
-        }.placeSearchSheet(isPresented: $searchingPlace, place: $event.place)
+        }
     }
     private func save() {
         guard var d = document, !days.isEmpty else { error = "Select at least one day."; return }
@@ -213,28 +222,44 @@ struct HotelReservationEditor: View {
     let documentID: UUID
     @State var reservation: HotelReservation
     var onSaved: () -> Void = {}
-    @State private var searchingPlace = false
     @State private var error: String?
     @State private var loading = false
+    @State private var bookingDetails = false
     @State private var delete = false
     var body: some View {
-        NavigationStack {
+        TripEditorNavigation {
             Form {
-                PlaceFields(place: $reservation.place, fixedCategory: .hotel) { searchingPlace = true }
-                Section("Your stay") { DayField(title: "Check-in", value: $reservation.checkIn); DayField(title: "Check-out", value: $reservation.checkOut); Stepper("\(reservation.guests) guests", value: $reservation.guests, in: 1...99); Stepper("\(reservation.rooms) rooms", value: $reservation.rooms, in: 1...50); TextField("Room type", text: $reservation.roomType); TextField("Confirmation number", text: $reservation.confirmation).textInputAutocapitalization(.characters) }
-                Section("Total booking cost") { MoneyFields(cost: $reservation.cost) }
-                Section("Hotel overview") {
-                    if !reservation.overview.isEmpty { Text(reservation.overview).font(.subheadline).textSelection(.enabled); Text("AI-generated from available hotel details. Verify important details with the hotel.").font(.caption).foregroundStyle(.secondary) }
-                    Button { Task { loading = true; defer { loading = false }; do { reservation.overview = try await api.hotelOverview(reservation.place).text } catch { self.error = error.localizedDescription } } } label: { Label(loading ? "Preparing overview…" : "Generate AI overview", systemImage: "sparkles") }.disabled(loading || reservation.place.name.isEmpty)
+                PlaceFields(place: $reservation.place, fixedCategory: .hotel, context: reservation.place.city)
+                Section("Your stay") {
+                    DayField(title: "Check-in", value: $reservation.checkIn)
+                    DayField(title: "Check-out", value: $reservation.checkOut)
+                    Stepper("\(reservation.guests) \(reservation.guests == 1 ? "guest" : "guests")", value: $reservation.guests, in: 1...99)
+                    Stepper("\(reservation.rooms) \(reservation.rooms == 1 ? "room" : "rooms")", value: $reservation.rooms, in: 1...50)
                 }
-                Section("Notes") { TextField("Special requests, cancellation terms…", text: $reservation.notes, axis: .vertical).lineLimit(3...8) }
-                Section { Text("This stores a booking record. A confirmation number you enter is not independently verified. Reserve and pay with the hotel.").font(.caption).foregroundStyle(.secondary) }
+                Section {
+                    DisclosureGroup("Booking details", isExpanded: $bookingDetails) {
+                        TextField("Room or suite type", text: $reservation.roomType)
+                        TextField("Confirmation number", text: $reservation.confirmation).textInputAutocapitalization(.characters)
+                        MoneyFields(cost: $reservation.cost)
+                        TextField("Special requests or booking notes", text: $reservation.notes, axis: .vertical).lineLimit(2...6)
+                    }
+                } footer: { Text("Save the stay now. You can add your confirmation and other booking details later.") }
+                if !reservation.place.name.isEmpty {
+                    Section {
+                        DisclosureGroup("About this hotel") {
+                            if !reservation.overview.isEmpty { Text(reservation.overview).font(.subheadline).textSelection(.enabled); Text("AI overview · verify important details with the hotel.").font(.caption).foregroundStyle(.secondary) }
+                            Button { Task { loading = true; defer { loading = false }; do { reservation.overview = try await api.hotelOverview(reservation.place).text } catch { self.error = error.localizedDescription } } } label: { Label(loading ? "Preparing overview…" : "Ask concierge for an overview", systemImage: "sparkles") }.disabled(loading)
+                        }
+                    }
+                }
                 if let error { Section { Text(error).foregroundStyle(.red) } }
                 if library.documents.first(where: { $0.id == documentID })?.hotels.contains(where: { $0.id == reservation.id }) == true { Section { Button("Remove hotel record", role: .destructive) { delete = true } } }
-            }.scrollDismissesKeyboard(.interactively).scrollContentBackground(.hidden).background(Color.canvas).navigationTitle("Your hotel booking").navigationBarTitleDisplayMode(.inline)
-                .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }; ToolbarItem(placement: .confirmationAction) { Button("Save") { save() }.accessibilityIdentifier("hotel-record-save") } }
+            }.scrollDismissesKeyboard(.interactively).scrollContentBackground(.hidden).background(Color.canvas).navigationTitle("Your stay").navigationBarTitleDisplayMode(.inline)
+                .toolbar { ToolbarItem(placement: .cancellationAction) { TripEditorBackButton() }; ToolbarItem(placement: .confirmationAction) { Button("Save") { save() }.accessibilityIdentifier("hotel-record-save") } }
                 .confirmationDialog("Remove this hotel record?", isPresented: $delete, titleVisibility: .visible) { Button("Remove record", role: .destructive) { save(remove: true) } }
-        }.placeSearchSheet(isPresented: $searchingPlace, place: $reservation.place, category: .hotel)
+            .onAppear { bookingDetails = !reservation.roomType.isEmpty || !reservation.confirmation.isEmpty || !reservation.notes.isEmpty || reservation.cost != nil }
+            .onChange(of: reservation.checkIn) { if reservation.checkOut <= reservation.checkIn { reservation.checkOut = TravelDay.adding(1, to: reservation.checkIn) } }
+        }
     }
     private func save(remove: Bool = false) { guard var d = library.documents.first(where: { $0.id == documentID }) else { return }; d.hotels.removeAll { $0.id == reservation.id }; if !remove { d.hotels.append(reservation) }; if library.save(d) { onSaved(); dismiss() } else { error = library.error } }
 }
@@ -243,34 +268,26 @@ struct FlightReservationEditor: View {
     @Environment(JourneyLibrary.self) private var library
     @Environment(TravelAPI.self) private var api
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.tripEditorEmbedded) private var embedded
     let documentID: UUID?
     @State var reservation: FlightReservation
     var onCancel: (() -> Void)? = nil
     var onSaved: () -> Void = {}
-    @State private var search = false
     @State private var error: String?
     @State private var delete = false
     @State private var saving = false
     var body: some View {
-        NavigationStack {
+        TripEditorNavigation {
             Form {
-                Section { Button { search = true } label: { Label("Search flights", systemImage: "magnifyingglass") }; TextField("Airline", text: $reservation.airline).accessibilityIdentifier("booking-airline"); TextField("Flight number", text: $reservation.flightNumber).textInputAutocapitalization(.characters) }
-                Section("Departure · airport local time") { LocationAutocompleteField("Departure airport / code", text: $reservation.departureAirport, kind: .airport, identifier: "booking-departure", onEdit: { reservation.departureLatitude = nil; reservation.departureLongitude = nil; reservation.departureZone = "" }) { selected in reservation.departureLatitude = selected.place.latitude; reservation.departureLongitude = selected.place.longitude; reservation.departureZone = selected.timeZone }; DayField(title: "Date", value: $reservation.departureDay); TextField("Time (HH:mm)", text: $reservation.departureTime).keyboardType(.numbersAndPunctuation); LocationAutocompleteField("Time zone, e.g. America/New_York", text: $reservation.departureZone, kind: .timeZone, identifier: "booking-departure-zone") }
-                Section("Arrival · airport local time") { LocationAutocompleteField("Arrival airport / code", text: $reservation.arrivalAirport, kind: .airport, identifier: "booking-arrival", onEdit: { reservation.arrivalLatitude = nil; reservation.arrivalLongitude = nil; reservation.arrivalZone = "" }) { selected in reservation.arrivalLatitude = selected.place.latitude; reservation.arrivalLongitude = selected.place.longitude; reservation.arrivalZone = selected.timeZone }; DayField(title: "Date", value: $reservation.arrivalDay); TextField("Time (HH:mm)", text: $reservation.arrivalTime).keyboardType(.numbersAndPunctuation); LocationAutocompleteField("Time zone, e.g. Europe/Paris", text: $reservation.arrivalZone, kind: .timeZone, identifier: "booking-arrival-zone") }
+                Section("Flight") { TextField("Airline", text: $reservation.airline).accessibilityIdentifier("booking-airline"); TextField("Flight number · e.g. BA178", text: $reservation.flightNumber).textInputAutocapitalization(.characters); InlineFlightSchedule(reservation: $reservation) }
+                Section("Departure · airport local time") { LocationAutocompleteField("Departure airport / code", text: $reservation.departureAirport, kind: .airport, identifier: "booking-departure", onEdit: { reservation.departureLatitude = nil; reservation.departureLongitude = nil; reservation.departureZone = "" }) { selected in reservation.departureLatitude = selected.place.latitude; reservation.departureLongitude = selected.place.longitude; reservation.departureZone = selected.timeZone }; DayField(title: "Date", value: $reservation.departureDay); LocalTimeField(title: "Departure time", value: $reservation.departureTime) }
+                Section("Arrival · airport local time") { LocationAutocompleteField("Arrival airport / code", text: $reservation.arrivalAirport, kind: .airport, identifier: "booking-arrival", onEdit: { reservation.arrivalLatitude = nil; reservation.arrivalLongitude = nil; reservation.arrivalZone = "" }) { selected in reservation.arrivalLatitude = selected.place.latitude; reservation.arrivalLongitude = selected.place.longitude; reservation.arrivalZone = selected.timeZone }; DayField(title: "Date", value: $reservation.arrivalDay); LocalTimeField(title: "Arrival time", value: $reservation.arrivalTime) }
                 Section("Booking") { MoneyFields(cost: $reservation.cost); TextField("Booking link", text: $reservation.bookingLink).keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled(); TextField("Notes", text: $reservation.notes, axis: .vertical).lineLimit(3...6) }
                 Section { Text("Times are stored exactly as airport-local values, including overnight and date-line crossings. Confirm them against your airline booking.").font(.caption).foregroundStyle(.secondary) }
                 if let error { Section { Text(error).foregroundStyle(.red) } }
                 if library.documents.first(where: { $0.id == documentID })?.flights.contains(where: { $0.id == reservation.id }) == true || (documentID == nil && api.savedFlights.contains(where: { $0.id == reservation.id })) { Section { Button("Remove flight record", role: .destructive) { delete = true } } }
             }.scrollDismissesKeyboard(.interactively).scrollContentBackground(.hidden).background(Color.canvas).navigationTitle(documentID == nil ? "Review flight" : "Your flight booking").navigationBarTitleDisplayMode(.inline)
-                .toolbar { ToolbarItem(placement: .cancellationAction) { Button(onCancel == nil ? "Cancel" : "Back") { if let onCancel { onCancel() } else { dismiss() } }.disabled(saving) }; ToolbarItem(placement: .confirmationAction) { Button(saving ? "Saving…" : "Save") { save() }.disabled(saving).accessibilityIdentifier("flight-record-save") } }
-                .sheet(isPresented: $search) { FlightLookupView { selection in
-                    let flight = selection.search
-                    reservation.departureAirport = flight.origin; reservation.arrivalAirport = flight.destination
-                    reservation.departureDay = TravelDay.key(flight.dates.start); reservation.arrivalDay = reservation.departureDay
-                    reservation.bookingLink = flight.url?.absoluteString ?? ""
-                    reservation.departureLatitude = selection.departure?.latitude; reservation.departureLongitude = selection.departure?.longitude
-                    reservation.arrivalLatitude = selection.arrival?.latitude; reservation.arrivalLongitude = selection.arrival?.longitude
-                } }
+                .toolbar { ToolbarItem(placement: .cancellationAction) { Button(onCancel == nil && !embedded ? "Cancel" : "Back") { if let onCancel { onCancel() } else { dismiss() } }.disabled(saving) }; ToolbarItem(placement: .confirmationAction) { Button(saving ? "Saving…" : "Save") { save() }.disabled(saving).accessibilityIdentifier("flight-record-save") } }
                 .confirmationDialog("Remove this flight record?", isPresented: $delete, titleVisibility: .visible) { Button("Remove record", role: .destructive) { save(remove: true) } }
         }
     }
@@ -302,13 +319,12 @@ struct RatedPlaceEditor: View {
     @State private var hasDate = false
     @State private var photoItems: [PhotosPickerItem] = []
     @State private var processing = false
-    @State private var searchingPlace = false
     @State private var error: String?
     @State private var delete = false
     var body: some View {
-        NavigationStack {
+        TripEditorNavigation {
             Form {
-                PlaceFields(place: $rated.place) { searchingPlace = true }
+                PlaceFields(place: $rated.place, context: library.documents.first(where: { $0.id == documentID })?.destination ?? "")
                 Section("Your overall rating") { scoreControl("Overall", score: $rated.overall); Text("Zero means not rated yet. Your ratings are separate from provider reviews.").font(.caption).foregroundStyle(.secondary) }
                 Section("A closer look") {
                     ForEach(rated.place.category.scoreCategories, id: \.self) { category in scoreControl(category, score: Binding(get: { rated.scores[category] ?? 0 }, set: { rated.scores[category] = $0 })) }
@@ -330,13 +346,13 @@ struct RatedPlaceEditor: View {
                 if let error { Section { Text(error).foregroundStyle(.red) } }
                 if library.documents.first(where: { $0.id == documentID })?.places.contains(where: { $0.id == rated.id }) == true { Section { Button("Remove this place", role: .destructive) { delete = true } } }
             }.scrollDismissesKeyboard(.interactively).scrollContentBackground(.hidden).background(Color.canvas).navigationTitle("A place to remember").navigationBarTitleDisplayMode(.inline)
-                .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }; ToolbarItem(placement: .confirmationAction) { Button("Save") { save() }.disabled(processing).accessibilityIdentifier("rated-save") } }
+                .toolbar { ToolbarItem(placement: .cancellationAction) { TripEditorBackButton() }; ToolbarItem(placement: .confirmationAction) { Button("Save") { save() }.disabled(processing).accessibilityIdentifier("rated-save") } }
                 .onAppear { hasDate = rated.visitedOn != nil }
                 .onChange(of: hasDate) { if hasDate { rated.visitedOn = rated.visitedOn ?? TravelDay.key(.now) } }
                 .onChange(of: photoItems) { Task { await importPhotos() } }
                 .onChange(of: rated.place.category) { rated.scores = [:]; rated.michelinStars = nil }
                 .confirmationDialog("Remove this place and its photos?", isPresented: $delete, titleVisibility: .visible) { Button("Remove place", role: .destructive) { save(remove: true) } }
-        }.placeSearchSheet(isPresented: $searchingPlace, place: $rated.place)
+        }
     }
     private func scoreControl(_ title: String, score: Binding<Double>) -> some View { VStack(alignment: .leading, spacing: 8) { HStack { Text(title); Spacer(); Text(score.wrappedValue == 0 ? "To rate" : String(format: "%.1f / 10", score.wrappedValue)).foregroundStyle(Color.bronze).monospacedDigit(); Stepper("Adjust " + title, value: score, in: 0...10, step: 0.1).labelsHidden().fixedSize().accessibilityIdentifier(title + "-stepper") }; Slider(value: score, in: 0...10, step: 0.1).accessibilityLabel(title + " rating").accessibilityValue(String(format: "%.1f", score.wrappedValue)) } }
     private func save(remove: Bool = false) { guard var d = library.documents.first(where: { $0.id == documentID }) else { return }; if !hasDate { rated.visitedOn = nil }; d.places.removeAll { $0.id == rated.id }; if !remove { d.places.append(rated) }; if library.save(d) { onSaved(); dismiss() } else { error = library.error } }
@@ -364,7 +380,70 @@ struct MoneyFields: View {
         Toggle("Include a price", isOn: Binding(get: { cost != nil }, set: { cost = $0 ? TravelMoney() : nil }))
         if cost != nil {
             TextField("Amount", value: Binding(get: { cost?.amount ?? 0 }, set: { cost?.amount = $0 }), format: .number).keyboardType(.decimalPad).accessibilityIdentifier("money-amount")
-            Picker("Currency", selection: Binding(get: { cost?.currency ?? "USD" }, set: { cost?.currency = $0 })) { ForEach(TravelMoney.currencies, id: \.self) { Text($0) } }
+            Picker("Currency", selection: Binding(get: { cost?.currency ?? "USD" }, set: { cost?.currency = $0 })) { ForEach(TravelMoney.currencies, id: \.self) { Text($0) } }.pickerStyle(.menu)
         }
+    }
+}
+
+struct LocalTimeField: View {
+    let title: String
+    @Binding var value: String
+    var body: some View {
+        DatePicker(title, selection: Binding(get: {
+            let parts = value.split(separator: ":").compactMap { Int($0) }
+            return Calendar.current.startOfDay(for: .now).addingTimeInterval(Double((parts.first ?? 9) * 3600 + (parts.count > 1 ? parts[1] : 0) * 60))
+        }, set: {
+            let parts = Calendar.current.dateComponents([.hour, .minute], from: $0)
+            value = String(format: "%02d:%02d", parts.hour ?? 0, parts.minute ?? 0)
+        }), displayedComponents: .hourAndMinute)
+    }
+}
+
+/// Schedule lookup stays inside the booking form and preserves the user's booking notes.
+struct InlineFlightSchedule: View {
+    @Environment(TravelAPI.self) private var api
+    @Binding var reservation: FlightReservation
+    @State private var feed: FlightFeed?
+    @State private var loading = false
+    @State private var message: String?
+    private var ident: String {
+        let number = reservation.flightNumber.replacingOccurrences(of: " ", with: "").uppercased()
+        if number.first?.isNumber == true, let airline = FlightAirline.collection.first(where: { $0.name.localizedCaseInsensitiveCompare(reservation.airline) == .orderedSame || $0.code.localizedCaseInsensitiveCompare(reservation.airline) == .orderedSame }) { return airline.code + number }
+        return number
+    }
+    var body: some View {
+        DisclosureGroup("Find this flight’s schedule") {
+            Button { Task { await lookup() } } label: { Label(loading ? "Finding your flight…" : "Look up flight", systemImage: "magnifyingglass") }.disabled(loading || ident.isEmpty).accessibilityIdentifier("booking-lookup-flight")
+            Text("Enter the airline, flight number and departure date. Choose a departure to fill its airports and local times.").font(.caption).foregroundStyle(.secondary)
+            if let message { Text(message).font(.caption).foregroundStyle(.secondary) }
+            if let feed {
+                ForEach(feed.flights) { flight in
+                    Button { Task { await select(flight) } } label: {
+                        VStack(alignment: .leading, spacing: 5) { Text(flight.ident + " · " + flight.origin + " → " + flight.destination); Text(FlightSnapshot.time(flight.scheduledOut ?? flight.scheduledOff, zone: flight.originZone)).font(.caption).foregroundStyle(.secondary) }
+                    }.disabled(loading)
+                }
+                if !feed.message.isEmpty { Text(feed.message).font(.caption).foregroundStyle(.secondary) }
+            }
+        }.onChange(of: reservation.flightNumber) { feed = nil }.onChange(of: reservation.departureDay) { feed = nil }
+    }
+    private func lookup() async {
+        loading = true; message = nil; feed = nil; defer { loading = false }
+        let number = ident, day = reservation.departureDay
+        do { let value = try await api.flightStatus(number, day: day); if ident == number && reservation.departureDay == day { feed = value } }
+        catch { message = error.localizedDescription }
+    }
+    private func select(_ flight: FlightSnapshot) async {
+        loading = true; message = nil; defer { loading = false }
+        let original = reservation
+        do {
+            async let departure = api.flightAirport(flight.origin)
+            async let arrival = api.flightAirport(flight.destination)
+            let (a, b) = try await (departure, arrival)
+            guard reservation == original else { return }
+            var value = flight.reservation(airline: FlightAirline.identified(by: flight.ident)?.name ?? reservation.airline)
+            value.id = reservation.id; value.cost = reservation.cost; value.notes = reservation.notes; value.bookingLink = reservation.bookingLink
+            value.departureLatitude = a.latitude; value.departureLongitude = a.longitude; value.arrivalLatitude = b.latitude; value.arrivalLongitude = b.longitude
+            reservation = value; feed = nil; message = "Schedule added. Review the details before saving."
+        } catch { message = error.localizedDescription }
     }
 }

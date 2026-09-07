@@ -352,7 +352,7 @@ final class AurumUITests: XCTestCase {
         for (option, save) in options {
             let choice = app.buttons["add-plan-" + option]; reveal(choice); choice.tap()
             XCTAssertTrue(app.buttons[save].waitForExistence(timeout: 5), "No editor for " + option)
-            app.buttons["Cancel"].firstMatch.tap()
+            app.buttons["Back"].firstMatch.tap()
             XCTAssertTrue(app.buttons["add-plan-" + option].waitForExistence(timeout: 5))
         }
         let ideas = app.buttons["AI activity ideas"]; reveal(ideas); ideas.tap()
@@ -388,67 +388,62 @@ final class AurumUITests: XCTestCase {
         XCTAssertEqual(app.staticTexts["trip-map-count"].label, "4 places on your map")
         capture("50 Saved trip map with bookings and meeting")
     }
-    func testPlaceSearchPopupStaysOpenAndReturnsSelection() {
+    func testInlinePlaceSearchKeepsOneEditorAndRepeatDays() {
         createAddFlowTrip()
         for choice in ["place", "hotel", "attraction", "journal"] {
             if choice == "journal" { app.buttons["Journal"].tap(); app.buttons["trip-add-place"].tap() }
             else { app.buttons["journey-add"].tap(); app.buttons["add-plan-" + choice].tap() }
-            let opener = app.buttons[choice == "hotel" ? "Search hotels" : "Find a restaurant or place"]
-            XCTAssertTrue(opener.waitForExistence(timeout: 5))
-            if choice == "place" {
-                let extraDay = app.buttons["event-day-1"]; reveal(extraDay); extraDay.tap()
-                for _ in 0..<8 { if opener.isHittable { break }; app.swipeDown(velocity: .slow) }
-            }
-            opener.tap()
-            let query = app.textFields["live-place-query"]
+            let query = app.textFields["place-name"]
             XCTAssertTrue(query.waitForExistence(timeout: 5))
-            // Catch a transient presentation that disappears immediately after opening.
-            RunLoop.current.run(until: Date().addingTimeInterval(2))
-            XCTAssertTrue(query.exists, "Search dismissed itself for " + choice)
-            query.tap(); query.typeText("Par")
-            let suggestion = app.buttons["live-place-query-suggestion-0"]
-            XCTAssertTrue(suggestion.waitForExistence(timeout: 5))
-            if choice == "place" { capture("55 Restaurant search popup stays open") }
-            suggestion.tap()
-            let selectedName = app.textFields["place-name"]
-            XCTAssertTrue(selectedName.waitForExistence(timeout: 5))
-            XCTAssertEqual(selectedName.value as? String, "Paris Test Hotel")
-            XCTAssertTrue(app.staticTexts["place-map-ready"].exists)
-            // Reopen and cancel: neither the selection nor the editor should be lost.
-            opener.tap(); XCTAssertTrue(query.waitForExistence(timeout: 5))
-            app.buttons["Cancel"].firstMatch.tap()
-            XCTAssertTrue(selectedName.waitForExistence(timeout: 5))
-            XCTAssertEqual(selectedName.value as? String, "Paris Test Hotel")
-            if choice == "place" {
-                let extraDay = app.buttons["event-day-1"]; reveal(extraDay)
-                XCTAssertEqual(extraDay.value as? String, "Selected", "Search reset the draft schedule")
-            }
             let save = choice == "hotel" ? "hotel-record-save" : choice == "journal" ? "rated-save" : "event-save"
+            let top = app.buttons[save].frame.minY
+            XCTAssertEqual(app.textFields.matching(identifier: "place-name").count, 1)
+            XCTAssertFalse(app.buttons["Find a restaurant or place"].exists)
+            XCTAssertFalse(app.buttons["Search hotels"].exists)
+            XCTAssertFalse(app.textFields["Latitude"].exists)
+            XCTAssertFalse(app.textFields["Longitude"].exists)
+            XCTAssertFalse(app.textFields["place-address"].exists)
+            if choice == "place" { let day = app.buttons["event-day-1"]; reveal(day); day.tap(); reveal(query) }
+            query.tap(); query.typeText("Par")
+            let suggestion = app.buttons["place-name-suggestion-0"]
+            XCTAssertTrue(suggestion.waitForExistence(timeout: 5))
+            XCTAssertEqual(app.buttons[save].frame.minY, top, accuracy: 2, "Place search must stay in the same sheet")
+            if choice == "place" { capture("76 Inline restaurant search") }
+            suggestion.tap()
+            XCTAssertEqual(query.value as? String, "Paris Test Hotel")
+            XCTAssertTrue(app.staticTexts["place-map-ready"].exists)
+            if choice == "place" {
+                let day = app.buttons["event-day-1"]; reveal(day)
+                XCTAssertEqual(day.value as? String, "Selected")
+                capture("77 Restaurant with automatic map details")
+            }
+            if choice == "hotel" { capture("78 Simplified hotel stay") }
             app.buttons[save].tap()
             XCTAssertTrue(app.buttons[choice == "journal" ? "trip-add-place" : "journey-add"].waitForExistence(timeout: 8))
         }
     }
-    func testFlightSearchPopupsStayOpen() {
+    func testFlightAirportsStayInline() {
         createAddFlowTrip()
         app.buttons["journey-add"].tap(); app.buttons["add-plan-flight"].tap()
-        XCTAssertTrue(app.buttons["Search flights"].waitForExistence(timeout: 5)); app.buttons["Search flights"].tap()
-        XCTAssertTrue(app.textFields["lookup-origin"].waitForExistence(timeout: 5))
-        for (opener, field) in [("Find departure city or airport", "lookup-origin"), ("Find arrival city or airport", "lookup-destination")] {
-            app.buttons[opener].tap()
-            let query = app.textFields["live-place-query"]; XCTAssertTrue(query.waitForExistence(timeout: 5))
-            RunLoop.current.run(until: Date().addingTimeInterval(2)); XCTAssertTrue(query.exists)
-            query.tap(); query.typeText("Par")
-            let suggestion = app.buttons["live-place-query-suggestion-0"]; XCTAssertTrue(suggestion.waitForExistence(timeout: 5)); suggestion.tap()
-            XCTAssertTrue(app.textFields[field].waitForExistence(timeout: 5))
-            XCTAssertEqual(app.textFields[field].value as? String, "Paris Charles de Gaulle Airport")
+        XCTAssertTrue(app.buttons["flight-record-save"].waitForExistence(timeout: 5))
+        let top = app.buttons["flight-record-save"].frame.minY
+        XCTAssertFalse(app.buttons["Search flights"].exists)
+        for identifier in ["booking-departure", "booking-arrival"] {
+            let field = app.textFields[identifier]; reveal(field); field.tap(); field.typeText("Par")
+            let suggestion = app.buttons[identifier + "-suggestion-0"]; XCTAssertTrue(suggestion.waitForExistence(timeout: 5)); suggestion.tap()
+            XCTAssertEqual(field.value as? String, "Paris Charles de Gaulle Airport")
+            XCTAssertEqual(app.buttons["flight-record-save"].frame.minY, top, accuracy: 2)
         }
+        XCTAssertFalse(app.textFields["booking-departure-zone"].exists)
+        capture("79 Inline flight airports and native times")
     }
-    func testLiveGooglePlaceAutocompleteResolvesMapLocation() {
+    func testLivePlaceAutocompleteResolvesMapLocation() {
         createAddFlowTrip(fixtures: false)
         app.buttons["journey-add"].tap(); capture("48 Stays first add menu"); app.buttons["add-plan-hotel"].tap()
         let field = app.textFields["place-name"]; XCTAssertTrue(field.waitForExistence(timeout: 5)); field.tap(); field.typeText("The Savoy London")
-        XCTAssertTrue(app.staticTexts["Google Maps"].waitForExistence(timeout: 15))
-        capture("51 Live Google Places suggestions")
+        XCTAssertTrue(app.buttons["place-name-suggestion-0"].waitForExistence(timeout: 20))
+        XCTAssertTrue(app.staticTexts["Google Maps"].exists || app.staticTexts["Apple Maps suggestions"].exists)
+        capture("51 Live place suggestions")
         app.buttons["place-name-suggestion-0"].tap()
         XCTAssertTrue(app.staticTexts["place-map-ready"].waitForExistence(timeout: 20))
         capture("52 Resolved Savoy hotel")
@@ -470,6 +465,7 @@ final class AurumUITests: XCTestCase {
         app.buttons["add-plan-meeting"].tap()
         let name = app.textFields["event-title"]
         XCTAssertTrue(name.waitForExistence(timeout: 5)); name.tap(); name.typeText("Design review\n")
+        let more = app.buttons["More details"]; reveal(more); more.tap()
         let duration = app.switches["event-duration-toggle"]
         reveal(duration); duration.coordinate(withNormalizedOffset: CGVector(dx: 0.92, dy: 0.5)).tap(); XCTAssertEqual(duration.value as? String, "1")
         capture("40 Meeting schedule")
@@ -945,10 +941,10 @@ final class AurumUITests: XCTestCase {
         let name = app.textFields["place-name"]; name.tap(); name.typeText("Par")
         XCTAssertTrue(app.buttons["place-name-suggestion-0"].waitForExistence(timeout: 5))
         app.buttons["place-name-suggestion-0"].tap()
-        app.buttons["Location & contact"].tap()
-        XCTAssertEqual(app.textFields["place-city"].value as? String, "Paris")
-        XCTAssertEqual(app.textFields["place-address"].value as? String, "10 Avenue Example, Paris, France")
-        app.buttons["Map coordinates"].tap()
+        XCTAssertTrue(app.staticTexts["10 Avenue Example, Paris, France"].exists)
+        XCTAssertTrue(app.staticTexts["place-map-ready"].exists)
+        XCTAssertFalse(app.textFields["place-address"].exists)
+        XCTAssertFalse(app.buttons["Map coordinates"].exists)
         capture("37 Autocomplete place details")
         app.buttons["rated-save"].tap()
         XCTAssertTrue(app.staticTexts["Paris Test Hotel"].waitForExistence(timeout: 5))
