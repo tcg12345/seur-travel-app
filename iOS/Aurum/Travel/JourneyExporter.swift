@@ -7,7 +7,7 @@ enum JourneyExportFormat: String, CaseIterable, Identifiable { case pdf, txt, js
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("AurumExports/" + UUID().uuidString)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let safeName = document.title.components(separatedBy: CharacterSet.alphanumerics.inverted).filter { !$0.isEmpty }.joined(separator: "-")
-        let url = directory.appendingPathComponent(String((safeName.isEmpty ? "Aurum-journey" : safeName).prefix(80)) + "." + format.rawValue)
+        let url = directory.appendingPathComponent(String((safeName.isEmpty ? "Seur-journey" : safeName).prefix(80)) + "." + format.rawValue)
         let data: Data
         switch format {
         case .json: let encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted, .sortedKeys]; data = try encoder.encode(JourneyArchive(document: document))
@@ -19,7 +19,7 @@ enum JourneyExportFormat: String, CaseIterable, Identifiable { case pdf, txt, js
         return url
     }
     static func text(_ d: JourneyDocument) -> String {
-        var lines = ["AURUM", d.title, "TRIP", d.routeLabel, d.description]
+        var lines = ["SEUR", d.title, "TRIP", d.routeLabel, d.description]
         if let start = d.startDate { lines.append("Dates: \(start) – \(d.endDate ?? start)") }
         if !d.stops.isEmpty || !d.hotels.isEmpty || !d.flights.isEmpty || !d.events.isEmpty {
             lines += ["", "YOUR ROUTE"] + d.stops.map { "\($0.name) \($0.code) · \($0.nights) nights" + (d.dateMode == .dates ? " · \($0.arrival) – \($0.departure)" : "") }
@@ -84,7 +84,7 @@ enum JourneyExportFormat: String, CaseIterable, Identifiable { case pdf, txt, js
             func newPage() {
                 context.beginPage(); page += 1; y = 57
                 UIColor(red: 0.98, green: 0.97, blue: 0.95, alpha: 1).setFill(); context.fill(bounds)
-                ("AURUM    /    \("THE WHOLE JOURNEY")" as NSString).draw(at: CGPoint(x: 42, y: 28), withAttributes: [.font: UIFont.systemFont(ofSize: 9, weight: .semibold), .foregroundColor: UIColor.brown])
+                ("SEUR    /    \("THE WHOLE JOURNEY")" as NSString).draw(at: CGPoint(x: 42, y: 28), withAttributes: [.font: UIFont.systemFont(ofSize: 9, weight: .semibold), .foregroundColor: UIColor.brown])
                 ("\(page)" as NSString).draw(at: CGPoint(x: 545, y: 808), withAttributes: [.font: UIFont.systemFont(ofSize: 9), .foregroundColor: UIColor.darkGray])
             }
             newPage()

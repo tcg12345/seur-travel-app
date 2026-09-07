@@ -3,6 +3,7 @@ import MapKit
 import UniformTypeIdentifiers
 
 struct TravelHubView: View {
+    @Environment(TravelAPI.self) private var api
     @Environment(JourneyLibrary.self) private var library
     @Environment(TravelStore.self) private var store
     @State private var section = "Trips"
@@ -19,25 +20,23 @@ struct TravelHubView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
-                VStack(alignment: .leading, spacing: 10) {
-                    Eyebrow(text: "A life well travelled")
-                    Editorial("The journey,\nyours to make.", size: 38)
-                    Text("Plan what’s next. Remember what mattered.").font(.subheadline).foregroundStyle(.secondary)
-                }.padding(.top, 10)
                 Picker("Travel tool", selection: $section) { Text("Trips").tag("Trips"); Text("Friends").tag("Friends") }.pickerStyle(.segmented).accessibilityIdentifier("travel-tool")
                 if section == "Friends" { TravelFriendsView() }
                 else {
-                    HStack {
-                        Menu { Picker("Show", selection: $filter) { ForEach(["All", "Private", "Friends", "Public"], id: \.self) { Text($0) } } } label: { Label(filter == "All" ? "All journeys" : filter, systemImage: "line.3.horizontal.decrease") }.font(.subheadline)
+                    if !library.documents.isEmpty { HStack {
+                        Menu { Picker("Show", selection: $filter) { ForEach(["All", "Private", "Friends", "Public"], id: \.self) { Text($0) } } } label: { Label(filter == "All" ? "All trips" : filter, systemImage: "line.3.horizontal.decrease") }.font(.subheadline)
                         Spacer()
                         Button { withAnimation(.smooth) { grid.toggle() } } label: { Image(systemName: grid ? "list.bullet" : "square.grid.2x2").frame(width: 38, height: 38) }.buttonStyle(.glass).accessibilityLabel(grid ? "List view" : "Grid view")
-                    }
+                    } }
                     if documents.isEmpty {
                         VStack(spacing: 18) {
                             Image(systemName: "point.topleft.down.to.point.bottomright.curvepath").font(.system(size: 40, weight: .ultraLight)).foregroundStyle(Color.bronze)
-                            Editorial(query.isEmpty ? "A world of possibilities." : "No journeys found.", size: 27)
-                            Text("Your plans, stays, flights and favourite memories. One trip, from the first idea to the last photograph.").font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
-                            Button { newJourney = true } label: { Label("Create trip", systemImage: "plus").padding(.vertical, 10) }.buttonStyle(.glassProminent).accessibilityIdentifier("travel-create")
+                            Text(query.isEmpty && filter == "All" ? "Your next trip" : "No trips found").font(.title2.weight(.semibold))
+                            if !query.isEmpty || filter != "All" {
+                                Button("Clear filters") { query = ""; filter = "All" }.buttonStyle(.glass)
+                            } else {
+                                Button { newJourney = true } label: { Label("Create trip", systemImage: "plus").padding(.vertical, 10) }.buttonStyle(.glassProminent).accessibilityIdentifier("travel-create")
+                            }
                         }.frame(maxWidth: .infinity).padding(.vertical, 30).padding(.horizontal, 15).background(.background, in: .rect(cornerRadius: 28))
                     } else {
                         LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 14), count: grid ? 2 : 1), spacing: 16) {
@@ -52,18 +51,18 @@ struct TravelHubView: View {
                 }
             }.padding(22)
         }.background(Color.canvas).navigationTitle("Travel").navigationBarTitleDisplayMode(.inline)
-            .searchable(text: $query, prompt: "Search journeys or destinations")
+            .searchable(text: $query, prompt: "Search trips or destinations")
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) { Button { account = true } label: { Image(systemName: "person.crop.circle") }.accessibilityLabel("Travel account") }
+                ToolbarItem(placement: .topBarLeading) { Button { account = true } label: { if api.isSignedIn { Image(systemName: "person.crop.circle") } else { Text("Sign in").font(.subheadline.weight(.medium)) } }.accessibilityLabel("Travel account") }
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
                         Button("New trip", systemImage: "plus") { section = "Trips"; newJourney = true }
-                        Button("Import Aurum JSON", systemImage: "square.and.arrow.down") { importing = true }
+                        Button("Import Seur JSON", systemImage: "square.and.arrow.down") { importing = true }
                     } label: { Image(systemName: "plus") }.accessibilityIdentifier("travel-new-menu")
                 }
             }
             .sheet(isPresented: $newJourney) { TripCreationView() }
-            .sheet(isPresented: $account) { TravelAccountView() }
+            .navigationDestination(isPresented: $account) { TravelAccountPage() }
             .fileImporter(isPresented: $importing, allowedContentTypes: [.json]) { result in
                 do { let url = try result.get(); let accessed = url.startAccessingSecurityScopedResource(); defer { if accessed { url.stopAccessingSecurityScopedResource() } }; _ = try library.importData(Data(contentsOf: url)) } catch { self.error = error.localizedDescription }
             }
@@ -74,14 +73,13 @@ struct TravelHubView: View {
 private struct JourneyCard: View {
     let document: JourneyDocument
     var compact = false
-    private var accent: Color { Color(red: 0.19, green: 0.31, blue: 0.29) }
+    private var accent: Color { Color.brandInk }
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             ZStack(alignment: .bottomLeading) {
                 LinearGradient(colors: [accent, accent.opacity(0.75)], startPoint: .topLeading, endPoint: .bottomTrailing)
                 Image(systemName: "airplane").font(.system(size: compact ? 70 : 100, weight: .ultraLight)).rotationEffect(.degrees(-15)).foregroundStyle(.white.opacity(0.12)).frame(maxWidth: .infinity, alignment: .trailing).padding(15)
                 VStack(alignment: .leading, spacing: 8) {
-                    Label("THE WHOLE JOURNEY", systemImage: "map").font(.system(size: 9, weight: .semibold)).tracking(1.5)
                     Text(document.routeLabel.isEmpty ? "Your journey" : document.routeLabel).font(.system(compact ? .title3 : .title2, design: .serif)).lineLimit(2)
                 }.foregroundStyle(.white).padding(20)
             }.frame(height: compact ? 138 : 150)
@@ -219,7 +217,7 @@ struct JourneyDetailView: View {
                     VStack(alignment: .leading, spacing: 14) {
                         HStack { SectionHeading(title: day.label, subtitle: day.city); Spacer(); Button { addingDay = day; addingPlan = true } label: { Image(systemName: "plus").frame(width: 35, height: 35) }.buttonStyle(.glass).accessibilityLabel("Add event on \(day.label) in \(day.city)") }
                         let events = d.events.filter { $0.stopID == day.stopID && $0.day == day.localDay }.sorted { $0.sortMinute < $1.sortMinute }
-                        if events.isEmpty { Text("A little space for serendipity.").font(.subheadline).foregroundStyle(.secondary).padding(.vertical, 10) }
+                        if events.isEmpty { Text("No plans yet").font(.subheadline).foregroundStyle(.secondary).padding(.vertical, 10) }
                         ForEach(events) { item in
                             Button { event = item } label: {
                                 HStack(alignment: .top, spacing: 15) {
@@ -239,17 +237,17 @@ struct JourneyDetailView: View {
             }
             if mode == "Map" || (d.hotels.isEmpty && d.flights.isEmpty) { bookingSection(d) }
             VStack(alignment: .leading, spacing: 14) {
-                SectionHeading(title: "The little details add up")
+                SectionHeading(title: "Budget")
                 priceRows(d.eventTotals, label: "Events")
                 Divider()
                 priceRows(d.totals, label: "Total planned cost")
-                Text("Each repeated event counts once per day. Different currencies stay separate. Missing prices are excluded.").font(.caption).foregroundStyle(.secondary)
+                DisclosureGroup("How totals work") { Text("Repeated events count once per day. Currencies stay separate. Only added prices count.").font(.caption).foregroundStyle(.secondary) }.font(.caption)
             }.padding(21).background(.background, in: .rect(cornerRadius: 25))
         }
     }
     private func bookingSection(_ d: JourneyDocument) -> some View {
         VStack(alignment: .leading, spacing: 14) {
-            SectionHeading(title: "The stay & the journey", subtitle: "Your booking details, all together.")
+            SectionHeading(title: "Bookings")
             ForEach(d.hotels) { item in Button { hotel = item } label: { bookingRow(item.place.name, subtitle: "\(TravelDay.label(item.checkIn)) – \(TravelDay.label(item.checkOut)) · \(item.rooms) rooms", symbol: "bed.double", cost: item.cost) }.buttonStyle(PressStyle()).contextMenu { Button("Log or rate stay", systemImage: "star.bubble") { rated = d.places.first(where: { $0.place.id == item.place.id && $0.place.source == item.place.source }) ?? RatedPlace(place: item.place) } } }
             ForEach(d.flights) { item in Button { flight = item } label: { bookingRow("\(item.departureAirport) → \(item.arrivalAirport)", subtitle: "\(item.airline) \(item.flightNumber) · \(item.departureDay)", symbol: "airplane", cost: item.cost) }.buttonStyle(PressStyle()) }
             if d.hotels.isEmpty && d.flights.isEmpty { Text("Attach a hotel or flight using Add to plan.").font(.subheadline).foregroundStyle(.secondary) }
@@ -311,7 +309,7 @@ struct JourneyMapView: View {
     }
     var body: some View {
         VStack(spacing: 9) {
-            if plotted.isEmpty { ContentUnavailableView("No mapped places yet", systemImage: "map", description: Text("Search for a place or add coordinates to put it on your map.")) }
+            if plotted.isEmpty { ContentUnavailableView("No mapped places yet", systemImage: "map", description: Text("Choose a place to add it to your map.")) }
             else {
                 Map(initialPosition: initialCamera, selection: $selected) { ForEach(plotted) { place in Marker(place.name, systemImage: place.category.symbol, coordinate: CLLocationCoordinate2D(latitude: place.latitude!, longitude: place.longitude!)).tint(Color.bronze).tag(place.id) } }.id(plotted).mapStyle(.standard(elevation: .realistic)).mapControls { MapCompass(); MapScaleView() }
                 if let selected, let place = plotted.first(where: { $0.id == selected }) {
@@ -319,7 +317,7 @@ struct JourneyMapView: View {
                 }
             }
             if !plotted.isEmpty { Text("\(plotted.count) \(plotted.count == 1 ? "place" : "places") on your map").font(.caption2).foregroundStyle(.secondary).accessibilityIdentifier("trip-map-count") }
-            if places.count > plotted.count { Text("Only places with coordinates are plotted; duplicate locations share a pin.").font(.caption2).foregroundStyle(.secondary).padding(.horizontal) }
+            if places.count > plotted.count { Text("\(places.count - plotted.count) places without a map location").font(.caption2).foregroundStyle(.secondary).padding(.horizontal) }
         }
     }
 }
@@ -334,14 +332,9 @@ struct ItineraryItemChooser: View {
     @Environment(\.dismiss) private var dismiss
     let select: (String) -> Void
     var body: some View {
-        NavigationStack {
+        TripEditorNavigation {
             ScrollView {
                 VStack(alignment: .leading, spacing: 28) {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Eyebrow(text: "A day, beautifully considered")
-                        Editorial("What’s on your agenda?", size: 32)
-                        Text("From a table for two to a moment that’s entirely yours.").font(.subheadline).foregroundStyle(.secondary)
-                    }.padding(.top, 8)
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Stays & flights").font(.subheadline.weight(.semibold))
                         HStack(spacing: 10) { option("Hotel booking", symbol: "bed.double", value: "hotel"); option("Flight booking", symbol: "airplane", value: "flight") }
@@ -369,49 +362,47 @@ struct ItineraryItemChooser: View {
             VStack(alignment: .leading, spacing: 14) {
                 Image(systemName: symbol).font(.title3).foregroundStyle(Color.bronze)
                 Text(title).font(.subheadline.weight(.medium)).foregroundStyle(.primary).fixedSize(horizontal: false, vertical: true)
-            }.frame(maxWidth: .infinity, minHeight: 88, alignment: .topLeading).padding(16).background(Color.cardSurface, in: .rect(cornerRadius: 21))
+            }.frame(maxWidth: .infinity, minHeight: 64, alignment: .topLeading).padding(16).background(Color.cardSurface, in: .rect(cornerRadius: 21))
         }.buttonStyle(PressStyle()).accessibilityIdentifier("add-plan-" + value)
     }
 }
 
-/// Keep the chooser mounted while presenting an editor. There is no race between sibling sheets.
+/// The chooser and each editor share one modal and one native navigation stack.
 struct TripAddFlowView: View {
     @Environment(JourneyLibrary.self) private var library
     @Environment(\.dismiss) private var dismiss
     let documentID: UUID
     var day: JourneyAgendaDay?
     @State private var route: AddRoute?
-    @State private var saved = false
     @State private var pendingChoice: String?
     private var document: JourneyDocument? { library.documents.first { $0.id == documentID } }
-    private enum AddRoute: Identifiable {
+    private enum AddRoute: Hashable, Identifiable {
         case event(JourneyEvent), hotel(HotelReservation), flight(FlightReservation), ideas, destination
         var id: String {
             switch self { case .event(let item): "event-" + item.id.uuidString; case .hotel(let item): "hotel-" + item.id.uuidString; case .flight(let item): "flight-" + item.id.uuidString; case .ideas: "ideas"; case .destination: "destination" }
         }
     }
     var body: some View {
-        ItineraryItemChooser(select: choose)
-            .sheet(item: $route, onDismiss: {
-                if saved { dismiss() }
-                else if let choice = pendingChoice {
-                    pendingChoice = nil
-                    if document?.stops.isEmpty == false { choose(choice) }
+        NavigationStack {
+            ItineraryItemChooser(select: choose)
+                .navigationDestination(item: $route) { route in
+                    Group {
+                        switch route {
+                        case .event(let value): JourneyEventEditor(documentID: documentID, event: value, onSaved: { dismiss() })
+                        case .hotel(let value): HotelReservationEditor(documentID: documentID, reservation: value, onSaved: { dismiss() })
+                        case .flight(let value): FlightReservationEditor(documentID: documentID, reservation: value, onSaved: { dismiss() })
+                        case .ideas: ActivityIdeasView(documentID: documentID, onSaved: { dismiss() })
+                        case .destination: AddTripDestinationView(documentID: documentID, onContinue: {
+                            if let choice = pendingChoice { pendingChoice = nil; choose(choice) }
+                        })
+                        }
+                    }.id(route.id)
                 }
-            }) { route in
-                switch route {
-                case .event(let value): JourneyEventEditor(documentID: documentID, event: value, onSaved: { saved = true })
-                case .hotel(let value): HotelReservationEditor(documentID: documentID, reservation: value, onSaved: { saved = true })
-                case .flight(let value): FlightReservationEditor(documentID: documentID, reservation: value, onSaved: { saved = true })
-                case .ideas: ActivityIdeasView(documentID: documentID)
-                case .destination: AddTripDestinationView(documentID: documentID)
-                }
-            }
+        }.environment(\.tripEditorEmbedded, true).presentationDragIndicator(.visible)
     }
     private func choose(_ choice: String) {
         guard var document else { return }
         if document.preparePlanningRoute(), !library.save(document) { return }
-        saved = false
         let stop = document.stops.first(where: { $0.id == day?.stopID }) ?? document.stops.first
         switch choice {
         case "hotel":
@@ -442,13 +433,14 @@ struct AddTripDestinationView: View {
     @Environment(\.dismiss) private var dismiss
     let documentID: UUID
     var fallbackDestination = ""
+    var onContinue: (() -> Void)? = nil
     @State private var destination = ""
     @State private var selection: LocationSelection?
     @State private var start = TravelDay.key(.now)
     @State private var end = TravelDay.adding(3, to: TravelDay.key(.now))
     @State private var error: String?
     var body: some View {
-        NavigationStack {
+        TripEditorNavigation {
             Form {
                 Section { LocationAutocompleteField("Destination", text: $destination, identifier: "add-trip-destination", onEdit: { selection = nil }) { selection = $0 } }
                 Section("Travel dates") { DayField(title: "Arrival", value: $start); DayField(title: "Departure", value: $end) }
@@ -461,7 +453,7 @@ struct AddTripDestinationView: View {
                         guard end > start else { error = "Choose a departure after your arrival."; return }
                         document.dateMode = .dates; document.startDate = start; document.endDate = end; document.destination = destination.trimmingCharacters(in: .whitespacesAndNewlines)
                         document.stops.append(JourneyStop(name: destination.trimmingCharacters(in: .whitespacesAndNewlines), country: selection?.country ?? "", arrival: start, nights: TravelDay.distance(start, end), latitude: selection?.place.latitude, longitude: selection?.place.longitude))
-                        if library.save(document) { dismiss() } else { error = library.error }
+                        if library.save(document) { if let onContinue { onContinue() } else { dismiss() } } else { error = library.error }
                     }.disabled(destination.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty).accessibilityIdentifier("add-trip-continue") }
                 }
                 .onAppear { if let document = library.documents.first(where: { $0.id == documentID }) { destination = document.destination.isEmpty ? fallbackDestination : document.destination; start = document.startDate ?? start; end = document.endDate ?? TravelDay.adding(3, to: start) } }

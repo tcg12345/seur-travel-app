@@ -30,7 +30,7 @@ struct MembershipPreviewView: View {
                         membershipCard
                         VStack(alignment: .leading, spacing: 10) {
                             Editorial("A little more\nextraordinary.", size: 32).dynamicTypeSize(...DynamicTypeSize.accessibility1).accessibilityAddTraits(.isHeader).accessibilityIdentifier("membership-title")
-                            Text("Meet Aurum Reserve. A preview of a more considered way to travel.").font(.subheadline).foregroundStyle(.secondary).lineSpacing(3)
+                            Text("Meet Seur Reserve. A preview of a more considered way to travel.").font(.subheadline).foregroundStyle(.secondary).lineSpacing(3)
                         }
                         VStack(spacing: 11) { ForEach(PreviewPlan.allCases) { plan in planRow(plan) } }
                         VStack(alignment: .leading, spacing: 17) {
@@ -51,7 +51,7 @@ struct MembershipPreviewView: View {
                 Button {
                     if success { onFinish() } else { confirming = true }
                 } label: {
-                    HStack { Text(success ? "Explore Aurum" : typeSize.isAccessibilitySize ? "Preview plan" : "Preview \(selected.title.lowercased()) membership"); Spacer(); Image(systemName: "arrow.right") }.onboardingPrimary()
+                    HStack { Text(success ? "Explore Seur" : typeSize.isAccessibilitySize ? "Preview plan" : "Preview \(selected.title.lowercased()) membership"); Spacer(); Image(systemName: "arrow.right") }.onboardingPrimary()
                 }.buttonStyle(PressStyle()).accessibilityIdentifier(success ? "membership-finish" : "membership-preview")
                 if !success { Button("Continue without membership", action: onFinish).font(.subheadline).frame(minHeight: 36).accessibilityIdentifier("membership-skip") }
                 Text("No charge. No trial. No automatic renewal.").font(.caption2).foregroundStyle(.secondary).dynamicTypeSize(...DynamicTypeSize.xxxLarge)
@@ -65,10 +65,10 @@ struct MembershipPreviewView: View {
     }
     private var membershipCard: some View {
         ZStack(alignment: .bottomLeading) {
-            RoundedRectangle(cornerRadius: 27).fill(LinearGradient(colors: [Color(red: 0.12, green: 0.23, blue: 0.20), Color(red: 0.35, green: 0.44, blue: 0.37)], startPoint: .topLeading, endPoint: .bottomTrailing))
+            RoundedRectangle(cornerRadius: 27).fill(LinearGradient(colors: [Color.brandInk, Color.brandBronze], startPoint: .topLeading, endPoint: .bottomTrailing))
             Image(systemName: "globe.europe.africa").font(.system(size: 150, weight: .ultraLight)).foregroundStyle(.white.opacity(0.09)).rotationEffect(.degrees(-15)).frame(maxWidth: .infinity, alignment: .trailing).padding(.trailing, 10).accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 30) {
-                HStack { Text("AURUM").font(.system(size: 11, weight: .medium)).tracking(4); Spacer(); Image(systemName: "sparkle").font(.title2) }
+                HStack(spacing: 10) { SeurLogo(size: 30); Text("SEUR").font(.system(size: 11, weight: .medium)).tracking(4); Spacer(); Image(systemName: "sparkle").font(.title2) }
                 HStack(alignment: .bottom) { Text("Reserve").font(.system(size: 34, design: .serif)); Spacer(); Text("DESIGN PREVIEW").font(.system(size: 8, weight: .medium)).tracking(1.8) }
             }.foregroundStyle(Color(red: 0.93, green: 0.88, blue: 0.75)).padding(24)
         }.frame(height: 136).accessibilityElement(children: .combine)
@@ -98,7 +98,7 @@ struct MembershipPreviewView: View {
                 VStack(alignment: .leading, spacing: 22) {
                     Label("SIMULATED SUBSCRIPTION", systemImage: "sparkles").font(.caption.weight(.semibold)).tracking(1).foregroundStyle(Color.bronze)
                     Editorial("Try the feeling.\nKeep it effortless.", size: 32)
-                    LabeledContent("Aurum Reserve", value: selected.title).font(.headline)
+                    LabeledContent("Seur Reserve", value: selected.title).font(.headline)
                     LabeledContent("Example price", value: "\(selected.price) \(selected.interval)")
                     LabeledContent("Charged today", value: "$0.00").foregroundStyle(Color.bronze)
                     Text("This is a design preview. Confirming only saves your chosen plan on this device. It does not create a subscription, start a trial, request payment details or charge you now or later.").font(.subheadline).foregroundStyle(.secondary).lineSpacing(4)
@@ -127,9 +127,9 @@ struct MembershipPreviewView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     Editorial("Just a preview.", size: 34)
-                    Text("Aurum Reserve is an interactive subscription design, not an offer for sale. Prices and membership packaging are illustrative.")
+                    Text("Seur Reserve is an interactive subscription design, not an offer for sale. Prices and membership packaging are illustrative.")
                     Text("No Apple purchase sheet, payment processing, billing, trial, renewal or subscription entitlement is connected. Restore preview reads only a previously saved preview on this device; it cannot restore an App Store purchase.")
-                    Text("Travel preferences and the selected preview plan are stored locally. Onboarding does not create an account, upload these preferences or request notifications, tracking or location access.")
+                    Text("Travel preferences and the selected preview plan are stored locally. Account creation and sign-in connect to Seur Cloud. No notification, tracking or location permission is requested.")
                     Text("All existing features stay available. Live provider features still depend on their separate backend configuration.")
                 }.font(.subheadline).lineSpacing(4).padding(26)
             }.background(Color.canvas).navigationTitle("About this preview").navigationBarTitleDisplayMode(.inline)

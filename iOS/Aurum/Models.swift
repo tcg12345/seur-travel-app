@@ -220,6 +220,6 @@ struct FlightSearch {
         toastTask = Task { try? await Task.sleep(for: .seconds(3)); if !Task.isCancelled { message = nil } }
     }
     var exportText: String {
-        "AURUM — MY ITINERARY\nDraft plans. Confirm reservations with providers.\n\n" + plans.sorted { $0.start < $1.start }.map { "\($0.start.formatted(date: .abbreviated, time: .omitted)) · \($0.kind)\n\($0.name) — \($0.city)\n\($0.guests) adults\n" }.joined(separator: "\n")
+        "SEUR — MY ITINERARY\nDraft plans. Confirm reservations with providers.\n\n" + plans.sorted { $0.start < $1.start }.map { "\($0.start.formatted(date: .abbreviated, time: .omitted)) · \($0.kind)\n\($0.name) — \($0.city)\n\($0.guests) adults\n" }.joined(separator: "\n")
     }
 }

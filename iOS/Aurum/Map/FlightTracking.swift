@@ -54,10 +54,10 @@ struct FlightPosition: Codable {
     var valid: Bool { latitude.isFinite && longitude.isFinite && (-90...90).contains(latitude) && (-180...180).contains(longitude) }
 }
 struct MapFlight: Identifiable {
-    var tripID: UUID
+    var tripID: UUID?
     var tripTitle: String
     var flight: FlightReservation
-    var id: String { tripID.uuidString + flight.id.uuidString }
+    var id: String { (tripID?.uuidString ?? "standalone-") + flight.id.uuidString }
     var title: String { flight.flightNumber.isEmpty ? "Your flight" : flight.flightNumber.uppercased() }
     var departure: CLLocationCoordinate2D? { Self.coordinate(flight.departureLatitude, flight.departureLongitude) }
     var arrival: CLLocationCoordinate2D? { Self.coordinate(flight.arrivalLatitude, flight.arrivalLongitude) }
@@ -171,7 +171,7 @@ struct FlightDetailPanel: View {
             }.padding(18).background(Color.cardSurface, in: .rect(cornerRadius: 23))
             if let link = validatedURL(flight.flight.bookingLink) { Link(destination: link) { Label("Open booking", systemImage: "arrow.up.right.square") } }
             if !flight.flight.notes.isEmpty { Text(flight.flight.notes).font(.subheadline) }
-            Text("FlightAware supplies connected flight information. Missing fields remain unreported; saved times are never presented as live predictions.").font(.caption2).foregroundStyle(.secondary)
+            Text("FlightAware supplies connected flight information. Missing fields remain unreported; saved times are never presented as live predictions.").font(.caption2).foregroundStyle(.secondary).accessibilityIdentifier("flight-detail-footer")
         }.task(id: "\(flight.flight.hashValue)-\(scenePhase)") {
             guard scenePhase == .active else { return }
             await tracker.load(flight.flight, api: api)
@@ -190,13 +190,23 @@ struct FlightDetailPanel: View {
 struct FlightDataInfoView: View {
     @Environment(\.dismiss) private var dismiss
     var body: some View {
-        NavigationStack { ScrollView { VStack(alignment: .leading, spacing: 24) {
-            Eyebrow(text: "Flight intelligence"); Editorial("A clearer picture\nof your journey.", size: 35)
-            Text("Your saved flights and routes work immediately. Connected flight data adds updated departure and arrival times, delays, gates, terminals, aircraft details and reported positions when available.")
-            Text("Historical access adds a recent delay sample. Availability varies by airline, airport and subscription. Aurum does not reproduce Flighty’s proprietary predictions.").foregroundStyle(.secondary)
-            Link("Explore FlightAware AeroAPI", destination: URL(string: "https://www.flightaware.com/commercial/aeroapi/")!).buttonStyle(.glass)
-            Text("The app’s operator connects the provider securely through Aurum’s backend. No flight API secret belongs in the iPhone app. Background alerts and Live Activities require an additional notification service.").font(.subheadline).foregroundStyle(.secondary)
-        }.padding(24) }.background(Color.canvas).navigationTitle("Live flight data").navigationBarTitleDisplayMode(.inline).toolbar { Button("Done") { dismiss() } } }
+        NavigationStack {
+            Form {
+                Section("Live status") {
+                    Text("Arrival times, delays, gates and aircraft details update when provided by the airline or tracking service.")
+                }
+                Section("On the map") {
+                    Label("Dashed route · planned flight", systemImage: "point.topleft.down.to.point.bottomright.curvepath")
+                    Label("Aircraft marker · reported position", systemImage: "airplane")
+                }
+                Section("Delay history") {
+                    Text("Recent departures can show a delay sample. Coverage depends on the airline and available flight data.")
+                }
+                Section { Link("FlightAware", destination: URL(string: "https://www.flightaware.com/commercial/aeroapi/")!) }
+            }.scrollContentBackground(.hidden).background(Color.canvas)
+                .navigationTitle("Flight information").navigationBarTitleDisplayMode(.inline)
+                .toolbar { Button("Done") { dismiss() } }
+        }
     }
 }
 
@@ -220,3 +230,214 @@ struct FlightDataInfoView: View {
     }
 }
 #endif
+
+struct FlightAirport: Decodable {
+    var code: String
+    var name: String
+    var latitude: Double
+    var longitude: Double
+    var timeZone: String
+}
+
+struct FlightAirline: Identifiable, Hashable {
+    var name: String
+    var code: String
+    var id: String { code }
+    static let collection: [FlightAirline] = [
+        ("Aer Lingus", "EI"), ("Aeromexico", "AM"), ("Air Canada", "AC"), ("Air China", "CA"),
+        ("Air France", "AF"), ("Air India", "AI"), ("Air New Zealand", "NZ"), ("Air Portugal · TAP", "TP"),
+        ("Air Transat", "TS"), ("Alaska Airlines", "AS"), ("All Nippon Airways · ANA", "NH"),
+        ("American Airlines", "AA"), ("Asiana Airlines", "OZ"), ("Austrian Airlines", "OS"),
+        ("Avianca", "AV"), ("British Airways", "BA"), ("Brussels Airlines", "SN"),
+        ("Cathay Pacific", "CX"), ("China Airlines", "CI"), ("China Eastern", "MU"), ("China Southern", "CZ"),
+        ("Copa Airlines", "CM"), ("Delta Air Lines", "DL"), ("easyJet", "U2"), ("Egyptair", "MS"),
+        ("Emirates", "EK"), ("Ethiopian Airlines", "ET"), ("Etihad Airways", "EY"), ("EVA Air", "BR"),
+        ("Fiji Airways", "FJ"), ("Finnair", "AY"), ("Frontier Airlines", "F9"), ("Gulf Air", "GF"),
+        ("Hawaiian Airlines", "HA"), ("Iberia", "IB"), ("Icelandair", "FI"), ("IndiGo", "6E"),
+        ("ITA Airways", "AZ"), ("Japan Airlines", "JL"), ("JetBlue", "B6"), ("Jetstar", "JQ"),
+        ("Kenya Airways", "KQ"), ("KLM", "KL"), ("Korean Air", "KE"), ("LATAM", "LA"),
+        ("LOT Polish Airlines", "LO"), ("Lufthansa", "LH"), ("Malaysia Airlines", "MH"),
+        ("Norwegian", "DY"), ("Oman Air", "WY"), ("Philippine Airlines", "PR"), ("Qantas", "QF"),
+        ("Qatar Airways", "QR"), ("Royal Air Maroc", "AT"), ("Royal Jordanian", "RJ"), ("Ryanair", "FR"),
+        ("Saudia", "SV"), ("Scandinavian Airlines · SAS", "SK"), ("Singapore Airlines", "SQ"),
+        ("South African Airways", "SA"), ("Southwest Airlines", "WN"), ("Spirit Airlines", "NK"),
+        ("SriLankan Airlines", "UL"), ("Swiss", "LX"), ("Thai Airways", "TG"), ("Turkish Airlines", "TK"),
+        ("United Airlines", "UA"), ("Vietnam Airlines", "VN"), ("Virgin Atlantic", "VS"),
+        ("Virgin Australia", "VA"), ("Vueling", "VY"), ("WestJet", "WS"), ("Wizz Air", "W6")
+    ].map { FlightAirline(name: $0.0, code: $0.1) }
+    static func matches(_ query: String) -> [FlightAirline] {
+        let term = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        let results = collection.filter { term.isEmpty || $0.name.localizedCaseInsensitiveContains(term) || $0.code.localizedCaseInsensitiveContains(term) }
+        if results.isEmpty && term.range(of: "^[A-Za-z0-9]{2,3}$", options: .regularExpression) != nil {
+            return [.init(name: "Airline code " + term.uppercased(), code: term.uppercased())]
+        }
+        return Array(results.prefix(8))
+    }
+    static func identified(by ident: String) -> FlightAirline? {
+        collection.first { ident.uppercased().hasPrefix($0.code) && ident.dropFirst($0.code.count).first?.isNumber == true }
+    }
+}
+
+extension FlightSnapshot {
+    func reservation(airline: String) -> FlightReservation {
+        func local(_ text: String?, zone: String, format: String) -> String {
+            guard let date = Self.date(text) else { return "" }
+            let formatter = DateFormatter(); formatter.locale = Locale(identifier: "en_US_POSIX"); formatter.timeZone = TimeZone(identifier: zone) ?? TimeZone(secondsFromGMT: 0); formatter.dateFormat = format
+            return formatter.string(from: date)
+        }
+        return FlightReservation(airline: airline, flightNumber: ident, departureAirport: origin, arrivalAirport: destination,
+            departureDay: local(scheduledOut ?? scheduledOff, zone: originZone, format: "yyyy-MM-dd"),
+            arrivalDay: local(scheduledIn ?? scheduledOn, zone: destinationZone, format: "yyyy-MM-dd"),
+            departureTime: local(scheduledOut ?? scheduledOff, zone: originZone, format: "HH:mm"),
+            arrivalTime: local(scheduledIn ?? scheduledOn, zone: destinationZone, format: "HH:mm"),
+            departureZone: originZone, arrivalZone: destinationZone)
+    }
+}
+
+struct FlightAddView: View {
+    @Environment(TravelAPI.self) private var api
+    @Environment(\.dismiss) private var dismiss
+    var onAdded: (FlightReservation) -> Void
+    @State private var method = "Flight number"
+    @State private var airlineText = ""
+    @State private var airline: FlightAirline?
+    @State private var number = ""
+    @State private var day = Date.now
+    @State private var origin = ""
+    @State private var destination = ""
+    @State private var feed: FlightFeed?
+    @State private var error: String?
+    @State private var loading = false
+    @State private var preparing: String?
+    @State private var draft: FlightReservation?
+    @State private var accountSheet = false
+    private var needsAccount: Bool {
+        #if DEBUG
+        if FlightMapFixtures.enabled { return false }
+        #endif
+        return !api.isSignedIn
+    }
+    @FocusState private var editingAirline: Bool
+    private var canSearch: Bool {
+        if method == "Flight number" { return airline != nil && number.range(of: "^[0-9]{1,4}[A-Za-z]?$", options: .regularExpression) != nil }
+        return Self.airportCode(origin) != nil && Self.airportCode(destination) != nil && origin != destination
+    }
+    static func airportCode(_ text: String) -> String? {
+        let value = text.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        return value.range(of: "^[A-Z0-9]{3,4}$", options: .regularExpression) == nil ? nil : value
+    }
+    var body: some View {
+        Group {
+            if let draft {
+                FlightReservationEditor(documentID: nil, reservation: draft, onCancel: { self.draft = nil }, onSaved: {
+                    if let saved = api.savedFlights.first(where: { $0.id == draft.id }) { onAdded(saved) }
+                    dismiss()
+                })
+            } else {
+                NavigationStack {
+                    Form {
+                        Section {
+                            Picker("Find by", selection: $method) { Text("Flight number").tag("Flight number"); Text("Route").tag("Route") }.pickerStyle(.segmented).accessibilityIdentifier("flight-search-method")
+                        }.listRowBackground(Color.clear).listRowInsets(EdgeInsets())
+                        if needsAccount { Section { Button { accountSheet = true } label: { Label("Sign in to search flights", systemImage: "person.crop.circle") } } }
+                        if method == "Flight number" { airlineSection } else { routeSection }
+                        Section { DatePicker("Departure date", selection: $day, displayedComponents: .date).accessibilityIdentifier("flight-search-date") } footer: { Text("Departure airport’s local date.") }
+                        Section {
+                            Button { Task { await search() } } label: { HStack { Spacer(); if loading { ProgressView() }; Text(loading ? "Finding flights…" : "Find flight").fontWeight(.semibold); Spacer() } }.disabled(!canSearch || loading || preparing != nil).accessibilityIdentifier("flight-find")
+                        }
+                        if let error { Section { Label(error, systemImage: "info.circle").font(.subheadline).foregroundStyle(.secondary).accessibilityIdentifier("flight-search-error") } }
+                        resultsSection
+                        Section {
+                            Button { draft = FlightReservation(airline: airline?.name ?? "", flightNumber: (airline?.code ?? "") + number.uppercased(), departureAirport: origin, arrivalAirport: destination, departureDay: TravelDay.key(day), arrivalDay: TravelDay.key(day)) } label: { Label("Enter flight manually", systemImage: "square.and.pencil") }.disabled(preparing != nil).accessibilityIdentifier("flight-manual")
+                        } footer: { Text("Have a booking for a later date? Add its confirmed schedule now. Live details appear when the provider reports them.") }
+                    }.listSectionSpacing(18).contentMargins(.top, 12, for: .scrollContent)
+                        .scrollDismissesKeyboard(.interactively).scrollContentBackground(.hidden).background(Color.canvas)
+                        .navigationTitle("Add a flight").navigationBarTitleDisplayMode(.inline)
+                        .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
+                }
+            }
+        }.presentationDetents([.large]).presentationDragIndicator(.visible)
+            .fullScreenCover(isPresented: $accountSheet) { TravelAccountView() }
+            .onChange(of: api.isSignedIn) { if api.isSignedIn { accountSheet = false } }
+            .onChange(of: airlineText) { if airlineText != airline?.name { airline = nil }; feed = nil }
+            .onChange(of: method) { feed = nil; error = nil; editingAirline = false }
+            .onChange(of: day) { feed = nil }
+            .onChange(of: origin) { feed = nil }
+            .onChange(of: destination) { feed = nil }
+    }
+    private var airlineSection: some View {
+        Section("Your airline") {
+            HStack {
+                Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+                TextField("Airline name or code", text: $airlineText).focused($editingAirline).autocorrectionDisabled().accessibilityIdentifier("flight-airline-query")
+                if let airline { Text(airline.code).font(.caption.weight(.semibold)).foregroundStyle(Color.bronze) }
+            }
+            if editingAirline {
+                ForEach(FlightAirline.matches(airlineText)) { value in
+                    Button { airline = value; airlineText = value.name; editingAirline = false } label: {
+                        HStack { Text(value.name).foregroundStyle(.primary); Spacer(); Text(value.code).foregroundStyle(.secondary) }
+                    }.accessibilityIdentifier("flight-airline-" + value.code)
+                }
+                if FlightAirline.matches(airlineText).isEmpty { Text("Try the airline’s two- or three-character code.").font(.caption).foregroundStyle(.secondary) }
+            }
+            HStack { Text("Flight number"); Spacer(); TextField("178", text: $number).multilineTextAlignment(.trailing).textInputAutocapitalization(.characters).autocorrectionDisabled().keyboardType(.asciiCapable).accessibilityIdentifier("flight-number-query") }.onChange(of: number) { feed = nil }
+        }
+    }
+    private var routeSection: some View {
+        Section("Your route") {
+            LocationAutocompleteField("Departure airport or code", text: $origin, kind: .airport, identifier: "flight-route-origin") { result in resolveAirport(result, departure: true) }
+            LocationAutocompleteField("Arrival airport or code", text: $destination, kind: .airport, identifier: "flight-route-destination") { result in resolveAirport(result, departure: false) }
+        }
+    }
+    @ViewBuilder private var resultsSection: some View {
+    if let feed {
+        Section("Departures") {
+            ForEach(feed.flights) { flight in
+                Button { Task { await choose(flight) } } label: {
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack { Text(flight.ident).font(.headline); Spacer(); if preparing == flight.id { ProgressView() } else { Image(systemName: "chevron.right").font(.caption) } }
+                        HStack { Text(flight.origin); Image(systemName: "arrow.right").foregroundStyle(Color.bronze); Text(flight.destination) }.font(.system(.title3, design: .rounded, weight: .medium))
+                        Text(FlightSnapshot.time(flight.scheduledOut ?? flight.scheduledOff, zone: flight.originZone) + " · " + flight.status).font(.caption).foregroundStyle(.secondary)
+                    }.foregroundStyle(.primary).padding(.vertical, 8)
+                }.disabled(preparing != nil).accessibilityIdentifier("flight-result-" + flight.id)
+            }
+            if !feed.message.isEmpty { Text(feed.message).font(.caption).foregroundStyle(.secondary) }
+        }
+    }
+    }
+    private func resolveAirport(_ selection: LocationSelection, departure: Bool) {
+        guard let lat = selection.place.latitude, let lon = selection.place.longitude else { return }
+        let selectedText = selection.text
+        Task {
+            do {
+                let airport = try await api.nearbyFlightAirport(latitude: lat, longitude: lon)
+                if departure && origin == selectedText { origin = airport.code }
+                if !departure && destination == selectedText { destination = airport.code }
+            } catch { self.error = error.localizedDescription }
+        }
+    }
+    private func search() async {
+        editingAirline = false; loading = true; error = nil; feed = nil
+        let searchMethod = method, searchDay = TravelDay.key(day), searchNumber = number, searchOrigin = origin, searchDestination = destination, searchAirline = airline
+        defer { loading = false }
+        do {
+            let result: FlightFeed
+            if searchMethod == "Flight number" { result = try await api.flightStatus((searchAirline?.code ?? "") + searchNumber.uppercased(), day: searchDay) }
+            else { result = try await api.flightRoute(origin: Self.airportCode(searchOrigin) ?? "", destination: Self.airportCode(searchDestination) ?? "", day: searchDay) }
+            guard method == searchMethod, TravelDay.key(day) == searchDay, number == searchNumber, origin == searchOrigin, destination == searchDestination, airline == searchAirline else { return }
+            feed = result
+        } catch { self.error = error.localizedDescription }
+    }
+    private func choose(_ flight: FlightSnapshot) async {
+        preparing = flight.id; error = nil; defer { preparing = nil }
+        var value = flight.reservation(airline: FlightAirline.identified(by: flight.ident)?.name ?? airline?.name ?? flight.ident)
+        do {
+            async let departure = api.flightAirport(flight.origin)
+            async let arrival = api.flightAirport(flight.destination)
+            let (a, b) = try await (departure, arrival)
+            value.departureLatitude = a.latitude; value.departureLongitude = a.longitude
+            value.arrivalLatitude = b.latitude; value.arrivalLongitude = b.longitude
+            draft = value
+        } catch { self.error = "Couldn’t load this flight’s airport locations. Try again, or enter the flight manually to select its airports." }
+    }
+}

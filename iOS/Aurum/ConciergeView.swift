@@ -83,7 +83,7 @@ struct ConciergeContext {
             }.joined(separator: "\n\n")
             return ConciergeMessage(role: .concierge, text: "\(intro)\n\n\(details)\n\nCheck current menus and availability with the hotel. Dining counts describe variety, not a quality rating.", hotelIDs: hotels.map(\.id), suggestions: ["Plan a weekend in \(city)", "Japanese dining instead", "Show my saved places"])
         }
-        return ConciergeMessage(role: .concierge, text: "I’m a preview concierge using Aurum’s hotel collection, so I’m best at stays, hotel dining, and simple trip ideas. Try a city and a cuisine, or ask for a weekend plan. What sounds like your kind of escape?", suggestions: ["Great dining in Bangkok", "Plan a weekend in Paris", "Help me find flights"])
+        return ConciergeMessage(role: .concierge, text: "I’m a preview concierge using Seur’s hotel collection, so I’m best at stays, hotel dining, and simple trip ideas. Try a city and a cuisine, or ask for a weekend plan. What sounds like your kind of escape?", suggestions: ["Great dining in Bangkok", "Plan a weekend in Paris", "Help me find flights"])
     }
     private static func matches(context: ConciergeContext, store: TravelStore) -> [Hotel] {
         let candidates = store.search(query: "", city: context.city ?? "Everywhere", cuisine: context.cuisine ?? "Any cuisine")
@@ -192,7 +192,7 @@ struct ConciergeView: View {
                 Image(systemName: "sparkles").font(.system(size: 30, weight: .light)).foregroundStyle(Color.bronze)
                     .frame(width: 72, height: 72).glassEffect(.regular.tint(Color.bronze.opacity(0.09)), in: .circle)
                     .padding(.top, 10)
-                Eyebrow(text: "Your Aurum concierge")
+                Eyebrow(text: "Your Seur concierge")
                 Editorial("Where shall\nwe take you?", size: 39)
                 Text("A place to stay. A table to remember.\nLet’s start with what you love.")
                     .font(.subheadline).foregroundStyle(.secondary).lineSpacing(4)
@@ -226,7 +226,7 @@ struct ConciergeView: View {
             }.accessibilityIdentifier("concierge-user-message")
         } else {
             VStack(alignment: .leading, spacing: 16) {
-                Label("AURUM", systemImage: "sparkles").font(.caption2.weight(.semibold)).tracking(1.8).foregroundStyle(Color.bronze)
+                Label { Text("SEUR") } icon: { SeurLogo(size: 23) }.font(.caption2.weight(.semibold)).tracking(1.8).foregroundStyle(Color.bronze)
                 Text(message.text).font(.body).lineSpacing(5).textSelection(.enabled).accessibilityIdentifier("concierge-reply")
                 ForEach(message.hotelIDs, id: \.self) { id in
                     if let hotel = store.hotels.first(where: { $0.id == id }) {

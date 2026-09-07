@@ -1,168 +1,63 @@
 import SwiftUI
 
+// One editor surface can be pushed inside the trip's sheet or presented on its own.
+private struct TripEditorEmbeddedKey: EnvironmentKey { static let defaultValue = false }
+extension EnvironmentValues {
+    var tripEditorEmbedded: Bool { get { self[TripEditorEmbeddedKey.self] } set { self[TripEditorEmbeddedKey.self] = newValue } }
+}
+struct TripEditorNavigation<Content: View>: View {
+    @Environment(\.tripEditorEmbedded) private var embedded
+    @ViewBuilder var content: () -> Content
+    var body: some View {
+        if embedded { content().navigationBarBackButtonHidden(true) }
+        else { NavigationStack { content() } }
+    }
+}
+struct TripEditorBackButton: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.tripEditorEmbedded) private var embedded
+    var body: some View { Button(embedded ? "Back" : "Cancel") { dismiss() }.accessibilityIdentifier("trip-editor-back") }
+}
+
 struct PlaceFields: View {
     @Binding var place: PlaceRecord
     var fixedCategory: PlaceCategory?
-    var search: () -> Void
-    @State private var coordinates = false
+    var context = ""
+    var optional = false
+    var identifier = "place-name"
+    private var category: PlaceCategory { fixedCategory ?? place.category }
+    private var title: String { optional ? "Location · optional" : category == .hotel ? "Your hotel" : category == .restaurant ? "Your restaurant" : "Your place" }
+    private var prompt: String { optional ? "Search for a venue or address" : category == .hotel ? "Search hotel name" : category == .restaurant ? "Search restaurant name" : "Search for a place" }
     var body: some View {
-        Section("The place") {
-            Button(action: search) { Label(fixedCategory == .hotel ? "Search hotels" : "Find a restaurant or place", systemImage: "magnifyingglass") }
-            LocationAutocompleteField("Place name", text: $place.name, kind: .place, identifier: "place-name", category: fixedCategory ?? place.category, onEdit: { clearLocation() }) { selected in var value = selected.place; value.category = fixedCategory ?? place.category; place = value }
-            if let fixedCategory { Text(fixedCategory.title).foregroundStyle(.secondary) }
-            else { Picker("Category", selection: $place.category) { ForEach(PlaceCategory.allCases) { Text($0.title).tag($0) } } }
+        Section {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: "magnifyingglass").foregroundStyle(Color.bronze).padding(.top, 2)
+                LocationAutocompleteField(prompt, text: $place.name, kind: .place, identifier: identifier, category: category, searchContext: context, onEdit: {
+                    place = PlaceRecord(name: place.name, category: category, city: context)
+                }) { selection in var value = selection.place; value.category = category; place = value }
+            }.padding(.vertical, 5)
             if place.hasCoordinate {
-                Label("Ready for your trip map", systemImage: "checkmark.circle.fill").font(.caption).foregroundStyle(Color.bronze).accessibilityIdentifier("place-map-ready")
-                if !place.address.isEmpty { Text(place.address).font(.caption).foregroundStyle(.secondary) }
-            } else { Text("Choose a search suggestion to add this place to your map.").font(.caption).foregroundStyle(.secondary) }
-            DisclosureGroup("Location & contact") {
-                LocationAutocompleteField("City", text: $place.city, kind: .city, identifier: "place-city", onEdit: { clearLocation() }) { _ in clearLocation() }
-                LocationAutocompleteField("Address", text: $place.address, kind: .address, identifier: "place-address", onEdit: { clearLocation() }) { selected in
-                    clearLocation(); place.city = selected.place.city; place.latitude = selected.place.latitude; place.longitude = selected.place.longitude
-                    place.source = "Apple Maps"; place.sourceURL = nil
-                }
-                TextField("Phone", text: $place.phone).keyboardType(.phonePad)
-                TextField("Website", text: $place.website).keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
+                VStack(alignment: .leading, spacing: 9) {
+                    if !place.address.isEmpty { Text(place.address).font(.subheadline).foregroundStyle(.secondary) }
+                    HStack {
+                        Label("Ready for your trip map", systemImage: "checkmark.circle.fill").foregroundStyle(Color.bronze).accessibilityIdentifier("place-map-ready")
+                        Spacer(minLength: 0)
+                        if let rating = place.rating { Label(String(format: "%.1f", rating), systemImage: "star.fill").foregroundStyle(.secondary) }
+                    }.font(.caption)
+                    if !place.phone.isEmpty || !place.website.isEmpty {
+                        DisclosureGroup("Place information") {
+                            if !place.phone.isEmpty { LabeledContent("Phone", value: place.phone).textSelection(.enabled) }
+                            if !place.website.isEmpty { Text(place.website).textSelection(.enabled).font(.caption).foregroundStyle(.secondary) }
+                        }.font(.subheadline)
+                    }
+                    if place.source != "Manual entry" { Text(place.source).font(.caption2).foregroundStyle(.secondary) }
+                }.padding(.vertical, 3)
             }
-            if let rating = place.rating {
-                HStack {
-                    Text("Provider rating").font(.caption)
-                    Spacer()
-                    if let imageURL = place.ratingImageURL, let url = validatedURL(imageURL) { AsyncImage(url: url) { image in image.resizable().scaledToFit() } placeholder: { Text("\(rating, specifier: "%.1f") / 5") }.frame(width: 100, height: 22) }
-                    else { Text("\(rating, specifier: "%.1f") / 5").font(.caption) }
-                }
-            }
-            if place.source != "Manual entry" {
-                if let link = place.sourceURL.flatMap(validatedURL) { Link("View on \(place.source)", destination: link).font(.caption) }
-                else { Text("Source: \(place.source)").font(.caption).foregroundStyle(.secondary) }
-            }
-            DisclosureGroup("Map coordinates", isExpanded: $coordinates) {
-                TextField("Latitude", value: $place.latitude, format: .number).keyboardType(.numbersAndPunctuation)
-                TextField("Longitude", value: $place.longitude, format: .number).keyboardType(.numbersAndPunctuation)
-                Text("Search fills these automatically when available.").font(.caption).foregroundStyle(.secondary)
-            }
+            if fixedCategory == nil { Picker("Type of place", selection: $place.category) { ForEach(PlaceCategory.allCases) { Text($0.title).tag($0) } }.pickerStyle(.menu) }
+        } header: { Text(title) } footer: {
+            if !place.hasCoordinate { Text(optional ? "Leave blank for online plans or free time. Choosing a suggestion adds its location automatically." : "Choose a suggestion to include it on your map. You can also save a name now and choose its location later.") }
         }
         .onAppear { if let fixedCategory { place.category = fixedCategory } }
-    }
-    private func clearLocation() { place.latitude = nil; place.longitude = nil; place.rating = nil; place.ratingImageURL = nil; place.sourceURL = nil; place.source = "Manual entry" }
-
-}
-
-extension View {
-    /// Attach to the editor's NavigationStack, never a Section in the recycling Form.
-    func placeSearchSheet(isPresented: Binding<Bool>, place: Binding<PlaceRecord>, category: PlaceCategory? = nil) -> some View {
-        sheet(isPresented: isPresented) {
-            PlaceSearchView(category: category ?? place.wrappedValue.category) { selected in
-                var result = selected
-                result.category = category ?? place.wrappedValue.category
-                place.wrappedValue = result
-            }
-        }
-    }
-}
-
-struct PlaceSearchView: View {
-    @Environment(TravelAPI.self) private var api
-    @Environment(\.dismiss) private var dismiss
-    let category: PlaceCategory
-    var citySearch = false
-    var select: (PlaceRecord) -> Void
-    @State private var query = ""
-    @State private var source = "Apple Maps"
-    @State private var results: [PlaceRecord] = []
-    @State private var loading = false
-    @State private var error: String?
-    @State private var didSearch = false
-    @State private var task: Task<Void, Never>?
-    var body: some View {
-        NavigationStack {
-            List {
-                if !citySearch { Section { Picker("Search with", selection: $source) { Text("Places").tag("Apple Maps"); Text("Tripadvisor").tag("Tripadvisor") }.pickerStyle(.segmented) } }
-                Section {
-                    if source == "Apple Maps" {
-                        LocationAutocompleteField(citySearch ? "City or airport" : "Name, cuisine or place + city", text: $query, kind: citySearch ? .airport : .place, identifier: "live-place-query", category: category, onSelect: { selected in select(selected.place); dismiss() })
-                    } else {
-                        TextField("Name, cuisine or place + city", text: $query).submitLabel(.search).onSubmit(runSearch).accessibilityIdentifier("live-place-query")
-                    }
-                    Button(action: runSearch) { Label(loading ? "Searching…" : "Search", systemImage: "magnifyingglass") }.disabled(loading || query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                } footer: { Text(citySearch ? "Live city and airport lookup with Apple Maps." : "Find a place as you type. Apple Maps supplies location and contact details; Tripadvisor offers additional reviews when connected.") }
-                if loading { ProgressView().frame(maxWidth: .infinity) }
-                if let error { Section { Text(error).foregroundStyle(.red); Button("Try again", action: runSearch) } }
-                if didSearch && !loading && results.isEmpty && error == nil { ContentUnavailableView.search(text: query) }
-                ForEach(results) { place in
-                    Button { choose(place) } label: {
-                        VStack(alignment: .leading, spacing: 7) { Text(place.name).font(.system(.headline, design: .serif)).foregroundStyle(.primary); Text(place.address.isEmpty ? place.city : place.address).font(.caption).foregroundStyle(.secondary); Text(place.source).font(.caption2).foregroundStyle(Color.bronze) }.padding(.vertical, 6)
-                    }.disabled(loading)
-                }
-            }.scrollDismissesKeyboard(.interactively).scrollContentBackground(.hidden).background(Color.canvas).navigationTitle(citySearch ? "Find your destination" : "Find your place").navigationBarTitleDisplayMode(.inline)
-                .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
-                .onDisappear { task?.cancel() }
-                .onChange(of: source) { scheduleSearch() }
-                .onChange(of: query) { scheduleSearch() }
-        }
-    }
-    private func scheduleSearch() {
-        task?.cancel(); results = []; error = nil; loading = false; didSearch = false
-        guard source == "Tripadvisor", query.trimmingCharacters(in: .whitespacesAndNewlines).count >= 2 else { return }
-        task = Task { do { try await Task.sleep(for: .milliseconds(450)) } catch { return }; guard !Task.isCancelled else { return }; runSearch() }
-    }
-    private func runSearch() {
-        task?.cancel(); let text = query.trimmingCharacters(in: .whitespacesAndNewlines); guard !text.isEmpty else { return }
-        let provider = source; loading = true; error = nil; results = []; didSearch = true
-        task = Task {
-            do { let found = provider == "Apple Maps" ? try await ApplePlaceSearch.search(text, category: category, citiesOnly: citySearch) : try await api.searchPlaces(text, category: category); guard !Task.isCancelled else { return }; results = found }
-            catch { if !Task.isCancelled { self.error = error.localizedDescription } }
-            if !Task.isCancelled { loading = false }
-        }
-    }
-    private func choose(_ place: PlaceRecord) {
-        if source == "Apple Maps" { select(place); dismiss(); return }
-        loading = true; error = nil
-        task = Task {
-            do { var detailed = try await api.placeDetails(place.id); detailed.category = category; guard !Task.isCancelled else { return }; select(detailed); dismiss() }
-            catch { if !Task.isCancelled { self.error = error.localizedDescription; loading = false } }
-        }
-    }
-}
-
-struct FlightLookupSelection { let search: FlightSearch; let departure: PlaceRecord?; let arrival: PlaceRecord? }
-
-struct FlightLookupView: View {
-    @Environment(\.dismiss) private var dismiss
-    var select: (FlightLookupSelection) -> Void
-    @State private var search = FlightSearch()
-    @State private var browser: BrowserDestination?
-    @State private var departure: PlaceRecord?
-    @State private var arrival: PlaceRecord?
-    @State private var choosingOrigin = false
-    @State private var choosingDestination = false
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section("Your route") {
-                    LocationAutocompleteField("From", text: $search.origin, kind: .airport, identifier: "lookup-origin", onEdit: { departure = nil }) { departure = $0.place }
-                    Button("Find departure city or airport") { choosingOrigin = true }
-                    LocationAutocompleteField("To", text: $search.destination, kind: .airport, identifier: "lookup-destination", onEdit: { arrival = nil }) { arrival = $0.place }
-                    Button("Find arrival city or airport") { choosingDestination = true }
-                }
-                Section("The journey") {
-                    Toggle("One way", isOn: $search.oneWay)
-                    DatePicker("Departure", selection: $search.dates.start, in: Date.now..., displayedComponents: .date)
-                    if !search.oneWay { DatePicker("Return", selection: $search.dates.end, in: search.dates.start..., displayedComponents: .date) }
-                    Stepper("\(search.dates.guests) travelers", value: $search.dates.guests, in: 1...9)
-                    Picker("Cabin", selection: $search.cabin) { ForEach(["Economy", "Premium economy", "Business", "First class"], id: \.self) { Text($0) } }
-                }
-                Section {
-                    Button { if let url = search.url { browser = BrowserDestination(url: url) } } label: { Label("Compare live flights", systemImage: "arrow.up.right") }.disabled(search.error != nil)
-                    Text("Current flights and prices open in Google Flights. After choosing or booking a flight, use these route details and enter the airline, flight number, airport-local times and price from your booking.").font(.caption).foregroundStyle(.secondary)
-                    if let error = search.error { Text(error).font(.caption).foregroundStyle(.red) }
-                }
-            }.scrollContentBackground(.hidden).background(Color.canvas).navigationTitle("Find a flight").navigationBarTitleDisplayMode(.inline)
-                .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }; ToolbarItem(placement: .confirmationAction) { Button("Use route") { select(FlightLookupSelection(search: search, departure: departure, arrival: arrival)); dismiss() }.disabled(search.error != nil) } }
-                .sheet(item: $browser) { InAppBrowser(url: $0.url).ignoresSafeArea() }
-                .sheet(isPresented: $choosingOrigin) { PlaceSearchView(category: .other, citySearch: true) { search.origin = $0.name; departure = $0 } }
-                .sheet(isPresented: $choosingDestination) { PlaceSearchView(category: .other, citySearch: true) { search.destination = $0.name; arrival = $0 } }
-        }
     }
 }
 
@@ -171,6 +66,7 @@ struct ActivityIdeasView: View {
     @Environment(TravelAPI.self) private var api
     @Environment(\.dismiss) private var dismiss
     let documentID: UUID
+    var onSaved: () -> Void = {}
     @State private var city = ""
     @State private var interests = "Art, food and a little time outdoors"
     @State private var response: AITravelResponse?
@@ -178,7 +74,7 @@ struct ActivityIdeasView: View {
     @State private var loading = false
     @State private var event: JourneyEvent?
     var body: some View {
-        NavigationStack {
+        TripEditorNavigation {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     Eyebrow(text: "Your AI travel editor")
@@ -200,7 +96,7 @@ struct ActivityIdeasView: View {
             }.background(Color.canvas).navigationTitle("Ideas for your days").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
                 .onAppear { city = library.documents.first(where: { $0.id == documentID })?.stops.first?.name ?? "" }
-                .sheet(item: $event) { JourneyEventEditor(documentID: documentID, event: $0) }
+                .navigationDestination(item: $event) { JourneyEventEditor(documentID: documentID, event: $0, onSaved: onSaved).environment(\.tripEditorEmbedded, true) }
         }
     }
 }
@@ -234,7 +130,7 @@ struct RatedRestaurantImportView: View {
         for hotel in store.hotels { for venue in hotel.venues {
             let key = RestaurantPlace(hotel: hotel, venue: venue).id
             if let visit = store.restaurantVisits[key], visit.rating > 0 {
-                places.append(RatedPlace(place: PlaceRecord(id: key, name: venue.name, category: .restaurant, city: hotel.city, address: hotel.address, website: hotel.website, source: "Aurum collection"), overall: Double(visit.rating) * 2, notes: visit.note))
+                places.append(RatedPlace(place: PlaceRecord(id: key, name: venue.name, category: .restaurant, city: hotel.city, address: hotel.address, website: hotel.website, source: "Seur collection"), overall: Double(visit.rating) * 2, notes: visit.note))
             }
         } }
         return places.filter { seen.insert($0.place.id).inserted }

@@ -15,8 +15,8 @@ final class AurumUITests: XCTestCase {
     func testGlobeFlightsTripsAndSaved() {
         app.terminate(); app.launchArguments = ["--ui-testing", "--map-testing", "--location-testing", "--city-testing"]; app.launch()
         app.tabBars.buttons["Map"].firstMatch.tap()
-        let content = app.segmentedControls["map-content"]; XCTAssertTrue(content.waitForExistence(timeout: 8)); capture("63 Globe map")
-        app.buttons["map-panel-expand"].tap(); content.buttons["Flights"].tap()
+        let content = app.buttons["map-section-Flights"]; XCTAssertTrue(content.waitForExistence(timeout: 8)); capture("63 Globe map")
+        app.buttons["map-panel-expand"].tap(); app.buttons["map-section-Flights"].tap()
         let flight = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "map-flight-")).firstMatch
         XCTAssertTrue(flight.waitForExistence(timeout: 5)); flight.tap()
         XCTAssertTrue(app.staticTexts["map-flight-title"].waitForExistence(timeout: 5)); capture("64 Flight route panel")
@@ -24,7 +24,7 @@ final class AurumUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["UI test · Delayed"].waitForExistence(timeout: 5)); capture("65 Flight intelligence")
         let history = app.buttons["Load delay history"]; reveal(history); history.tap()
         XCTAssertTrue(app.staticTexts["UI test sample only"].waitForExistence(timeout: 5)); capture("66 Flight delay history")
-        app.buttons["All flights"].tap(); content.buttons["Trips"].tap()
+        app.buttons["All flights"].tap(); app.buttons["map-section-Trips"].tap()
         let trip = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "map-trip-")).firstMatch; XCTAssertTrue(trip.waitForExistence(timeout: 5)); trip.tap()
         XCTAssertTrue(app.buttons["Open trip"].waitForExistence(timeout: 5))
         app.buttons["map-saved"].tap(); XCTAssertTrue(app.navigationBars["Saved places"].waitForExistence(timeout: 5))
@@ -34,25 +34,114 @@ final class AurumUITests: XCTestCase {
         app.tabBars.buttons["Map"].firstMatch.tap()
         let expand = app.buttons["map-panel-expand"]; XCTAssertTrue(expand.waitForExistence(timeout: 8))
         let compactY = expand.frame.minY; capture("68 Native map sheet compact")
+        app.buttons["map-section-Trips"].tap(); capture("84 Compact trips panel")
+        app.buttons["map-section-Flights"].tap(); capture("85 Compact flights panel")
+        app.buttons["map-section-Explore"].tap()
+        XCTAssertGreaterThanOrEqual(app.otherElements["map-panel-surface"].frame.maxY, app.frame.maxY - 1)
         expand.tap()
         let raised = NSPredicate { _, _ in expand.frame.minY < compactY - 200 }
         expectation(for: raised, evaluatedWith: expand); waitForExpectations(timeout: 8)
         capture("69 Native map sheet expanded")
+        XCTAssertGreaterThanOrEqual(app.otherElements["map-panel-surface"].frame.maxY, app.frame.maxY - 1)
         XCTAssertEqual(app.tabBars.firstMatch.frame.minY, originalBarY, accuracy: 2)
         expand.tap()
         expectation(for: NSPredicate { _, _ in expand.frame.minY > compactY - 50 }, evaluatedWith: expand); waitForExpectations(timeout: 8)
         let bar = app.tabBars.firstMatch
         XCTAssertTrue(bar.waitForExistence(timeout: 5)); XCTAssertTrue(bar.buttons["Travel"].isHittable)
         bar.buttons["Travel"].tap()
-        XCTAssertTrue(app.buttons["travel-create"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["travel-create"].waitForExistence(timeout: 5)); capture("83 Minimal travel dashboard")
         app.tabBars.buttons["Map"].firstMatch.tap(); XCTAssertTrue(expand.waitForExistence(timeout: 5))
         let origin = app.coordinate(withNormalizedOffset: .zero)
         let handle = origin.withOffset(CGVector(dx: app.frame.midX, dy: expand.frame.minY - 10))
         handle.press(forDuration: 0.15, thenDragTo: origin.withOffset(CGVector(dx: app.frame.midX, dy: 180)))
         expectation(for: raised, evaluatedWith: expand); waitForExpectations(timeout: 8)
         capture("70 Native dragged sheet with navigation")
-        app.buttons["map-panel-close"].tap()
+        app.buttons["map-panel-options"].tap(); app.buttons["map-panel-close"].tap()
         XCTAssertTrue(app.buttons["map-show-panel"].waitForExistence(timeout: 5))
+    }
+    func testMapSectionSwitchKeepsLayoutAndSearch() {
+        app.terminate(); app.launchArguments = ["--ui-testing", "--map-testing", "--location-testing", "--city-testing"]; app.launch()
+        app.tabBars.buttons["Map"].tap()
+        let expand = app.buttons["map-panel-expand"]
+        XCTAssertTrue(expand.waitForExistence(timeout: 8))
+        let tabY = app.tabBars.firstMatch.frame.minY
+        for expanded in [false, true] {
+            if expanded { expand.tap(); RunLoop.current.run(until: Date().addingTimeInterval(0.7)) }
+            let headerY = expand.frame.minY
+            for _ in 0..<2 {
+                for section in ["Trips", "Flights", "Explore"] {
+                    app.buttons["map-section-" + section].tap()
+                    XCTAssertEqual(expand.frame.minY, headerY, accuracy: 2)
+                    XCTAssertEqual(app.tabBars.firstMatch.frame.minY, tabY, accuracy: 2)
+                    XCTAssertEqual(app.scrollViews.matching(identifier: "map-panel-scroll").count, 1)
+                }
+                let search = app.textFields["world-city-search"]
+                XCTAssertTrue(search.isHittable)
+                XCTAssertGreaterThan(search.frame.minY, expand.frame.minY)
+                XCTAssertLessThan(search.frame.maxY, expand.frame.maxY + 100)
+            }
+            capture(expanded ? "88 Stable expanded Explore" : "87 Stable compact Explore")
+        }
+        let search = app.textFields["world-city-search"]
+        search.tap(); search.typeText("Par")
+        let result = app.buttons["world-city-search-suggestion-0"]
+        XCTAssertTrue(result.waitForExistence(timeout: 5)); result.tap()
+        XCTAssertTrue(app.buttons["map-city-guide"].waitForExistence(timeout: 8))
+        app.buttons["map-section-Flights"].tap(); app.buttons["map-section-Explore"].tap()
+        XCTAssertEqual(search.value as? String, "Paris")
+        XCTAssertTrue(search.isHittable)
+    }
+    func testMapBodyDragAndStandaloneFlight() {
+        app.terminate(); app.launchArguments = ["--ui-testing", "--map-testing"]; app.launch()
+        let originalBar = app.tabBars.firstMatch.frame
+        app.tabBars.buttons["Map"].tap()
+        let expand = app.buttons["map-panel-expand"]; XCTAssertTrue(expand.waitForExistence(timeout: 8))
+        let compactY = expand.frame.minY
+        app.buttons["map-section-Flights"].tap()
+        XCTAssertEqual(expand.frame.minY, compactY, accuracy: 2)
+        let scroll = app.scrollViews["map-panel-scroll"]
+        let start = scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.65))
+        start.press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.22)))
+        expectation(for: NSPredicate { _, _ in expand.frame.minY < compactY - 200 }, evaluatedWith: expand)
+        waitForExpectations(timeout: 6)
+        XCTAssertEqual(app.tabBars.firstMatch.frame.minY, originalBar.minY, accuracy: 2)
+        XCTAssertGreaterThanOrEqual(app.otherElements["map-panel-surface"].frame.maxY, app.frame.maxY - 1)
+        capture("71 Refined map sheet body drag")
+        app.buttons["map-add-flight"].tap()
+        let airline = app.textFields["flight-airline-query"]; XCTAssertTrue(airline.waitForExistence(timeout: 5))
+        airline.tap(); airline.typeText("British")
+        app.buttons["flight-airline-BA"].tap()
+        let number = app.textFields["flight-number-query"]; number.tap(); number.typeText("178\n")
+        app.buttons["flight-find"].tap()
+        let result = app.buttons["flight-result-BAW178-ui-test"]; reveal(result); XCTAssertTrue(result.waitForExistence(timeout: 5))
+        capture("72 Native flight search results")
+        result.tap()
+        XCTAssertTrue(app.buttons["flight-record-save"].waitForExistence(timeout: 8))
+        capture("73 Standalone flight review")
+        app.buttons["flight-record-save"].tap()
+        XCTAssertTrue(app.staticTexts["map-flight-title"].waitForExistence(timeout: 8))
+        XCTAssertTrue(app.staticTexts["My flights"].exists)
+        app.buttons["map-panel-expand"].tap()
+        let footer = app.staticTexts["flight-detail-footer"]
+        for _ in 0..<10 {
+            app.scrollViews["map-panel-scroll"].swipeUp(velocity: .slow)
+            if footer.isHittable { break }
+        }
+        XCTAssertTrue(footer.isHittable)
+        XCTAssertLessThanOrEqual(footer.frame.maxY, app.tabBars.firstMatch.frame.minY)
+        capture("75 Flight content clear of navigation")
+        app.buttons["All flights"].tap()
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "map-flight-standalone-")).firstMatch.exists)
+        app.buttons["map-add-flight"].tap()
+        app.segmentedControls["flight-search-method"].buttons["Route"].tap()
+        let from = app.textFields["flight-route-origin"]; from.tap(); from.typeText("JFK\n")
+        let to = app.textFields["flight-route-destination"]; to.tap(); to.typeText("LHR\n")
+        app.buttons["flight-find"].tap()
+        reveal(result); XCTAssertTrue(result.waitForExistence(timeout: 5)); capture("74 Flight route search")
+        app.buttons["Cancel"].firstMatch.tap()
+        app.tabBars.buttons["Travel"].tap(); app.tabBars.buttons["Map"].tap()
+        XCTAssertEqual(expand.frame.minY, compactY, accuracy: 2)
+        XCTAssertEqual(app.tabBars.firstMatch.frame.minY, originalBar.minY, accuracy: 2)
     }
     func testGlobeCitySearchAndGuide() {
         app.terminate(); app.launchArguments = ["--ui-testing", "--location-testing", "--city-testing"]; app.launch()
@@ -298,7 +387,7 @@ final class AurumUITests: XCTestCase {
         for (option, save) in options {
             let choice = app.buttons["add-plan-" + option]; reveal(choice); choice.tap()
             XCTAssertTrue(app.buttons[save].waitForExistence(timeout: 5), "No editor for " + option)
-            app.buttons["Cancel"].firstMatch.tap()
+            app.buttons["Back"].firstMatch.tap()
             XCTAssertTrue(app.buttons["add-plan-" + option].waitForExistence(timeout: 5))
         }
         let ideas = app.buttons["AI activity ideas"]; reveal(ideas); ideas.tap()
@@ -334,67 +423,62 @@ final class AurumUITests: XCTestCase {
         XCTAssertEqual(app.staticTexts["trip-map-count"].label, "4 places on your map")
         capture("50 Saved trip map with bookings and meeting")
     }
-    func testPlaceSearchPopupStaysOpenAndReturnsSelection() {
+    func testInlinePlaceSearchKeepsOneEditorAndRepeatDays() {
         createAddFlowTrip()
         for choice in ["place", "hotel", "attraction", "journal"] {
             if choice == "journal" { app.buttons["Journal"].tap(); app.buttons["trip-add-place"].tap() }
             else { app.buttons["journey-add"].tap(); app.buttons["add-plan-" + choice].tap() }
-            let opener = app.buttons[choice == "hotel" ? "Search hotels" : "Find a restaurant or place"]
-            XCTAssertTrue(opener.waitForExistence(timeout: 5))
-            if choice == "place" {
-                let extraDay = app.buttons["event-day-1"]; reveal(extraDay); extraDay.tap()
-                for _ in 0..<8 { if opener.isHittable { break }; app.swipeDown(velocity: .slow) }
-            }
-            opener.tap()
-            let query = app.textFields["live-place-query"]
+            let query = app.textFields["place-name"]
             XCTAssertTrue(query.waitForExistence(timeout: 5))
-            // Catch a transient presentation that disappears immediately after opening.
-            RunLoop.current.run(until: Date().addingTimeInterval(2))
-            XCTAssertTrue(query.exists, "Search dismissed itself for " + choice)
-            query.tap(); query.typeText("Par")
-            let suggestion = app.buttons["live-place-query-suggestion-0"]
-            XCTAssertTrue(suggestion.waitForExistence(timeout: 5))
-            if choice == "place" { capture("55 Restaurant search popup stays open") }
-            suggestion.tap()
-            let selectedName = app.textFields["place-name"]
-            XCTAssertTrue(selectedName.waitForExistence(timeout: 5))
-            XCTAssertEqual(selectedName.value as? String, "Paris Test Hotel")
-            XCTAssertTrue(app.staticTexts["place-map-ready"].exists)
-            // Reopen and cancel: neither the selection nor the editor should be lost.
-            opener.tap(); XCTAssertTrue(query.waitForExistence(timeout: 5))
-            app.buttons["Cancel"].firstMatch.tap()
-            XCTAssertTrue(selectedName.waitForExistence(timeout: 5))
-            XCTAssertEqual(selectedName.value as? String, "Paris Test Hotel")
-            if choice == "place" {
-                let extraDay = app.buttons["event-day-1"]; reveal(extraDay)
-                XCTAssertEqual(extraDay.value as? String, "Selected", "Search reset the draft schedule")
-            }
             let save = choice == "hotel" ? "hotel-record-save" : choice == "journal" ? "rated-save" : "event-save"
+            let top = app.buttons[save].frame.minY
+            XCTAssertEqual(app.textFields.matching(identifier: "place-name").count, 1)
+            XCTAssertFalse(app.buttons["Find a restaurant or place"].exists)
+            XCTAssertFalse(app.buttons["Search hotels"].exists)
+            XCTAssertFalse(app.textFields["Latitude"].exists)
+            XCTAssertFalse(app.textFields["Longitude"].exists)
+            XCTAssertFalse(app.textFields["place-address"].exists)
+            if choice == "place" { let day = app.buttons["event-day-1"]; reveal(day); day.tap(); reveal(query) }
+            query.tap(); query.typeText("Par")
+            let suggestion = app.buttons["place-name-suggestion-0"]
+            XCTAssertTrue(suggestion.waitForExistence(timeout: 5))
+            XCTAssertEqual(app.buttons[save].frame.minY, top, accuracy: 2, "Place search must stay in the same sheet")
+            if choice == "place" { capture("76 Inline restaurant search") }
+            suggestion.tap()
+            XCTAssertEqual(query.value as? String, "Paris Test Hotel")
+            XCTAssertTrue(app.staticTexts["place-map-ready"].exists)
+            if choice == "place" {
+                let day = app.buttons["event-day-1"]; reveal(day)
+                XCTAssertEqual(day.value as? String, "Selected")
+                capture("77 Restaurant with automatic map details")
+            }
+            if choice == "hotel" { capture("78 Simplified hotel stay") }
             app.buttons[save].tap()
             XCTAssertTrue(app.buttons[choice == "journal" ? "trip-add-place" : "journey-add"].waitForExistence(timeout: 8))
         }
     }
-    func testFlightSearchPopupsStayOpen() {
+    func testFlightAirportsStayInline() {
         createAddFlowTrip()
         app.buttons["journey-add"].tap(); app.buttons["add-plan-flight"].tap()
-        XCTAssertTrue(app.buttons["Search flights"].waitForExistence(timeout: 5)); app.buttons["Search flights"].tap()
-        XCTAssertTrue(app.textFields["lookup-origin"].waitForExistence(timeout: 5))
-        for (opener, field) in [("Find departure city or airport", "lookup-origin"), ("Find arrival city or airport", "lookup-destination")] {
-            app.buttons[opener].tap()
-            let query = app.textFields["live-place-query"]; XCTAssertTrue(query.waitForExistence(timeout: 5))
-            RunLoop.current.run(until: Date().addingTimeInterval(2)); XCTAssertTrue(query.exists)
-            query.tap(); query.typeText("Par")
-            let suggestion = app.buttons["live-place-query-suggestion-0"]; XCTAssertTrue(suggestion.waitForExistence(timeout: 5)); suggestion.tap()
-            XCTAssertTrue(app.textFields[field].waitForExistence(timeout: 5))
-            XCTAssertEqual(app.textFields[field].value as? String, "Paris Charles de Gaulle Airport")
+        XCTAssertTrue(app.buttons["flight-record-save"].waitForExistence(timeout: 5))
+        let top = app.buttons["flight-record-save"].frame.minY
+        XCTAssertFalse(app.buttons["Search flights"].exists)
+        for identifier in ["booking-departure", "booking-arrival"] {
+            let field = app.textFields[identifier]; reveal(field); field.tap(); field.typeText("Par")
+            let suggestion = app.buttons[identifier + "-suggestion-0"]; XCTAssertTrue(suggestion.waitForExistence(timeout: 5)); suggestion.tap()
+            XCTAssertEqual(field.value as? String, "Paris Charles de Gaulle Airport")
+            XCTAssertEqual(app.buttons["flight-record-save"].frame.minY, top, accuracy: 2)
         }
+        XCTAssertFalse(app.textFields["booking-departure-zone"].exists)
+        capture("79 Inline flight airports and native times")
     }
-    func testLiveGooglePlaceAutocompleteResolvesMapLocation() {
+    func testLivePlaceAutocompleteResolvesMapLocation() {
         createAddFlowTrip(fixtures: false)
         app.buttons["journey-add"].tap(); capture("48 Stays first add menu"); app.buttons["add-plan-hotel"].tap()
         let field = app.textFields["place-name"]; XCTAssertTrue(field.waitForExistence(timeout: 5)); field.tap(); field.typeText("The Savoy London")
-        XCTAssertTrue(app.staticTexts["Google Maps"].waitForExistence(timeout: 15))
-        capture("51 Live Google Places suggestions")
+        XCTAssertTrue(app.buttons["place-name-suggestion-0"].waitForExistence(timeout: 20))
+        XCTAssertTrue(app.staticTexts["Google Maps"].exists || app.staticTexts["Apple Maps suggestions"].exists)
+        capture("51 Live place suggestions")
         app.buttons["place-name-suggestion-0"].tap()
         XCTAssertTrue(app.staticTexts["place-map-ready"].waitForExistence(timeout: 20))
         capture("52 Resolved Savoy hotel")
@@ -416,6 +500,7 @@ final class AurumUITests: XCTestCase {
         app.buttons["add-plan-meeting"].tap()
         let name = app.textFields["event-title"]
         XCTAssertTrue(name.waitForExistence(timeout: 5)); name.tap(); name.typeText("Design review\n")
+        let more = app.buttons["More details"]; reveal(more); more.tap()
         let duration = app.switches["event-duration-toggle"]
         reveal(duration); duration.coordinate(withNormalizedOffset: CGVector(dx: 0.92, dy: 0.5)).tap(); XCTAssertEqual(duration.value as? String, "1")
         capture("40 Meeting schedule")
@@ -539,21 +624,151 @@ final class AurumUITests: XCTestCase {
         app.buttons["Travel account"].tap()
         XCTAssertTrue(app.buttons["Create account"].waitForExistence(timeout: 8))
         capture("20 Account before signup")
-        app.buttons["Create account"].tap()
+        app.segmentedControls["account-mode"].buttons["Create account"].tap()
         capture("21 Account signup form")
         let handle = app.textFields["account-handle"]
         XCTAssertTrue(handle.waitForExistence(timeout: 5)); handle.tap(); handle.typeText("ui_" + UUID().uuidString.prefix(8).lowercased())
-        let displayName = app.textFields["Display name"]
+        let displayName = app.textFields["account-name"]
         displayName.tap(); displayName.typeText("Native Test Traveler")
         let password = app.secureTextFields["account-password"]
         password.tap(); password.typeText("Strong-simulator-password-123")
-        app.buttons["Create my account"].tap()
+        let confirm = app.secureTextFields["account-confirmation"]; reveal(confirm); confirm.tap(); confirm.typeText("Strong-simulator-password-123")
+        reveal(app.buttons["account-submit"]); app.buttons["account-submit"].tap()
         let connected = app.buttons["Sign out"].waitForExistence(timeout: 10)
         capture("22 Account registration result")
         XCTAssertTrue(connected)
         capture("19 Backend account connected")
         app.buttons["Sign out"].tap()
         XCTAssertTrue(app.secureTextFields["account-password"].waitForExistence(timeout: 8))
+    }
+    @MainActor func testGuestCanCreateAccountAndSignInFromProfile() throws {
+        let root = "https://bwrodcxmdzrpyrshrlfd.supabase.co/functions/v1/travel-api"
+        let username = "guest_" + UUID().uuidString.prefix(8).lowercased()
+        let passwordValue = "Seur-Travel-" + UUID().uuidString.prefix(12)
+        addTeardownBlock {
+            var login = URLRequest(url: URL(string: root + "/v1/auth/login")!)
+            login.httpMethod = "POST"; login.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            login.httpBody = try JSONSerialization.data(withJSONObject: ["handle": username, "password": passwordValue])
+            let (data, response) = try await URLSession.shared.data(for: login)
+            if (response as? HTTPURLResponse)?.statusCode == 401 { return }
+            let body = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+            let token = try XCTUnwrap(body?["token"] as? String)
+            var removal = URLRequest(url: URL(string: root + "/v1/account")!); removal.httpMethod = "DELETE"
+            removal.setValue("Bearer " + token, forHTTPHeaderField: "Authorization")
+            let (_, removed) = try await URLSession.shared.data(for: removal)
+            XCTAssertEqual((removed as? HTTPURLResponse)?.statusCode, 200)
+        }
+        let server = ["--travel-test-server", root + "?guest-test=" + username]
+        app.terminate(); app.launchArguments = ["--ui-testing", "--location-testing"] + server; app.launch()
+        app.tabBars.buttons["Travel"].tap(); app.buttons["travel-create"].tap()
+        app.textFields["trip-destination"].tap(); app.textFields["trip-destination"].typeText("Paris\n")
+        app.buttons["journey-save"].tap()
+        app.tabBars.buttons["Discover"].tap(); app.buttons["Your workspace"].tap()
+        XCTAssertTrue(app.buttons["profile-create-account"].waitForExistence(timeout: 8)); capture("89 Guest profile account access")
+        app.buttons["profile-create-account"].tap()
+        let name = app.textFields["account-name"]
+        XCTAssertTrue(name.waitForExistence(timeout: 5)); name.tap(); name.typeText("Avery Traveler")
+        app.keyboards.buttons["next"].tap()
+        let handle = app.textFields["account-handle"]; handle.typeText(username)
+        app.keyboards.buttons["next"].tap(); dismissStrongPasswordIfNeeded()
+        let password = app.secureTextFields["account-password"]
+        for character in passwordValue { password.typeText(String(character)) }
+        app.keyboards.buttons["next"].tap(); dismissStrongPasswordIfNeeded()
+        let confirm = app.secureTextFields["account-confirmation"]; confirm.typeText("does-not-match")
+        let submit = app.buttons["account-submit"]; reveal(submit); submit.tap()
+        XCTAssertTrue(app.staticTexts["account-message"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["account-message"].label.contains("don’t match"))
+        reveal(confirm); confirm.tap(); confirm.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 14))
+        for character in passwordValue { confirm.typeText(String(character)) }
+        reveal(submit); capture("90 Create a Seur account"); submit.tap(); dismissSavePasswordIfNeeded()
+        XCTAssertTrue(app.staticTexts["account-success"].waitForExistence(timeout: 25), app.staticTexts["account-message"].exists ? app.staticTexts["account-message"].label : "No account response")
+        capture("91 Guest account created")
+        app.buttons["account-continue"].tap(); XCTAssertTrue(app.buttons["profile-account"].waitForExistence(timeout: 5))
+        app.buttons["Done"].tap(); app.tabBars.buttons["Travel"].tap()
+        XCTAssertTrue(app.staticTexts["Trip to Paris"].waitForExistence(timeout: 5))
+        app.terminate(); app.launchArguments = ["--ui-testing", "--preserve-state", "--location-testing"] + server; app.launch()
+        app.buttons["Your workspace"].tap()
+        XCTAssertTrue(app.buttons["profile-account"].waitForExistence(timeout: 15), "Session must restore from Keychain")
+        app.buttons["profile-account"].tap(); app.buttons["Sign out"].tap()
+        XCTAssertTrue(handle.waitForExistence(timeout: 8))
+        handle.tap(); handle.typeText(username); app.keyboards.buttons["next"].tap()
+        password.typeText("wrong-password-value"); reveal(submit); submit.tap()
+        XCTAssertTrue(app.staticTexts["account-message"].waitForExistence(timeout: 15))
+        reveal(password); password.tap(); password.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 20) + passwordValue)
+        reveal(submit); capture("92 Sign in after onboarding"); submit.tap(); dismissSavePasswordIfNeeded()
+        XCTAssertTrue(app.staticTexts["account-success"].waitForExistence(timeout: 25))
+    }
+    func testAccountFullPageDesign() {
+        app.terminate()
+        app.launchArguments = ["--ui-testing", "--travel-test-server", "https://bwrodcxmdzrpyrshrlfd.supabase.co/functions/v1/travel-api?account-layout=" + UUID().uuidString]
+        app.launch()
+        Thread.sleep(forTimeInterval: 1)
+        app.tabBars.buttons["Travel"].tap()
+        XCTAssertTrue(app.buttons["Travel account"].waitForExistence(timeout: 8), app.debugDescription)
+        app.buttons["Travel account"].tap()
+        XCTAssertTrue(app.textFields["account-handle"].waitForExistence(timeout: 8))
+        XCTAssertFalse(app.sheets.firstMatch.exists)
+        XCTAssertFalse(app.tabBars.buttons["Map"].isHittable)
+        app.segmentedControls["account-mode"].buttons["Create account"].tap()
+        XCTAssertTrue(app.textFields["account-name"].waitForExistence(timeout: 5))
+        reveal(app.secureTextFields["account-confirmation"])
+        app.buttons["Done"].tap()
+        XCTAssertTrue(app.tabBars.buttons["Map"].waitForExistence(timeout: 5))
+        // The native tab bar animates back into place after leaving account navigation.
+        Thread.sleep(forTimeInterval: 0.8)
+        app.tabBars.buttons["Discover"].tap()
+        XCTAssertTrue(app.buttons["Your workspace"].waitForExistence(timeout: 8))
+        app.buttons["Your workspace"].tap()
+        app.buttons["profile-sign-in"].tap()
+        XCTAssertTrue(app.textFields["account-handle"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.sheets.firstMatch.exists)
+    }
+    func testAccountAccessAtLargeText() {
+        app.terminate(); app.launchArguments = ["--ui-testing", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]; app.launch()
+        app.tabBars.buttons["Travel"].tap(); app.buttons["Travel account"].tap()
+        XCTAssertTrue(app.textFields["account-handle"].waitForExistence(timeout: 8))
+        let mode = app.segmentedControls["account-mode"]; reveal(mode); mode.buttons["Create account"].tap()
+        let name = app.textFields["account-name"]; reveal(name); XCTAssertTrue(name.isHittable)
+        let submit = app.buttons["account-submit"]; reveal(submit); XCTAssertTrue(submit.isHittable)
+        capture("93 Accessible account page")
+        app.buttons["Done"].tap(); XCTAssertTrue(app.buttons["travel-create"].waitForExistence(timeout: 5))
+    }
+    @MainActor func testSupabaseNativeAccount() async throws {
+        let root = "https://bwrodcxmdzrpyrshrlfd.supabase.co/functions/v1/travel-api"
+        let handleValue = "native_" + UUID().uuidString.prefix(8).lowercased()
+        let passwordValue = UUID().uuidString + "-cloud"
+        var registration = URLRequest(url: URL(string: root + "/v1/auth/register")!)
+        registration.httpMethod = "POST"; registration.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        registration.httpBody = try JSONSerialization.data(withJSONObject: ["handle": handleValue, "name": "Native Cloud Test", "password": passwordValue])
+        let (data, response) = try await URLSession.shared.data(for: registration)
+        XCTAssertEqual((response as? HTTPURLResponse)?.statusCode, 200)
+        let account = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+        let cleanupToken = account["token"] as! String
+        addTeardownBlock {
+            var removal = URLRequest(url: URL(string: root + "/v1/account")!); removal.httpMethod = "DELETE"
+            removal.setValue("Bearer " + cleanupToken, forHTTPHeaderField: "Authorization")
+            let (_, response) = try await URLSession.shared.data(for: removal)
+            XCTAssertEqual((response as? HTTPURLResponse)?.statusCode, 200)
+        }
+        app.terminate(); app.launchArguments = ["--ui-testing", "--travel-test-server", root + "?native-test=" + handleValue]; app.launch()
+        app.tabBars.buttons["Travel"].tap(); app.buttons["Travel account"].tap()
+        let handle = app.textFields["account-handle"]; XCTAssertTrue(handle.waitForExistence(timeout: 10))
+        handle.tap(); handle.typeText(handleValue)
+        let password = app.secureTextFields["account-password"]; password.tap(); password.typeText(passwordValue)
+        let login = app.buttons["account-submit"]
+        XCTAssertTrue(login.isEnabled); login.tap()
+        // iOS may present its password-saving prompt over the account sheet.
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        let notNow = springboard.buttons["Not Now"]
+        if notNow.waitForExistence(timeout: 10) { notNow.tap() }
+        else if app.buttons["Not Now"].exists { app.buttons["Not Now"].tap() }
+        if !app.buttons["Sign out"].waitForExistence(timeout: 3), app.buttons["Travel account"].exists { app.buttons["Travel account"].tap() }
+        XCTAssertTrue(app.buttons["Sign out"].waitForExistence(timeout: 25), app.staticTexts["account-message"].exists ? app.staticTexts["account-message"].label : "No account error shown")
+        XCTAssertTrue(app.staticTexts["Native Cloud Test"].exists)
+        capture("71 Supabase native account")
+        app.buttons["Refresh cloud journeys"].tap()
+        app.buttons["Sign out"].tap()
+        XCTAssertTrue(handle.waitForExistence(timeout: 10))
     }
     func testFlightValidation() {
         app.buttons["category-Flights"].tap()
@@ -602,6 +817,83 @@ final class AurumUITests: XCTestCase {
         app.launch()
         XCTAssertTrue(app.buttons["onboarding-start"].waitForExistence(timeout: 8))
     }
+    @MainActor func testOnboardingCloudRegistrationAndSignIn() throws {
+        let root = "https://bwrodcxmdzrpyrshrlfd.supabase.co/functions/v1/travel-api"
+        let username = "onboard_" + UUID().uuidString.prefix(8).lowercased()
+        let passwordValue = UUID().uuidString + "-cloud"
+        // Only this test's account is ever touched, including cleanup after a failed assertion.
+        addTeardownBlock {
+            var login = URLRequest(url: URL(string: root + "/v1/auth/login")!)
+            login.httpMethod = "POST"; login.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            login.httpBody = try JSONSerialization.data(withJSONObject: ["handle": username, "password": passwordValue])
+            let (data, response) = try await URLSession.shared.data(for: login)
+            if (response as? HTTPURLResponse)?.statusCode == 401 { return }
+            let result = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+            let token = try XCTUnwrap(result?["token"] as? String)
+            var removal = URLRequest(url: URL(string: root + "/v1/account")!); removal.httpMethod = "DELETE"
+            removal.setValue("Bearer " + token, forHTTPHeaderField: "Authorization")
+            let (_, deleted) = try await URLSession.shared.data(for: removal)
+            XCTAssertEqual((deleted as? HTTPURLResponse)?.statusCode, 200)
+        }
+        let serverArgs = ["--travel-test-server", root + "?onboarding-test=" + username]
+        beginOnboarding(extra: serverArgs)
+        app.buttons["onboarding-start"].tap(); app.buttons["onboarding-skip"].tap()
+        let name = app.textFields["onboarding-account-name"]
+        XCTAssertTrue(name.waitForExistence(timeout: 8)); capture("74 Create your account"); name.tap(); name.typeText("Onboarding Traveler")
+        app.keyboards.buttons["next"].tap()
+        let handle = app.textFields["onboarding-account-handle"]
+        handle.typeText(username)
+        app.keyboards.buttons["next"].tap()
+        let password = app.secureTextFields["onboarding-account-password"]
+        dismissStrongPasswordIfNeeded()
+        for character in passwordValue { password.typeText(String(character)) }
+        app.keyboards.buttons["next"].tap()
+        let confirmation = app.secureTextFields["onboarding-account-confirmation"]
+        dismissStrongPasswordIfNeeded()
+        confirmation.typeText("does-not-match")
+        app.buttons["onboarding-account-submit"].tap()
+        XCTAssertTrue(app.staticTexts["onboarding-account-error"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["onboarding-account-error"].label.contains("don’t match"), app.staticTexts["onboarding-account-error"].label)
+        confirmation.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 14))
+        for character in passwordValue { confirmation.typeText(String(character)) }
+        app.buttons["onboarding-account-submit"].tap()
+        dismissSavePasswordIfNeeded()
+        XCTAssertTrue(app.buttons["membership-skip"].waitForExistence(timeout: 30), "Registration must reach the membership preview")
+        capture("72 Onboarding account created")
+        app.buttons["membership-skip"].tap()
+        app.tabBars.buttons["Travel"].tap(); app.buttons["Travel account"].tap()
+        XCTAssertTrue(app.staticTexts["Onboarding Traveler"].waitForExistence(timeout: 10))
+        app.terminate()
+        app.launchArguments = ["--ui-testing", "--onboarding-testing", "--preserve-state"] + serverArgs; app.launch()
+        app.tabBars.buttons["Travel"].tap(); app.buttons["Travel account"].tap()
+        XCTAssertTrue(app.buttons["Sign out"].waitForExistence(timeout: 15), "Account must survive relaunch in Keychain")
+        app.buttons["Sign out"].tap()
+        XCTAssertTrue(app.textFields["account-handle"].waitForExistence(timeout: 10))
+        beginOnboarding(extra: serverArgs)
+        app.buttons["onboarding-sign-in"].tap()
+        XCTAssertFalse(app.textFields["onboarding-account-name"].exists)
+        handle.tap(); handle.typeText(username)
+        app.keyboards.buttons["next"].tap()
+        password.typeText("wrong-password-value")
+        app.buttons["onboarding-account-submit"].tap()
+        XCTAssertTrue(app.staticTexts["onboarding-account-error"].waitForExistence(timeout: 20))
+        XCTAssertFalse(app.buttons["membership-skip"].exists)
+        password.tap(); password.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 20) + passwordValue)
+        app.buttons["onboarding-account-submit"].tap()
+        dismissSavePasswordIfNeeded()
+        XCTAssertTrue(app.buttons["membership-skip"].waitForExistence(timeout: 30))
+        app.buttons["membership-skip"].tap()
+        app.tabBars.buttons["Travel"].tap(); app.buttons["Travel account"].tap()
+        XCTAssertTrue(app.staticTexts["Onboarding Traveler"].waitForExistence(timeout: 10))
+    }
+    private func dismissStrongPasswordIfNeeded() {
+        if app.staticTexts["Use Strong Password?"].waitForExistence(timeout: 3) { app.buttons["Close"].tap() }
+    }
+    private func dismissSavePasswordIfNeeded() {
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        if springboard.buttons["Not Now"].waitForExistence(timeout: 3) { springboard.buttons["Not Now"].tap() }
+        else if app.buttons["Not Now"].exists { app.buttons["Not Now"].tap() }
+    }
     func testOnboardingPersonalizationAndPreview() {
         beginOnboarding()
         capture("21 Onboarding welcome")
@@ -623,6 +915,7 @@ final class AurumUITests: XCTestCase {
         app.buttons["destination-Paris"].tap()
         capture("24 First destination")
         app.buttons["onboarding-continue"].tap()
+        app.buttons["onboarding-account-skip"].tap()
         XCTAssertTrue(app.buttons["membership-preview"].waitForExistence(timeout: 5))
         capture("25 Reserve introduction")
         reveal(app.buttons["membership-monthly"])
@@ -679,6 +972,9 @@ final class AurumUITests: XCTestCase {
         XCTAssertTrue(app.buttons["onboarding-continue"].isHittable)
         capture("30 Preferences accessibility text")
         app.buttons["onboarding-skip"].tap()
+        capture("73 Account accessibility text")
+        XCTAssertTrue(app.buttons["onboarding-account-skip"].isHittable)
+        app.buttons["onboarding-account-skip"].tap()
         XCTAssertTrue(app.buttons["membership-preview"].isHittable)
         app.buttons["membership-close"].tap()
         XCTAssertTrue(app.tabBars.buttons["Discover"].waitForExistence(timeout: 5))
@@ -773,10 +1069,10 @@ final class AurumUITests: XCTestCase {
         let name = app.textFields["place-name"]; name.tap(); name.typeText("Par")
         XCTAssertTrue(app.buttons["place-name-suggestion-0"].waitForExistence(timeout: 5))
         app.buttons["place-name-suggestion-0"].tap()
-        app.buttons["Location & contact"].tap()
-        XCTAssertEqual(app.textFields["place-city"].value as? String, "Paris")
-        XCTAssertEqual(app.textFields["place-address"].value as? String, "10 Avenue Example, Paris, France")
-        app.buttons["Map coordinates"].tap()
+        XCTAssertTrue(app.staticTexts["10 Avenue Example, Paris, France"].exists)
+        XCTAssertTrue(app.staticTexts["place-map-ready"].exists)
+        XCTAssertFalse(app.textFields["place-address"].exists)
+        XCTAssertFalse(app.buttons["Map coordinates"].exists)
         capture("37 Autocomplete place details")
         app.buttons["rated-save"].tap()
         XCTAssertTrue(app.staticTexts["Paris Test Hotel"].waitForExistence(timeout: 5))

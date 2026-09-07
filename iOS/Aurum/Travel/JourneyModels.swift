@@ -342,7 +342,7 @@ struct JourneyLibraryArchive: Codable { var version = 1; var documents: [Journey
         guard FileManager.default.fileExists(atPath: self.url.path) else { return }
         do {
             let archive = try JSONDecoder().decode(JourneyLibraryArchive.self, from: Data(contentsOf: self.url))
-            guard archive.version == 1 else { throw JourneyError.message("This library was made with a newer Aurum version.") }
+            guard archive.version == 1 else { throw JourneyError.message("This library was made with a newer Seur version.") }
             documents = archive.documents
         } catch { loadFailed = true; self.error = "Your travel library couldn’t be loaded. Your original file has been kept: \(error.localizedDescription)" }
     }
@@ -366,7 +366,7 @@ struct JourneyLibraryArchive: Codable { var version = 1; var documents: [Journey
     func importData(_ data: Data) throws -> UUID {
         guard data.count <= 40_000_000 else { throw JourneyError.message("This file is too large (40 MB maximum).") }
         let archive = try JSONDecoder().decode(JourneyArchive.self, from: data)
-        guard archive.version == 1 else { throw JourneyError.message("Unsupported Aurum file version.") }
+        guard archive.version == 1 else { throw JourneyError.message("Unsupported Seur file version.") }
         var copy = archive.document
         if let reason = copy.validationError() { throw JourneyError.message(reason) }
         copy.id = UUID(); copy.visibility = .private; copy.importedFrom = copy.title

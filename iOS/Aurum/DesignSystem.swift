@@ -2,9 +2,21 @@ import SwiftUI
 import SafariServices
 
 extension Color {
-    static let canvas = Color(uiColor: UIColor { $0.userInterfaceStyle == .dark ? UIColor(red: 0.075, green: 0.080, blue: 0.073, alpha: 1) : UIColor(red: 0.974, green: 0.964, blue: 0.946, alpha: 1) })
+    static let canvas = Color(uiColor: UIColor { $0.userInterfaceStyle == .dark ? UIColor(red: 0.080, green: 0.075, blue: 0.070, alpha: 1) : UIColor(red: 0.974, green: 0.964, blue: 0.946, alpha: 1) })
     static let bronze = Color(uiColor: UIColor { $0.userInterfaceStyle == .dark ? UIColor(red: 0.83, green: 0.70, blue: 0.51, alpha: 1) : UIColor(red: 0.55, green: 0.39, blue: 0.22, alpha: 1) })
+    static let brandInk = Color(red: 0.20, green: 0.17, blue: 0.14)
+    static let brandBronze = Color(red: 0.55, green: 0.39, blue: 0.22)
     static let cardSurface = Color(uiColor: .secondarySystemGroupedBackground)
+}
+
+/// The shared Seur flight-ribbon mark. Uses the same artwork as the home-screen icon.
+struct SeurLogo: View {
+    var size: CGFloat = 32
+    var body: some View {
+        Image("SeurLogo").resizable().scaledToFit().frame(width: size, height: size)
+            .clipShape(.rect(cornerRadius: size * 0.23))
+            .accessibilityLabel("Seur").accessibilityIdentifier("seur-logo")
+    }
 }
 
 struct Editorial: View {

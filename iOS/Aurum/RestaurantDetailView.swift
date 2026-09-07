@@ -47,7 +47,7 @@ struct RestaurantDetailView: View {
                         SectionHeading(title: "Make a stay of it", subtitle: "One address. More to discover.")
                         NavigationLink { HotelDetailView(hotel: hotel) } label: { HotelRow(hotel: hotel) }.buttonStyle(PressStyle())
                     }
-                    Text("From the Aurum hotel collection. Menus, opening hours and availability are confirmed by the hotel.")
+                    Text("From the Seur hotel collection. Menus, opening hours and availability are confirmed by the hotel.")
                         .font(.caption).foregroundStyle(.secondary).lineSpacing(3).padding(.bottom, 12)
                 }.padding(24).background(Color.canvas, in: UnevenRoundedRectangle(topLeadingRadius: 32, topTrailingRadius: 32)).padding(.top, -28)
             }
@@ -91,7 +91,7 @@ struct RestaurantDetailView: View {
         ZStack(alignment: .bottomLeading) {
             if hotel.image != nil { HotelPhoto(hotel: hotel) }
             else {
-                Rectangle().fill(LinearGradient(colors: [Color(red: 0.18, green: 0.23, blue: 0.21), Color(red: 0.35, green: 0.30, blue: 0.22)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                Rectangle().fill(LinearGradient(colors: [Color.brandInk, Color(red: 0.35, green: 0.30, blue: 0.22)], startPoint: .topLeading, endPoint: .bottomTrailing))
                 Image(systemName: symbol).font(.system(size: 86, weight: .ultraLight)).foregroundStyle(.white.opacity(0.55)).frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             LinearGradient(colors: [.clear, .black.opacity(0.65)], startPoint: .center, endPoint: .bottom)

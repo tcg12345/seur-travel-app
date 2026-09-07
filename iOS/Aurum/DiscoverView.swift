@@ -35,15 +35,15 @@ struct DiscoverView: View {
         .toolbar {
             ToolbarItem(placement: .principal) {
                 HStack(spacing: 8) {
-                    Image(systemName: "a.circle").font(.system(size: 18, weight: .ultraLight)).foregroundStyle(Color.bronze)
-                    Text("AURUM").font(.system(size: 14, weight: .medium, design: .serif)).tracking(4)
+                    SeurLogo(size: 30)
+                    Text("SEUR").font(.system(size: 14, weight: .medium, design: .serif)).tracking(4)
                 }.accessibilityElement(children: .combine)
             }
             ToolbarItem(placement: .topBarTrailing) {
                 Button { showProfile = true } label: { Image(systemName: "person.crop.circle").fontWeight(.light) }.accessibilityLabel("Your workspace")
             }
         }
-        .sheet(isPresented: $showProfile) { ProfileView() }
+        .navigationDestination(isPresented: $showProfile) { ProfileView() }
         .navigationDestination(for: Hotel.self) { hotel in
             HotelDetailView(hotel: hotel).navigationTransition(.zoom(sourceID: hotel.id, in: hotelTransition))
         }

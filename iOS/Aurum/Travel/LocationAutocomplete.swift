@@ -41,13 +41,14 @@ struct LocationSuggestion: Identifiable {
     private let fixtures: Bool
     init(fixtures: Bool = false) { self.fixtures = fixtures; super.init() }
 
-    func update(_ value: String, kind: LocationSearchKind, googleSearch: ((String) async throws -> [GooglePlaceSuggestion])? = nil) {
+    func update(_ value: String, kind: LocationSearchKind, context: String = "", googleSearch: ((String) async throws -> [GooglePlaceSuggestion])? = nil) {
         stop()
         query = value.trimmingCharacters(in: .whitespacesAndNewlines)
         guard query.count >= 2 else { return }
         if kind.isLocal { suggestions = Self.localSuggestions(query, kind: kind); return }
         loading = true
         let current = revision; let fragment = query
+        let contextual = context.isEmpty || query.split(whereSeparator: { $0.isWhitespace }).count > 1 || query.localizedCaseInsensitiveContains(context) ? query : query + " " + context
         work = Task { [weak self] in
             do { try await Task.sleep(for: .milliseconds(350)) } catch { return }
             guard let self, !Task.isCancelled, self.revision == current else { return }
@@ -58,7 +59,7 @@ struct LocationSuggestion: Identifiable {
             #endif
             if (kind == .place || kind == .address), let googleSearch {
                 do {
-                    let matches = try await googleSearch(fragment)
+                    let matches = try await googleSearch(contextual)
                     guard !Task.isCancelled, self.revision == current else { return }
                     if !matches.isEmpty {
                         self.suggestions = matches.map { LocationSuggestion(title: $0.title, subtitle: $0.subtitle, google: $0) }
@@ -80,7 +81,7 @@ struct LocationSuggestion: Identifiable {
             case .address: engine.resultTypes = .address
             default: engine.resultTypes = [.pointOfInterest, .address]
             }
-            self.completer = engine; engine.delegate = self; engine.queryFragment = fragment
+            self.completer = engine; engine.delegate = self; engine.queryFragment = contextual
         }
     }
     func completerDidUpdateResults(_ completer: MKLocalSearchCompleter) {
@@ -170,12 +171,13 @@ struct LocationAutocompleteField: View {
     var kind: LocationSearchKind = .destination
     var identifier = "location-field"
     var category: PlaceCategory = .other
+    var searchContext = ""
     var onEdit: (() -> Void)?
     var onSelect: ((LocationSelection) -> Void)?
     @State private var model: LocationAutocompleteModel
     @FocusState private var focused: Bool
-    init(_ title: String, text: Binding<String>, kind: LocationSearchKind = .destination, identifier: String = "location-field", category: PlaceCategory = .other, onEdit: (() -> Void)? = nil, onSelect: ((LocationSelection) -> Void)? = nil) {
-        self.title = title; _text = text; self.kind = kind; self.identifier = identifier; self.category = category; self.onEdit = onEdit; self.onSelect = onSelect
+    init(_ title: String, text: Binding<String>, kind: LocationSearchKind = .destination, identifier: String = "location-field", category: PlaceCategory = .other, searchContext: String = "", onEdit: (() -> Void)? = nil, onSelect: ((LocationSelection) -> Void)? = nil) {
+        self.title = title; _text = text; self.kind = kind; self.identifier = identifier; self.category = category; self.searchContext = searchContext; self.onEdit = onEdit; self.onSelect = onSelect
         #if DEBUG
         let args = ProcessInfo.processInfo.arguments
         _model = State(initialValue: LocationAutocompleteModel(fixtures: args.contains("--ui-testing") && args.contains("--location-testing")))
@@ -213,9 +215,9 @@ struct LocationAutocompleteField: View {
                 }.padding(.top, 6)
             }
         }
-        .onChange(of: text) { if focused { model.update(text, kind: kind, googleSearch: { try await api.autocompletePlaces($0) }) } }
-        .onChange(of: focused) { if focused { model.update(text, kind: kind, googleSearch: { try await api.autocompletePlaces($0) }) } else { model.stop() } }
-        .onChange(of: kind) { if focused { model.update(text, kind: kind, googleSearch: { try await api.autocompletePlaces($0) }) } }
+        .onChange(of: text) { if focused { model.update(text, kind: kind, context: searchContext, googleSearch: { try await api.autocompletePlaces($0) }) } }
+        .onChange(of: focused) { if focused { model.update(text, kind: kind, context: searchContext, googleSearch: { try await api.autocompletePlaces($0) }) } else { model.stop() } }
+        .onChange(of: kind) { if focused { model.update(text, kind: kind, context: searchContext, googleSearch: { try await api.autocompletePlaces($0) }) } }
         .onDisappear { model.stop() }
     }
 }

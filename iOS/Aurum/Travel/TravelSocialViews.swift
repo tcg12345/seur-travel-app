@@ -1,56 +1,219 @@
 import SwiftUI
 
 struct TravelAccountView: View {
+    var createAccount = false
+    var body: some View { NavigationStack { TravelAccountPage(register: createAccount) } }
+}
+
+/// Full-page account access shared by profile, travel, and contextual entry points.
+struct TravelAccountPage: View {
     @Environment(TravelAPI.self) private var api
     @Environment(JourneyLibrary.self) private var library
     @Environment(\.dismiss) private var dismiss
-    @State private var address = ""
+    @State var register = false
     @State private var handle = ""
     @State private var name = ""
     @State private var password = ""
-    @State private var register = false
+    @State private var confirmation = ""
     @State private var loading = false
-    @State private var error: String?
+    @State private var message: String?
     @State private var cloud: [RemoteJourney] = []
+    @State private var confirmingDeletion = false
+    @State private var justAuthenticated = false
+    @FocusState private var focus: Field?
+    private enum Field { case name, handle, password, confirmation }
+    @Environment(\.dynamicTypeSize) private var typeSize
     var body: some View {
-        NavigationStack {
-            Form {
-                if let account = api.account {
-                    Section("Your account") { Label(account.name, systemImage: "person.crop.circle"); Text("@" + account.handle).foregroundStyle(.secondary); Button("Sign out") { Task { await api.logout(); cloud = [] } } }
-                    Section("Cloud copies") {
-                        Button("Refresh cloud journeys") { Task { await loadCloud() } }
+        Group {
+            if let account = api.account, api.isSignedIn {
+                Form {
+                    Section {
+                        HStack(spacing: 16) {
+                            Image(systemName: "person.crop.circle.fill").font(.system(size: 44)).foregroundStyle(Color.bronze)
+                            VStack(alignment: .leading, spacing: 5) {
+                                Text(account.name).font(.title3.weight(.semibold))
+                                Text("@" + account.handle).font(.subheadline).foregroundStyle(.secondary)
+                            }
+                        }.padding(.vertical, 10)
+                        if justAuthenticated { Label("You’re signed in", systemImage: "checkmark.circle.fill").foregroundStyle(Color.bronze).accessibilityIdentifier("account-success") }
+                        Button("Continue exploring") { dismiss() }.accessibilityIdentifier("account-continue")
+                    }
+                    Section("Cloud trips") {
+                        Button("Refresh cloud journeys") { Task { await loadCloud() } }.disabled(loading)
                         ForEach(cloud) { remote in
-                            Button { do { _ = try library.importData(JSONEncoder().encode(JourneyArchive(document: remote.document))); error = "A private copy was saved on this device." } catch { self.error = error.localizedDescription } } label: { VStack(alignment: .leading, spacing: 5) { Text(remote.document.title); Text("Download a separate copy").font(.caption).foregroundStyle(.secondary) } }
+                            Button { Task { do { let full = try await api.document(remote.id); _ = try library.importData(JSONEncoder().encode(JourneyArchive(document: full.document))); message = "A private copy was saved on this device." } catch { message = error.localizedDescription } } } label: {
+                                HStack { Text(remote.document.title); Spacer(); Image(systemName: "arrow.down.circle") }
+                            }
                         }
                     }
-                } else {
                     Section {
-                        Picker("Account", selection: $register) { Text("Sign in").tag(false); Text("Create account").tag(true) }.pickerStyle(.segmented)
-                        TextField("Username", text: $handle).textInputAutocapitalization(.never).autocorrectionDisabled().textContentType(.username).accessibilityIdentifier("account-handle")
-                        if register { TextField("Display name", text: $name).textContentType(.name) }
-                        SecureField("Password (12+ characters)", text: $password).textContentType(register ? .newPassword : .password).accessibilityIdentifier("account-password")
-                        Button(loading ? "Connecting…" : register ? "Create my account" : "Sign in") { Task { loading = true; error = nil; defer { loading = false }; do { try await api.authenticate(handle: handle, name: name, password: password, register: register); password = ""; await loadCloud() } catch { self.error = error.localizedDescription } } }.disabled(loading || handle.isEmpty || password.isEmpty)
-                    } header: { Text("Travel is better together") } footer: { Text("Your local journeys work without an account. Sign in to save cloud copies, find friends, and share.") }
-                }
-                Section("Travel services") {
-                    LabeledContent("Apple Maps", value: "Available on iOS")
-                    LabeledContent("Google Places", value: api.status?.googlePlaces.map { $0 ? "Connected" : "Apple Maps fallback" } ?? "Not checked")
-                    LabeledContent("Tripadvisor", value: api.status.map { $0.tripadvisor ? "Connected" : "Key needed on server" } ?? "Not checked")
-                    LabeledContent("AI recommendations", value: api.status.map { $0.ai ? "Connected" : "Key needed on server" } ?? "Not checked")
-                    LabeledContent("Public links", value: api.status.map { $0.publicSharing ? "Available" : "HTTPS deployment needed" } ?? "Not checked")
-                }
-                Section {
-                    TextField("https://your-backend.example", text: $address).keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
-                    Button("Connect to server") { Task { api.baseURL = address.trimmingCharacters(in: .whitespacesAndNewlines); await refresh() } }
-                } header: { Text("Backend address") } footer: { Text("API keys stay on the backend. Local Simulator development uses http://localhost:8787; other devices require your HTTPS deployment.") }
-                if let error { Section { Text(error).font(.subheadline).foregroundStyle(.secondary) } }
-            }.scrollContentBackground(.hidden).background(Color.canvas).navigationTitle("Your travel account").navigationBarTitleDisplayMode(.inline)
-                .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
-                .task { address = api.baseURL; await refresh() }
+                        NavigationLink("Connected services") { TravelServicesSettingsView() }
+                        Button("Sign out") { Task { loading = true; await api.logout(); cloud = []; justAuthenticated = false; register = false; message = nil; loading = false } }.disabled(loading)
+                    }
+                    Section { Button("Delete cloud account", role: .destructive) { confirmingDeletion = true }.disabled(loading) }
+                        footer: { Text("Trips saved on this device stay on this device.") }
+
+                    if let message { Section { Text(message).font(.subheadline).accessibilityIdentifier("account-message") } }
+                }.scrollContentBackground(.hidden)
+            } else { guestPage }
+        }
+        .background(Color.canvas).scrollDismissesKeyboard(.interactively)
+        .navigationTitle(api.isSignedIn ? "Your account" : "")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.hidden, for: .tabBar)
+        .toolbarBackground(.hidden, for: .navigationBar)
+        .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() }.disabled(loading) } }
+        .interactiveDismissDisabled(loading)
+        .onChange(of: register) { focus = nil; password = ""; confirmation = ""; message = nil }
+        .onDisappear { password = ""; confirmation = "" }
+        .task { try? await api.refresh(); if api.isSignedIn { await loadCloud() } }
+        .confirmationDialog("Delete your cloud account and all cloud trips?", isPresented: $confirmingDeletion, titleVisibility: .visible) {
+            Button("Delete account", role: .destructive) { Task { loading = true; defer { loading = false }; do { try await api.deleteAccount(); cloud = []; justAuthenticated = false } catch { message = error.localizedDescription } } }
+            Button("Cancel", role: .cancel) { }
         }
     }
-    private func refresh() async { do { try await api.refresh(); error = nil; if api.isSignedIn { await loadCloud() } } catch { self.error = error.localizedDescription } }
-    private func loadCloud() async { do { cloud = try await api.documents() } catch { self.error = error.localizedDescription } }
+
+    private var guestPage: some View {
+        ScrollView {
+            VStack(spacing: 0) {
+                ZStack(alignment: .bottomLeading) {
+                    GeometryReader { geometry in
+                        Image("bangkok").resizable().scaledToFill()
+                            .frame(width: geometry.size.width, height: geometry.size.height).clipped()
+                    }
+                    LinearGradient(colors: [.black.opacity(0.05), .black.opacity(0.65)], startPoint: .top, endPoint: .bottom)
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack(spacing: 10) {
+                            SeurLogo(size: 34)
+                            Text("SEUR").font(.subheadline.weight(.medium)).tracking(5)
+                        }
+                        Text("Made for the journey.").font(.system(.title, design: .serif)).fixedSize(horizontal: false, vertical: true)
+                    }.foregroundStyle(.white).padding(24)
+                }
+                .frame(height: typeSize.isAccessibilitySize ? 250 : 205)
+                .clipShape(.rect(cornerRadius: 28))
+                .padding(.horizontal, 16).accessibilityElement(children: .combine)
+
+                VStack(alignment: .leading, spacing: 24) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(register ? "A world of your own." : "Welcome back.")
+                            .font(.system(.largeTitle, design: .serif)).tracking(-0.8)
+                            .fixedSize(horizontal: false, vertical: true).accessibilityAddTraits(.isHeader)
+                        Text(register ? "Save your trips. Keep your discoveries." : "Your next journey is waiting.")
+                            .font(.subheadline).foregroundStyle(.secondary)
+                    }
+                    Picker("Account", selection: $register) {
+                        Text("Sign in").tag(false)
+                        Text("Create account").tag(true)
+                    }.pickerStyle(.segmented).accessibilityIdentifier("account-mode").disabled(loading)
+
+                    VStack(spacing: 0) {
+                        if register {
+                            field("Your name", icon: "person") {
+                                TextField("Display name", text: $name).textContentType(.name).focused($focus, equals: .name)
+                                    .submitLabel(.next).onSubmit { focus = .handle }.accessibilityIdentifier("account-name")
+                            }
+                            Divider().padding(.leading, 52)
+                        }
+                        field("Username", icon: "at") {
+                            TextField(register ? "Choose a username" : "Username", text: $handle).textContentType(.username)
+                                .textInputAutocapitalization(.never).autocorrectionDisabled().focused($focus, equals: .handle)
+                                .submitLabel(.next).onSubmit { focus = .password }.accessibilityIdentifier("account-handle")
+                        }
+                        Divider().padding(.leading, 52)
+                        field("Password", icon: "lock") {
+                            SecureField(register ? "12 or more characters" : "Password", text: $password).textContentType(register ? .newPassword : .password)
+                                .focused($focus, equals: .password).submitLabel(register ? .next : .go)
+                                .onSubmit { if register { focus = .confirmation } else { submit() } }.accessibilityIdentifier("account-password")
+                        }
+                        if register {
+                            Divider().padding(.leading, 52)
+                            field("Confirm password", icon: "checkmark.shield") {
+                                SecureField("Repeat your password", text: $confirmation).textContentType(.newPassword).focused($focus, equals: .confirmation)
+                                    .submitLabel(.go).onSubmit { submit() }.accessibilityIdentifier("account-confirmation")
+                            }
+                        }
+                    }
+                    .background(Color.cardSurface, in: .rect(cornerRadius: 24))
+                    .overlay { RoundedRectangle(cornerRadius: 24).strokeBorder(Color.bronze.opacity(0.14), lineWidth: 1) }
+                    .disabled(loading)
+                    if let message {
+                        Label(message, systemImage: "exclamationmark.circle").font(.subheadline).foregroundStyle(.red)
+                            .fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("account-message")
+                    }
+                    Button(action: submit) {
+                        HStack(spacing: 12) {
+                            Spacer()
+                            if loading { ProgressView().tint(.white) }
+                            Text(loading ? "Connecting…" : register ? "Create account" : "Sign in").fontWeight(.semibold)
+                            if !loading { Image(systemName: "arrow.right") }
+                            Spacer()
+                        }.padding(.vertical, 14).frame(minHeight: 48)
+                    }.buttonStyle(.glassProminent).tint(Color.bronze).disabled(loading).accessibilityIdentifier("account-submit")
+                }.padding(.horizontal, 24).padding(.top, 28).padding(.bottom, 32)
+            }
+        }.scrollEdgeEffectHidden(true, for: .top).accessibilityIdentifier("account-full-page")
+    }
+
+    private func field<Content: View>(_ title: String, icon: String, @ViewBuilder content: () -> Content) -> some View {
+        HStack(alignment: .center, spacing: 14) {
+            Image(systemName: icon).font(.body.weight(.light)).foregroundStyle(Color.bronze).frame(width: 20).accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 7) {
+                Text(title).font(.caption.weight(.medium)).foregroundStyle(.secondary)
+                content().font(.body)
+            }
+        }.padding(18)
+    }
+    private func submit() {
+        guard !loading else { return }
+        message = nil
+        let username = handle.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard username.range(of: "^[a-z0-9_]{3,32}$", options: .regularExpression) != nil else { message = "Enter a username with 3–32 letters, numbers or underscores."; focus = .handle; return }
+        guard !password.isEmpty else { message = "Enter your password."; focus = .password; return }
+        let displayName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        if register {
+            guard !displayName.isEmpty && displayName.count <= 100 else { message = "Enter your name (up to 100 characters)."; focus = .name; return }
+            guard (12...256).contains(password.count) else { message = "Use a password with 12–256 characters."; focus = .password; return }
+            guard password == confirmation else { message = "Your passwords don’t match."; focus = .confirmation; return }
+        }
+        focus = nil; loading = true
+        Task { @MainActor in
+            defer { loading = false }
+            do {
+                try await api.authenticate(handle: username, name: displayName, password: password, register: register)
+                password = ""; confirmation = ""; justAuthenticated = true
+                await loadCloud()
+            } catch { message = error.localizedDescription }
+        }
+    }
+    private func loadCloud() async { do { cloud = try await api.documents() } catch { message = error.localizedDescription } }
+}
+
+private struct TravelServicesSettingsView: View {
+    @Environment(TravelAPI.self) private var api
+    @State private var address = ""
+    @State private var error: String?
+    var body: some View {
+        Form {
+            Section("Services") {
+                LabeledContent("Seur Cloud", value: "Connected")
+                LabeledContent("Apple Maps", value: "Available")
+                LabeledContent("FlightAware", value: api.status?.flightTracking == true ? "Connected" : "Unavailable")
+                LabeledContent("Google Places", value: api.status?.googlePlaces == true ? "Connected" : "Apple Maps fallback")
+                LabeledContent("Tripadvisor", value: api.status?.tripadvisor == true ? "Connected" : "Unavailable")
+                LabeledContent("AI recommendations", value: api.status?.ai == true ? "Connected" : "Unavailable")
+                LabeledContent("Public links", value: api.status?.publicSharing == true ? "Available" : "Unavailable")
+            }
+            #if DEBUG
+            Section("Development") {
+                TextField("Backend address", text: $address).keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
+                Button("Connect to server") { Task { api.baseURL = address.trimmingCharacters(in: .whitespacesAndNewlines); do { try await api.refresh() } catch { self.error = error.localizedDescription } } }
+            }
+            #endif
+            if let error { Text(error).foregroundStyle(.red) }
+        }.navigationTitle("Connected services").navigationBarTitleDisplayMode(.inline)
+            .task { address = api.baseURL; try? await api.refresh() }
+    }
 }
 
 struct TravelFriendsView: View {
@@ -88,7 +251,7 @@ struct TravelFriendsView: View {
             }
             if let error { Text(error).font(.subheadline).foregroundStyle(.red) }
         }.task { if !api.isSignedIn { try? await api.refresh() }; if api.isSignedIn { await refresh() } }
-            .sheet(isPresented: $account, onDismiss: { Task { if api.isSignedIn { await refresh() } } }) { TravelAccountView() }
+            .fullScreenCover(isPresented: $account, onDismiss: { Task { if api.isSignedIn { await refresh() } } }) { TravelAccountView() }
             .sheet(isPresented: $group, onDismiss: { Task { await refresh() } }) { ConversationEditor(friends: friends.filter { $0.status == "accepted" }) }
     }
     private func refresh() async { refreshing = true; defer { refreshing = false }; do { friends = try await api.friends(); feed = try await api.documents(feed: true); chats = try await api.conversations(); error = nil } catch { self.error = error.localizedDescription } }
@@ -198,24 +361,38 @@ private struct AttachJourneyView: View {
 struct SharedJourneyPreview: View {
     @Environment(JourneyLibrary.self) private var library
     let remote: RemoteJourney
+    @Environment(TravelAPI.self) private var api
+    @State private var loaded: RemoteJourney?
+    @State private var loading = false
+    private var current: RemoteJourney { loaded ?? remote }
     @State private var imported = false
     @State private var error: String?
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
-                Eyebrow(text: "Shared by \(remote.owner.name)")
-                Editorial(remote.document.title, size: 36)
-                Text(remote.document.routeLabel).foregroundStyle(.secondary)
+                Eyebrow(text: "Shared by \(current.owner.name)")
+                Editorial(current.document.title, size: 36)
+                Text(current.document.routeLabel).foregroundStyle(.secondary)
                 Label("Read-only shared journey", systemImage: "lock").font(.caption)
-                Button { do { _ = try library.importData(JSONEncoder().encode(JourneyArchive(document: remote.document))); imported = true } catch { self.error = error.localizedDescription } } label: { Label(imported ? "Private copy imported" : "Import my own copy", systemImage: imported ? "checkmark" : "square.and.arrow.down").frame(maxWidth: .infinity).padding(.vertical, 11) }.buttonStyle(.glassProminent).disabled(imported)
-                Text(JourneyExporter.text(remote.document)).font(.subheadline).lineSpacing(5).textSelection(.enabled)
-                JourneyMapView(places: remote.document.mapPlaces).frame(height: 280).clipShape(.rect(cornerRadius: 22))
-                ForEach(remote.document.places) { place in
+                Button { do { _ = try library.importData(JSONEncoder().encode(JourneyArchive(document: current.document))); imported = true } catch { self.error = error.localizedDescription } } label: { Label(imported ? "Private copy imported" : "Import my own copy", systemImage: imported ? "checkmark" : "square.and.arrow.down").frame(maxWidth: .infinity).padding(.vertical, 11) }.buttonStyle(.glassProminent).disabled(imported || loading || (remote.isSummary == true && loaded == nil))
+                Text(JourneyExporter.text(current.document)).font(.subheadline).lineSpacing(5).textSelection(.enabled)
+                JourneyMapView(places: current.document.mapPlaces).frame(height: 280).clipShape(.rect(cornerRadius: 22))
+                ForEach(current.document.places) { place in
                     if !place.photos.isEmpty { Text(place.place.name).font(.headline); ScrollView(.horizontal) { HStack { ForEach(place.photos) { photo in if let image = UIImage(data: photo.jpeg) { Image(uiImage: image).resizable().scaledToFit().frame(height: 200).clipShape(.rect(cornerRadius: 20)) } } } } }
                 }
                 if let error { Text(error).foregroundStyle(.red) }
             }.padding(24)
         }.background(Color.canvas).navigationTitle("A shared journey").navigationBarTitleDisplayMode(.inline)
+            .overlay { if loading { ProgressView("Loading shared photos…").padding(20).glassEffect(.regular, in: .rect(cornerRadius: 20)) } }
+            .task(id: remote.id) { await loadFullJourney() }
+            .refreshable { await loadFullJourney() }
+    }
+    private func loadFullJourney() async {
+        guard remote.isSummary == true else { return }
+        loading = true; defer { loading = false }
+        do { loaded = try await api.document(remote.id); error = nil }
+        catch { loaded = nil; self.error = error.localizedDescription }
+
     }
 }
 
@@ -240,7 +417,7 @@ struct JourneyShareView: View {
                     Section { Text(document.title).font(.system(.title2, design: .serif)); Text("Your journal, your audience.").foregroundStyle(.secondary) }
                     Section {
                         ForEach(JourneyExportFormat.allCases) { format in Button { do { export = ExportedJourney(url: try JourneyExporter.export(document, format: format)) } catch { message = error.localizedDescription } } label: { Label("Share \(format.rawValue.uppercased())", systemImage: "square.and.arrow.up") } }
-                    } header: { Text("Take it with you") } footer: { Text("Use the Apple share sheet for Mail, Messages, AirDrop and Files. Exports include the booking details and private notes in your local copy. JSON can be imported back into Aurum.") }
+                    } header: { Text("Take it with you") } footer: { Text("Use the Apple share sheet for Mail, Messages, AirDrop and Files. Exports include the booking details and private notes in your local copy. JSON can be imported back into Seur.") }
                     if api.isSignedIn {
                         Section("Cloud & audience") {
                             Button("Save cloud copy") { run { _ = try await api.upload(document); message = "Cloud copy saved with your current audience settings." } }
@@ -267,7 +444,7 @@ struct JourneyShareView: View {
             }.disabled(loading).scrollContentBackground(.hidden).background(Color.canvas).navigationTitle("Share your journey").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
                 .task { await refresh() }
-                .sheet(isPresented: $account, onDismiss: { Task { await refresh() } }) { TravelAccountView() }
+                .fullScreenCover(isPresented: $account, onDismiss: { Task { await refresh() } }) { TravelAccountView() }
                 .sheet(item: $export) { ActivityShareSheet(items: [$0.url]) }
         }
     }
