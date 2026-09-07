@@ -412,3 +412,11 @@ The SwiftUI source uses native iOS 26 Liquid Glass APIs and system controls. The
 - Removed the permanently inset surface. Its side margins interpolate continuously from 12 points at compact height to zero at full expansion; the content width stays fixed.
 - Kept the inner scroll layout at expanded height and changed only its visible outer height during dragging. Active drag updates disable implicit animations; detent settling retains a spring. MapKit's viewport/insets remain independent of sheet movement.
 - Signed iPhone build succeeded and installed on the connected iPhone 16 Pro. All three targeted terminal checks passed: interpolation/bounds unit coverage, actual full-width expansion and collapse after scrolling flight details, and repeated Explore/Trips/Flights dragging with unchanged map camera, viewport and tab-bar position. No browser or manual screenshot checks were used.
+
+## Immersed flight details and detailed timetable — September 7, 2026
+
+- Replaced large airport cards with open route/time sections, a restrained status ribbon and compact gate/terminal tiles. Aircraft and registration use small independent tiles; tracking, alerts, performance and notes remain accessible below. Endpoint timing colors retain text labels and actual/estimated/scheduled distinctions.
+- Added an always-visible six-stage timetable with scheduled, estimated and actual columns, local dates and safe paired-timestamp taxi durations. Missing data remains explicit. Accessibility sizes stack columns. Supabase and Python flight adapters now preserve provider runway estimates without extra requests or changes to polling/cache behavior.
+- One native timetable unit test and one terminal-driven UI flow passed with zero failures, covering stage order, taxi calculations/missing values, local times, field round trips, timetable navigation, performance disclosure and returning to Flights. Ten Supabase contract tests and seven Python flight-provider tests passed. No browser or manual screenshots were used.
+- Deployed travel-api; remote source verification confirmed both runway-estimate fields, and the status endpoint returned valid JSON. Verification did not request paid flight data.
+- Final signed iPhone build succeeded and installed successfully on Tyler’s connected iPhone 16 Pro. Map sheet geometry and gesture implementation were unchanged.

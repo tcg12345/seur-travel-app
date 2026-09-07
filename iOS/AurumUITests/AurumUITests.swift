@@ -12,6 +12,25 @@ final class AurumUITests: XCTestCase {
         app.tabBars.buttons["Map"].firstMatch.tap()
         if app.buttons["map-saved"].waitForExistence(timeout: 2) { app.buttons["map-saved"].tap() }
     }
+    func testFlightTimetableAndImmersedAirportDetails() {
+        app.terminate(); app.launchArguments = ["--ui-testing", "--map-testing", "--location-testing", "--city-testing"]; app.launch()
+        app.tabBars.buttons["Map"].tap(); XCTAssertTrue(app.buttons["map-section-Flights"].waitForExistence(timeout: 8))
+        resizeMapPanel(expanded: true); app.buttons["map-section-Flights"].tap()
+        let flight = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "map-flight-")).firstMatch
+        XCTAssertTrue(flight.waitForExistence(timeout: 5)); flight.tap(); resizeMapPanel(expanded: true)
+        XCTAssertTrue(app.staticTexts["map-flight-title"].waitForExistence(timeout: 5))
+        let time = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "30m late")).firstMatch
+        XCTAssertTrue(time.waitForExistence(timeout: 8))
+        let heading = app.staticTexts["flight-timetable-title"]; reveal(heading)
+        XCTAssertTrue(heading.exists)
+        XCTAssertTrue(app.staticTexts["Gate departure"].exists)
+        XCTAssertTrue(app.staticTexts["Taxi to runway"].exists)
+        let landing = app.staticTexts["Landing"]; reveal(landing); XCTAssertTrue(landing.exists)
+        let gate = app.staticTexts["Gate arrival"]; reveal(gate); XCTAssertTrue(gate.exists)
+        let performance = app.buttons["flight-performance"]; reveal(performance); performance.tap()
+        XCTAssertTrue(app.buttons["Load delay history"].waitForExistence(timeout: 5))
+        app.buttons["All flights"].tap(); XCTAssertTrue(app.buttons["map-section-Flights"].waitForExistence(timeout: 5))
+    }
     func testMapPanelReachesEdgesAndCollapsesAfterContentScrolling() {
         app.terminate(); app.launchArguments = ["--ui-testing", "--map-testing", "--location-testing", "--city-testing"]; app.launch()
         app.tabBars.buttons["Map"].tap()
@@ -27,7 +46,7 @@ final class AurumUITests: XCTestCase {
         XCTAssertTrue(flight.waitForExistence(timeout: 5)); flight.tap(); resizeMapPanel(expanded: true)
         let scroll = app.scrollViews["map-panel-scroll"].firstMatch
         scroll.swipeUp(); scroll.swipeUp()
-        XCTAssertTrue(app.buttons["flight-performance"].exists)
+        reveal(app.buttons["flight-performance"]); XCTAssertTrue(app.buttons["flight-performance"].exists)
         resizeMapPanel(expanded: false)
         XCTAssertEqual(surface.frame.width, compactWidth, accuracy: 2)
         resizeMapPanel(expanded: true)

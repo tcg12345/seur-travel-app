@@ -624,6 +624,24 @@ import MapKit
             XCTAssertLessThan(layout.medium, layout.maximum)
         }
     }
+    func testDetailedFlightTimetableUsesRealStagesAndSafeTaxiDurations() throws {
+        var flight = FlightMapFixtures.snapshot
+        flight.scheduledOff = "2026-09-06T22:10:00Z"; flight.estimatedOff = "2026-09-06T22:57:00Z"
+        flight.scheduledOn = "2026-09-07T04:50:00Z"; flight.estimatedOn = "2026-09-07T05:25:00Z"
+        flight.actualOut = "2026-09-06T22:31:00Z"; flight.actualOff = "2026-09-06T22:51:00Z"
+        let rows = FlightTimetableRow.rows(flight)
+        XCTAssertEqual(rows.map(\.id), ["gate-out", "taxi-out", "takeoff", "landing", "taxi-in", "gate-in"])
+        XCTAssertEqual(rows[1].scheduled, .duration(600)); XCTAssertEqual(rows[1].estimated, .duration(1620)); XCTAssertEqual(rows[1].actual, .duration(1200))
+        XCTAssertEqual(rows[4].scheduled, .duration(600)); XCTAssertEqual(rows[4].estimated, .duration(600)); XCTAssertNil(rows[4].actual)
+        XCTAssertEqual(rows[2].estimated?.text(zone: flight.originZone), "18:57")
+        XCTAssertEqual(rows[3].estimated?.text(zone: flight.destinationZone), "06:25")
+        let roundTrip = try JSONDecoder().decode(FlightSnapshot.self, from: JSONEncoder().encode(flight))
+        XCTAssertEqual(roundTrip.estimatedOff, flight.estimatedOff); XCTAssertEqual(roundTrip.estimatedOn, flight.estimatedOn)
+        flight.actualOff = "2026-09-06T22:00:00Z"
+        XCTAssertNil(FlightTimetableRow.rows(flight)[1].actual)
+        flight.estimatedOff = nil
+        XCTAssertNil(FlightTimetableRow.rows(flight)[1].estimated)
+    }
     func testFlightDetailPunctualitySeparatesDepartureAndArrival() {
         var flight = FlightMapFixtures.snapshot
         XCTAssertEqual(flight.timing(departure: true), .late(30))

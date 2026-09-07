@@ -156,3 +156,10 @@ Deno.test("standalone flights reject invalid coordinates and preserve local date
     Problem,
   );
 });
+
+Deno.test("Runway estimates survive flight normalization without fabricated values", () => {
+  const row = normalize({ fa_flight_id: "timeline", estimated_off: "2026-09-08T01:27:00Z", estimated_on: "2026-09-08T08:40:00Z" });
+  assert.equal(row.estimatedOff, "2026-09-08T01:27:00Z");
+  assert.equal(row.estimatedOn, "2026-09-08T08:40:00Z");
+  assert.equal(normalize({ fa_flight_id: "missing" }).estimatedOff, undefined);
+});
