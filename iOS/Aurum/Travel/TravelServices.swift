@@ -2,13 +2,13 @@ import SwiftUI
 import MapKit
 import Security
 
-struct TravelAccount: Codable, Identifiable { var id: String; var handle: String; var name: String }
+struct TravelAccount: Codable, Identifiable, Hashable { var id: String; var handle: String; var name: String }
 struct TravelAuthResponse: Codable { var token: String; var user: TravelAccount }
 struct TravelServiceStatus: Codable { var tripadvisor: Bool; var ai: Bool; var publicSharing: Bool; var googlePlaces: Bool?; var flightTracking: Bool?; var flightHistory: Bool? }
 struct GooglePlaceSuggestion: Codable, Identifiable { var id: String; var title: String; var subtitle: String }
 struct TravelFriend: Codable, Identifiable { var id: String; var handle: String; var name: String; var status: String; var incoming: Bool }
 struct RemoteJourney: Codable, Identifiable { var id: String; var owner: TravelAccount; var document: JourneyDocument; var revision: Int; var isSummary: Bool? }
-struct TravelConversation: Codable, Identifiable { var id: String; var name: String; var members: [TravelAccount] }
+struct TravelConversation: Codable, Identifiable, Hashable { var id: String; var name: String; var members: [TravelAccount] }
 struct TravelChatMessage: Codable, Identifiable { var id: String; var sender: TravelAccount; var text: String; var documentID: String?; var createdAt: Double; var timestamp: String { Date(timeIntervalSince1970: createdAt).formatted(date: .abbreviated, time: .shortened) } }
 struct TravelLink: Codable { var url: String }
 struct AITravelResponse: Codable { var text: String; var places: [PlaceRecord] }
@@ -56,6 +56,9 @@ private struct EmptyReply: Codable { var ok: Bool }
         baseURL = configured
         #endif
         token = Self.readToken(for: baseURL)
+        #if DEBUG
+        if FriendsFixtures.enabled { account = FriendsFixtures.owner; token = "friends-fixture-only" }
+        #endif
     }
     var isSignedIn: Bool { account != nil && token != nil }
     func refresh() async throws {
@@ -230,6 +233,9 @@ private struct EmptyReply: Codable { var ok: Bool }
         try await perform(path, method: method, data: body.map { try JSONSerialization.data(withJSONObject: $0) }, query: query)
     }
     private func perform<T: Decodable>(_ path: String, method: String, data: Data?, query: [String: String] = [:], timeout: TimeInterval = 40) async throws -> T {
+        #if DEBUG
+        if FriendsFixtures.enabled { return try JSONDecoder().decode(T.self, from: FriendsFixtures.response(path, method: method)) }
+        #endif
         guard var url = URLComponents(string: baseURL.trimmingCharacters(in: .whitespacesAndNewlines)), let host = url.host,
               url.scheme == "https" || (url.scheme == "http" && ["localhost", "127.0.0.1", "::1"].contains(host)) else { throw JourneyError.message("The cloud service address is invalid. Check the server setting in Travel → Account.") }
         url.path = url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/")); url.path = (url.path.isEmpty ? "" : "/" + url.path) + path

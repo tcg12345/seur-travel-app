@@ -193,6 +193,7 @@ struct WorldMapView: View {
         HStack(spacing: 10) {
             HStack(spacing: 8) { Image(systemName: "globe.europe.africa"); Text("Your world").font(.system(.headline, design: .serif)) }.padding(.horizontal, 17).padding(.vertical, 13).glassEffect(.regular, in: .capsule)
             Spacer()
+            Button { store.searchPresented = true } label: { Image(systemName: "magnifyingglass").frame(width: 44, height: 44) }.buttonStyle(.glass).accessibilityLabel("Search").accessibilityIdentifier("global-search")
             Button { showSaved = true } label: { Image(systemName: "bookmark").frame(width: 44, height: 44) }.buttonStyle(.glass).accessibilityLabel("Saved places and collections").accessibilityIdentifier("map-saved")
             Menu {
                 Button(satellite ? "Standard map" : "Satellite globe", systemImage: "map") { satellite.toggle() }

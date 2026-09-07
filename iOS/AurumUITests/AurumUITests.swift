@@ -12,6 +12,33 @@ final class AurumUITests: XCTestCase {
         app.tabBars.buttons["Map"].firstMatch.tap()
         if app.buttons["map-saved"].waitForExistence(timeout: 2) { app.buttons["map-saved"].tap() }
     }
+    func testFriendsTabSharedItineraryPeopleAndSearch() {
+        app.terminate(); app.launchArguments = ["--ui-testing", "--friends-testing"]; app.launch()
+        let bar = app.tabBars.firstMatch
+        XCTAssertTrue(bar.buttons["Friends"].waitForExistence(timeout: 8))
+        XCTAssertTrue(bar.buttons["Concierge"].exists); XCTAssertFalse(bar.buttons["More"].exists)
+        XCTAssertGreaterThan(bar.buttons["Friends"].frame.minX, bar.buttons["Travel"].frame.minX)
+        bar.buttons["Friends"].tap()
+        XCTAssertTrue(app.staticTexts["friends-home-title"].waitForExistence(timeout: 8))
+        let trip = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "friends-trip-")).firstMatch
+        if !trip.isHittable { app.swipeUp() }
+        XCTAssertTrue(trip.waitForExistence(timeout: 8)); trip.tap()
+        XCTAssertTrue(app.staticTexts["shared-itinerary-title"].waitForExistence(timeout: 8))
+        XCTAssertTrue(app.buttons["shared-itinerary-copy"].exists)
+        app.navigationBars.buttons.firstMatch.tap()
+        app.swipeDown()
+        app.buttons["friends-section-People"].tap()
+        XCTAssertTrue(app.staticTexts["Maya Chen"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Accept"].exists)
+        app.buttons["friends-add-person"].tap()
+        XCTAssertTrue(app.textFields["friend-invite-username"].waitForExistence(timeout: 5)); app.buttons["Cancel"].tap()
+        app.buttons["friends-section-Messages"].tap()
+        XCTAssertTrue(app.staticTexts["Paris planning"].waitForExistence(timeout: 5))
+        bar.buttons["Travel"].tap(); XCTAssertFalse(app.segmentedControls["travel-tool"].exists)
+        bar.buttons["Discover"].tap(); app.buttons["global-search"].tap()
+        XCTAssertTrue(app.buttons["Done"].waitForExistence(timeout: 5)); app.buttons["Done"].tap()
+        XCTAssertTrue(bar.buttons["Friends"].exists)
+    }
     func testGlobeFlightsTripsAndSaved() {
         app.terminate(); app.launchArguments = ["--ui-testing", "--map-testing", "--location-testing", "--city-testing", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryL"]; app.launch()
         app.tabBars.buttons["Map"].firstMatch.tap()
@@ -288,7 +315,7 @@ final class AurumUITests: XCTestCase {
         capture("04 Itinerary")
     }
     func testSearchCatalogAndEmptyState() {
-        app.tabBars.buttons["Search"].tap()
+        app.tabBars.buttons["Discover"].tap(); app.buttons["global-search"].tap()
         let field = app.searchFields.firstMatch
         XCTAssertTrue(field.waitForExistence(timeout: 5)); field.tap(); field.typeText("Savoy")
         XCTAssertTrue(app.staticTexts["The Savoy"].waitForExistence(timeout: 5))

@@ -415,7 +415,7 @@ export async function handler(req: Request): Promise<Response> {
         return json({ url: apiURL + "/s/" + value });
       }
     }
-    const value = await dispatch(uid, method, path, body);
+    const value = path === "/v1/feed" && method === "GET" ? await rpc("travel_social_feed", { actor: uid }) : await dispatch(uid, method, path, body);
     if (Array.isArray(value) && ["/v1/documents", "/v1/feed"].includes(path)) {
       return json(await Promise.all(value.map((v) => hydrate(v, true))));
     }

@@ -33,6 +33,7 @@ struct DiscoverView: View {
         .background(Color.canvas)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            ToolbarItem(placement: .topBarLeading) { Button { store.searchPresented = true } label: { Image(systemName: "magnifyingglass") }.accessibilityLabel("Search").accessibilityIdentifier("global-search") }
             ToolbarItem(placement: .principal) {
                 HStack(spacing: 8) {
                     SeurLogo(size: 30)
@@ -66,7 +67,7 @@ struct DiscoverView: View {
                 }.accessibilityIdentifier("personal-destination")
             }
             if let cuisine = onboarding.profile.cuisines.sorted().first {
-                Button { store.cuisine = cuisine; store.city = "Everywhere"; store.query = ""; store.selectedTab = 3 } label: { Label(cuisine + " tables to discover", systemImage: "fork.knife").font(.subheadline) }
+                Button { store.cuisine = cuisine; store.city = "Everywhere"; store.query = ""; store.searchPresented = true } label: { Label(cuisine + " tables to discover", systemImage: "fork.knife").font(.subheadline) }
             }
             if !onboarding.profile.interests.isEmpty {
                 Text(onboarding.profile.interests.sorted().joined(separator: " · ")).font(.caption).foregroundStyle(.secondary)
@@ -101,7 +102,7 @@ struct DiscoverView: View {
             heroCard(hero)
             HStack(alignment: .firstTextBaseline) {
                 SectionHeading(title: "Worth the journey", subtitle: "Iconic stays. Unforgettable tables.")
-                Button("View all") { store.selectedTab = 3 }.font(.subheadline).foregroundStyle(Color.bronze)
+                Button("View all") { store.searchPresented = true }.font(.subheadline).foregroundStyle(Color.bronze)
             }
             ScrollView(.horizontal) {
                 HStack(spacing: 16) {
@@ -177,13 +178,13 @@ struct DiscoverView: View {
             SectionHeading(title: "Choose your table", subtitle: "Search by cuisine, restaurant, or city.")
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                 ForEach(["French", "Japanese", "Chinese", "Italian", "Thai", "Indian"], id: \.self) { cuisine in
-                    Button { store.cuisine = cuisine; store.selectedTab = 3 } label: {
+                    Button { store.cuisine = cuisine; store.searchPresented = true } label: {
                         HStack { Text(cuisine); Spacer(); Image(systemName: "arrow.up.right") }.font(.subheadline).padding(19)
                             .cardSurface(cornerRadius: 19)
                     }.buttonStyle(PressStyle())
                 }
             }
-            Button { store.sort = .dining; store.selectedTab = 3 } label: {
+            Button { store.sort = .dining; store.searchPresented = true } label: {
                 HStack(spacing: 16) {
                     Image(systemName: "fork.knife.circle").font(.largeTitle).fontWeight(.ultraLight)
                     VStack(alignment: .leading, spacing: 5) { Text("More tables, more possibilities").font(.headline); Text("Explore hotels with the widest dining selection.").font(.caption).foregroundStyle(.secondary) }

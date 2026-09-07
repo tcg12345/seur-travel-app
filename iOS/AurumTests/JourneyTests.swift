@@ -767,3 +767,40 @@ import MapKit
         XCTAssertTrue(chat.messages.isEmpty); XCTAssertFalse(chat.isReplying)
     }
 }
+
+@MainActor final class FriendsFeatureTests: XCTestCase {
+    func testTripPeriodsAndFlexibleDates() {
+        var trip = FriendsFixtures.trip
+        trip.stops[0].arrival = "2026-09-10"
+        XCTAssertEqual(FriendsTravel.phase(trip, today: "2026-09-07"), .upcoming)
+        XCTAssertEqual(FriendsTravel.phase(trip, today: "2026-09-11"), .traveling)
+        XCTAssertEqual(FriendsTravel.phase(trip, today: "2026-09-14"), .past)
+        trip.dateMode = .nights
+        XCTAssertNil(FriendsTravel.phase(trip)); XCTAssertEqual(FriendsTravel.dates(trip), "Dates flexible")
+    }
+    func testSharedTripSearchAndSavedFilter() {
+        let remote = FriendsFixtures.remote
+        XCTAssertTrue(FriendsTravel.matches(remote, query: "maya", filter: .all, saved: []))
+        XCTAssertFalse(FriendsTravel.matches(remote, query: "Tokyo", filter: .all, saved: []))
+        XCTAssertFalse(FriendsTravel.matches(remote, query: "", filter: .saved, saved: []))
+        XCTAssertTrue(FriendsTravel.matches(remote, query: "Paris", filter: .saved, saved: [remote.id]))
+    }
+    func testOverlapRequiresSameDestinationCountryAndMatchingDates() {
+        var other = FriendsFixtures.trip; other.stops[0].arrival = "2026-09-10"
+        var own = other; own.id = UUID(); own.stops[0].arrival = "2026-09-12"
+        XCTAssertNotNil(FriendsTravel.overlap(other, with: [own], today: "2026-09-07"))
+        own.stops[0].country = "United States"; XCTAssertNil(FriendsTravel.overlap(other, with: [own], today: "2026-09-07"))
+        own.stops[0].country = "France"; own.stops[0].arrival = "2026-09-20"; XCTAssertNil(FriendsTravel.overlap(other, with: [own], today: "2026-09-07"))
+        own.dateMode = .nights; XCTAssertNil(FriendsTravel.overlap(other, with: [own]))
+    }
+    func testDirectConversationDoesNotReuseLargerGroup() {
+        let owner = FriendsFixtures.owner, friend = FriendsFixtures.maya
+        var group = FriendsFixtures.chat; group.members.append(.init(id: "third", handle: "third", name: "Third"))
+        XCTAssertNil(FriendsTravel.directConversation(friend: friend.id, owner: owner.id, chats: [group]))
+        XCTAssertNotNil(FriendsTravel.directConversation(friend: friend.id, owner: owner.id, chats: [group, FriendsFixtures.chat]))
+    }
+    func testAccountResetClearsPersonalSocialData() {
+        let model = FriendsHomeModel(); model.friends = FriendsFixtures.friends; model.trips = [FriendsFixtures.remote]; model.chats = [FriendsFixtures.chat]; model.saved = [FriendsFixtures.remote.id]
+        model.reset(); XCTAssertTrue(model.friends.isEmpty); XCTAssertTrue(model.trips.isEmpty); XCTAssertTrue(model.chats.isEmpty); XCTAssertTrue(model.saved.isEmpty)
+    }
+}

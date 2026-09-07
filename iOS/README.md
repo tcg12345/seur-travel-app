@@ -122,3 +122,7 @@ The “Find a restaurant or place” and “Search hotels” buttons present sea
 ## Flight alerts and destination weather
 
 Flight detail pages now offer **Follow flight** for push alerts and **Show on Lock Screen** for Live Activities. Upcoming itinerary days use native WeatherKit forecasts with rain-aware concierge suggestions. See [AppleServices.md](AppleServices.md) for setup, permissions, monitoring costs and platform limits.
+
+## Friends
+
+The dedicated Friends tab contains shared trip discovery, invitations, friend profiles, private/group conversations, date-overlap hints, saved trip shortcuts and itinerary sharing controls. Shared itineraries have a readable day-by-day preview. Search is available from magnifying-glass buttons in Discover and Map so all five primary tabs remain visible. See [Friends.md](Friends.md) for sharing behavior and privacy details.

@@ -5,7 +5,6 @@ struct TravelHubView: View {
     @Environment(TravelAPI.self) private var api
     @Environment(JourneyLibrary.self) private var library
     @Environment(TravelStore.self) private var store
-    @State private var section = "Trips"
     @State private var query = ""
     @State private var grid = false
     @State private var newJourney = false
@@ -17,9 +16,7 @@ struct TravelHubView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
-                Picker("Travel tool", selection: $section) { Text("Trips").tag("Trips"); Text("Friends").tag("Friends") }.pickerStyle(.segmented).accessibilityIdentifier("travel-tool")
-                if section == "Friends" { TravelFriendsView() }
-                else {
+                Group {
                     if !library.documents.isEmpty { HStack {
                         Menu { Picker("Show", selection: $filter) { ForEach(["All", "Private", "Friends", "Public"], id: \.self) { Text($0) } } } label: { Label(filter == "All" ? "All trips" : filter, systemImage: "line.3.horizontal.decrease") }.font(.subheadline)
                         Spacer()
@@ -52,7 +49,7 @@ struct TravelHubView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) { Button { account = true } label: { if api.isSignedIn { Image(systemName: "person.crop.circle") } else { Text("Sign in").font(.subheadline.weight(.medium)) } }.accessibilityLabel("Travel account") }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button { section = "Trips"; newJourney = true } label: { Image(systemName: "plus") }
+                    Button { newJourney = true } label: { Image(systemName: "plus") }
                         .accessibilityLabel("New trip").accessibilityIdentifier("travel-new-trip")
                 }
             }

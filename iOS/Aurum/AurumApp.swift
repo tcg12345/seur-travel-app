@@ -38,10 +38,14 @@ struct RootView: View {
             // Normal tab/section switching keeps the same map instance.
             Tab("Map", systemImage: "globe.europe.africa", value: 1) { NavigationStack { WorldMapView(request: store.cityMapRequest) }.id(store.cityMapRequest?.id) }
             Tab("Travel", systemImage: "suitcase.rolling", value: 2) { NavigationStack { TravelHubView() } }
+            Tab("Friends", systemImage: "person.2", value: 5) { NavigationStack { FriendsHubView() } }
             Tab("Concierge", systemImage: "sparkles", value: 4) { NavigationStack { ConciergeView() } }
-            Tab(value: 3, role: .search) { NavigationStack { SearchView() } } label: { Label("Search", systemImage: "magnifyingglass") }
         }
         .tabBarMinimizeBehavior(.never)
+        .sheet(isPresented: $store.searchPresented) {
+            NavigationStack { SearchView().toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { store.searchPresented = false } } } }
+                .presentationDetents([.large])
+        }
         .task { try? await api.refresh() }
         .task(id: api.account?.id) { await FlightNotifications.shared.restore(api: api) }
         .task(id: FlightNotifications.shared.deviceToken) { await FlightNotifications.shared.syncDeviceToken(api: api) }
