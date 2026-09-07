@@ -699,6 +699,9 @@ final class AurumUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["account-success"].waitForExistence(timeout: 25))
     }
     func testAccountFullPageDesign() {
+        app.terminate()
+        app.launchArguments = ["--ui-testing", "--travel-test-server", "https://bwrodcxmdzrpyrshrlfd.supabase.co/functions/v1/travel-api?account-layout=" + UUID().uuidString]
+        app.launch()
         Thread.sleep(forTimeInterval: 1)
         app.tabBars.buttons["Travel"].tap()
         XCTAssertTrue(app.buttons["Travel account"].waitForExistence(timeout: 8), app.debugDescription)
