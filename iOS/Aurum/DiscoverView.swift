@@ -3,202 +3,195 @@ import SwiftUI
 struct DiscoverView: View {
     @Environment(OnboardingStore.self) private var onboarding
     @Environment(TravelStore.self) private var store
+    @Environment(JourneyLibrary.self) private var library
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var typeSize
     @Namespace private var hotelTransition
-    @Namespace private var categoryGlass
     @State private var showProfile = false
+    @State private var createTrip = false
+
+    private var latestTrip: JourneyDocument? { library.documents.max { $0.updatedAt < $1.updatedAt } }
+
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 25) {
-                VStack(alignment: .leading, spacing: 9) {
-                    Eyebrow(text: "The art of travel")
-                    Editorial(store.category == .dining ? "A destination\nin every dish." : store.category == .flights ? "Enjoy the\ngetting there." : store.category == .experiences ? "Go a little\nfurther." : "Somewhere\nextraordinary.", size: 40)
-                        .contentTransition(.numericText())
-                    Text(store.category == .dining ? "Remarkable tables. Exceptional stays." : "Thoughtful journeys, beautifully connected.")
-                        .font(.subheadline).foregroundStyle(.secondary)
-                }.padding(.top, 8)
-                categoryPicker
-                cityExplorerEntry
-                if onboarding.profile.hasPreferences { personalStartingPoint }
-                Group {
-                    switch store.category {
-                    case .hotels: hotelContent
-                    case .dining: diningContent
-                    case .flights: FlightForm()
-                    case .experiences: ExperiencesView()
-                    }
-                }.transition(reduceMotion ? .opacity : .opacity.combined(with: .offset(y: 12)))
-            }.padding(.horizontal, 22).padding(.bottom, 32)
+            VStack(alignment: .leading, spacing: 30) {
+                startingPoint
+                browseShortcuts
+                planningShortcut
+                inspiration
+                conciergeShortcut
+            }.padding(.horizontal, 22).padding(.top, 14).padding(.bottom, 32)
         }
         .background(Color.canvas)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .topBarLeading) { Button { store.searchPresented = true } label: { Image(systemName: "magnifyingglass") }.accessibilityLabel("Search").accessibilityIdentifier("global-search") }
+            ToolbarItem(placement: .topBarLeading) {
+                Button { store.searchPresented = true } label: { Image(systemName: "magnifyingglass") }
+                    .accessibilityLabel("Search").accessibilityIdentifier("global-search")
+            }
             ToolbarItem(placement: .principal) {
                 HStack(spacing: 8) {
-                    SeurLogo(size: 30)
+                    SeurLogo(size: 26)
                     Text("SEUR").font(.system(size: 14, weight: .medium, design: .serif)).tracking(4)
                 }.accessibilityElement(children: .combine)
             }
             ToolbarItem(placement: .topBarTrailing) {
-                Button { showProfile = true } label: { Image(systemName: "person.crop.circle").fontWeight(.light) }.accessibilityLabel("Your workspace")
+                Button { showProfile = true } label: { Image(systemName: "person.crop.circle") }.accessibilityLabel("Your workspace")
             }
         }
         .navigationDestination(isPresented: $showProfile) { ProfileView() }
         .navigationDestination(for: Hotel.self) { hotel in
             HotelDetailView(hotel: hotel).navigationTransition(.zoom(sourceID: hotel.id, in: hotelTransition))
         }
+        .sheet(isPresented: $createTrip) { TripCreationView() }
     }
-    private var cityExplorerEntry: some View {
-        NavigationLink { CityExplorerView() } label: {
-            HStack(spacing: 16) {
-                Image(systemName: "globe.europe.africa").font(.system(size: 32, weight: .ultraLight)).foregroundStyle(Color.bronze)
-                VStack(alignment: .leading, spacing: 6) { Text("Explore a city").font(.system(.title3, design: .serif)).foregroundStyle(.primary); Text("Great tables, little detours & everything between.").font(.caption).foregroundStyle(.secondary) }
-                Spacer(); Image(systemName: "arrow.up.right").foregroundStyle(Color.bronze)
-            }.padding(20).cardSurface(cornerRadius: 26)
-        }.buttonStyle(PressStyle()).accessibilityIdentifier("explore-cities")
-    }
-    private var personalStartingPoint: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Eyebrow(text: "Your starting point")
-            if !onboarding.profile.destination.isEmpty {
+
+    private var startingPoint: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 8) {
+                Editorial("Where to next?", size: 34).accessibilityIdentifier("discover-title")
+                Text("Choose a city. Find places you’ll love. Make it a trip.")
+                    .font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
+            NavigationLink { CityExplorerView() } label: {
+                HStack(spacing: 13) {
+                    Image(systemName: "magnifyingglass").font(.title3).foregroundStyle(Color.bronze)
+                    Text("Explore a city").font(.body.weight(.medium)).foregroundStyle(.primary)
+                    Spacer(minLength: 4)
+                    Image(systemName: "arrow.right").font(.subheadline).foregroundStyle(Color.bronze)
+                }.padding(18).cardSurface(cornerRadius: 18, emphasized: true)
+            }.buttonStyle(PressStyle()).accessibilityIdentifier("explore-cities")
+                .accessibilityHint("Search any destination for restaurants, stays and things to do")
+            if !onboarding.profile.destination.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 NavigationLink { CityExplorerView(initialQuery: onboarding.profile.destination) } label: {
-                    HStack { Text("Explore " + onboarding.profile.destination).font(.system(.title3, design: .serif)); Spacer(); Image(systemName: "arrow.up.right") }
+                    Label("Continue exploring " + onboarding.profile.destination, systemImage: "clock.arrow.circlepath")
+                        .font(.subheadline).foregroundStyle(Color.bronze).frame(minHeight: 32, alignment: .leading)
                 }.accessibilityIdentifier("personal-destination")
             }
-            if let cuisine = onboarding.profile.cuisines.sorted().first {
-                Button { store.cuisine = cuisine; store.city = "Everywhere"; store.query = ""; store.searchPresented = true } label: { Label(cuisine + " tables to discover", systemImage: "fork.knife").font(.subheadline) }
-            }
-            if !onboarding.profile.interests.isEmpty {
-                Text(onboarding.profile.interests.sorted().joined(separator: " · ")).font(.caption).foregroundStyle(.secondary)
-            }
-        }.padding(20).cardSurface(cornerRadius: 24, emphasized: true)
-    }
-    private var categoryPicker: some View {
-        ScrollView(.horizontal) {
-            GlassEffectContainer(spacing: 8) {
-                HStack(spacing: 8) {
-                    ForEach(TravelCategory.allCases) { category in
-                        Button {
-                            withAnimation(reduceMotion ? nil : .spring(response: 0.4, dampingFraction: 0.8)) { store.category = category }
-                        } label: {
-                            Label(category.rawValue, systemImage: category.symbol)
-                                .font(.system(.subheadline, weight: store.category == category ? .semibold : .regular))
-                                .padding(.horizontal, 15).frame(height: 44)
-                                .foregroundStyle(store.category == category ? .white : .primary)
-                        }
-                        .glassEffect(.regular.tint(store.category == category ? Color.bronze : .clear).interactive(), in: .capsule)
-                        .glassEffectID(category, in: categoryGlass)
-                        .accessibilityAddTraits(store.category == category ? .isSelected : [])
-                        .accessibilityIdentifier("category-\(category.rawValue)")
-                    }
-                }.padding(.vertical, 4)
-            }
-        }.scrollIndicators(.hidden).sensoryFeedback(.selection, trigger: store.category)
-    }
-    @ViewBuilder private var hotelContent: some View {
-        if let error = store.loadError { EmptyState(title: "Collection unavailable", message: error, symbol: "wifi.exclamationmark") }
-        if let hero = store.featured.first {
-            heroCard(hero)
-            HStack(alignment: .firstTextBaseline) {
-                SectionHeading(title: "Worth the journey", subtitle: "Iconic stays. Unforgettable tables.")
-                Button("View all") { store.searchPresented = true }.font(.subheadline).foregroundStyle(Color.bronze)
-            }
-            ScrollView(.horizontal) {
-                HStack(spacing: 16) {
-                    ForEach(store.featured.dropFirst()) { hotel in
-                        NavigationLink(value: hotel) { compactCard(hotel) }
-                            .buttonStyle(PressStyle()).matchedTransitionSource(id: hotel.id, in: hotelTransition)
-                    }
-                }.padding(.bottom, 8)
-            }.scrollIndicators(.hidden).contentMargins(.trailing, 22)
-            destinationSection
-            collectionNote
         }
     }
-    private func heroCard(_ hotel: Hotel) -> some View {
-        ZStack(alignment: .topTrailing) {
-            NavigationLink(value: hotel) {
-                ZStack(alignment: .bottomLeading) {
-                    HotelPhoto(hotel: hotel)
-                    LinearGradient(colors: [.clear, .black.opacity(0.05), .black.opacity(0.82)], startPoint: .top, endPoint: .bottom)
-                    VStack(alignment: .leading, spacing: 9) {
-                        Text("BANGKOK, THAILAND").font(.caption2.weight(.medium)).tracking(2).foregroundStyle(.white.opacity(0.8))
-                        Editorial("A legend on\nthe river.", size: 37).foregroundStyle(.white)
-                        Text(hotel.name).font(.subheadline).foregroundStyle(.white.opacity(0.9))
-                        HStack {
-                            Label("\(hotel.venues.count) dining experiences", systemImage: "fork.knife").font(.caption)
-                            Spacer()
-                            Image(systemName: "arrow.up.right").font(.system(size: 15, weight: .medium))
-                        }.foregroundStyle(.white.opacity(0.95)).padding(.top, 7)
-                    }.padding(24)
-                    VStack {
-                        HStack {
-                            Label("THE DINING COLLECTION", systemImage: "sparkle")
-                                .font(.system(size: 10, weight: .semibold)).tracking(1)
-                                .padding(.horizontal, 12).padding(.vertical, 10)
-                                .glassEffect(.clear, in: .capsule).foregroundStyle(.white)
-                            Spacer()
-                        }
-                        Spacer()
-                    }.padding(18)
-                }.frame(height: 386).clipShape(.rect(cornerRadius: 30))
-            }.buttonStyle(PressStyle()).matchedTransitionSource(id: hotel.id, in: hotelTransition)
-                .accessibilityIdentifier("hero-hotel")
-            SaveButton(hotel: hotel).padding(14)
-        }.shadow(color: .black.opacity(0.10), radius: 18, x: 0, y: 9)
-    }
-    private func compactCard(_ hotel: Hotel) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HotelPhoto(hotel: hotel).frame(height: 168).clipped()
-            VStack(alignment: .leading, spacing: 7) {
-                Eyebrow(text: hotel.city)
-                Text(hotel.shortName).font(.system(.title3, design: .serif)).foregroundStyle(.primary)
-                Label("\(hotel.venues.count) dining options", systemImage: "fork.knife").font(.caption).foregroundStyle(.secondary)
-            }.padding(16)
-        }.frame(width: 252).cardSurface(cornerRadius: 24).clipShape(.rect(cornerRadius: 24))
-    }
-    private var destinationSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            SectionHeading(title: "Follow your curiosity")
-            ScrollView(.horizontal) {
-                HStack(spacing: 10) {
-                    ForEach(ExploreCity.collection) { city in
-                        NavigationLink { CityGuideView(city: city) } label: {
-                            HStack { Text(city.name); Image(systemName: "arrow.up.right").font(.caption) }.font(.subheadline).padding(.horizontal, 18).padding(.vertical, 13)
-                        }.buttonStyle(.glass)
-                    }
-                }.padding(.vertical, 4)
-            }.scrollIndicators(.hidden)
-        }
-    }
-    private var diningContent: some View {
-        VStack(alignment: .leading, spacing: 22) {
-            if let hotel = store.featured.first { heroCard(hotel) }
-            SectionHeading(title: "Choose your table", subtitle: "Search by cuisine, restaurant, or city.")
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                ForEach(["French", "Japanese", "Chinese", "Italian", "Thai", "Indian"], id: \.self) { cuisine in
-                    Button { store.cuisine = cuisine; store.searchPresented = true } label: {
-                        HStack { Text(cuisine); Spacer(); Image(systemName: "arrow.up.right") }.font(.subheadline).padding(19)
-                            .cardSurface(cornerRadius: 19)
-                    }.buttonStyle(PressStyle())
-                }
-            }
-            Button { store.sort = .dining; store.searchPresented = true } label: {
-                HStack(spacing: 16) {
-                    Image(systemName: "fork.knife.circle").font(.largeTitle).fontWeight(.ultraLight)
-                    VStack(alignment: .leading, spacing: 5) { Text("More tables, more possibilities").font(.headline); Text("Explore hotels with the widest dining selection.").font(.caption).foregroundStyle(.secondary) }
-                    Spacer(); Image(systemName: "chevron.right").font(.caption)
-                }.padding(20).cardSurface(cornerRadius: 24, emphasized: true)
+
+    private var browseShortcuts: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Or start with").font(.subheadline).foregroundStyle(.secondary)
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: typeSize.isAccessibilitySize ? 2 : 4), spacing: 18) {
+                Button {
+                    store.query = ""; store.city = "Everywhere"; store.cuisine = "Any cuisine"; store.sort = .featured
+                    store.searchPresented = true
+                } label: { shortcutLabel("Stays", symbol: "bed.double", color: .bronze) }
+                    .accessibilityIdentifier("category-Stays")
+                NavigationLink { CityExplorerView(initialInterest: .restaurants) } label: {
+                    shortcutLabel("Dining", symbol: "fork.knife", color: .orange)
+                }.accessibilityIdentifier("category-Dining")
+                NavigationLink { CityExplorerView(initialInterest: .attractions) } label: {
+                    shortcutLabel("Things to do", symbol: "sparkles", color: .teal)
+                }.accessibilityIdentifier("category-Experiences")
+                NavigationLink {
+                    ScrollView { FlightForm().padding(22) }.background(Color.canvas)
+                        .navigationTitle("Find flights").navigationBarTitleDisplayMode(.inline)
+                } label: { shortcutLabel("Flights", symbol: "airplane", color: .blue) }
+                    .accessibilityIdentifier("category-Flights")
             }.buttonStyle(PressStyle())
-            collectionNote
         }
     }
-    private var collectionNote: some View {
-        VStack(spacing: 7) {
-            Image(systemName: "sparkle").foregroundStyle(Color.bronze)
-            Text("Your next destination. Your next chapter.").font(.caption).foregroundStyle(.secondary)
-        }.frame(maxWidth: .infinity).padding(.vertical, 18)
+
+    private func shortcutLabel(_ title: String, symbol: String, color: Color) -> some View {
+        VStack(spacing: 9) {
+            Image(systemName: symbol).font(.system(size: 21, weight: .medium))
+                .foregroundStyle(color).frame(width: 48, height: 48)
+                .background(color.opacity(0.10), in: .circle)
+            Text(title).font(.caption.weight(.medium)).foregroundStyle(.primary).multilineTextAlignment(.center)
+        }.frame(maxWidth: .infinity, alignment: .top).contentShape(.rect)
+    }
+
+    private var planningShortcut: some View {
+        VStack(spacing: 0) {
+            Divider()
+            if let trip = latestTrip {
+                NavigationLink { JourneyDetailView(id: trip.id) } label: {
+                    planningLabel("Continue planning", detail: trip.title.isEmpty ? trip.routeLabel : trip.title, symbol: "suitcase.rolling")
+                }.accessibilityIdentifier("discover-continue-trip")
+            } else {
+                Button { createTrip = true } label: {
+                    planningLabel("Start a trip", detail: "Keep your plans together in one itinerary.", symbol: "plus")
+                }.accessibilityIdentifier("discover-create-trip")
+            }
+            Divider()
+        }.buttonStyle(PressStyle())
+    }
+
+    private func planningLabel(_ title: String, detail: String, symbol: String) -> some View {
+        HStack(spacing: 14) {
+            Image(systemName: symbol).font(.title3).foregroundStyle(Color.bronze).frame(width: 28)
+            VStack(alignment: .leading, spacing: 5) {
+                Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(.primary)
+                Text(detail).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+            }
+            Spacer(minLength: 6)
+            Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+        }.padding(.vertical, 18).frame(maxWidth: .infinity, alignment: .leading).contentShape(.rect)
+    }
+
+    private var inspiration: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            HStack(alignment: .firstTextBaseline) {
+                Editorial("A little inspiration", size: 26)
+                Spacer(minLength: 8)
+                NavigationLink("City guides") { CityExplorerView() }.font(.subheadline).foregroundStyle(Color.bronze)
+            }
+            if let hotel = store.featured.first {
+                heroCard(hotel)
+                ForEach(store.featured.dropFirst().prefix(2)) { hotel in
+                    NavigationLink(value: hotel) {
+                        HStack(spacing: 14) {
+                            HotelPhoto(hotel: hotel).frame(width: 76, height: 76).clipShape(.rect(cornerRadius: 12))
+                            VStack(alignment: .leading, spacing: 5) {
+                                Text(hotel.city).font(.caption).foregroundStyle(Color.bronze)
+                                Text(hotel.shortName).font(.system(.headline, design: .serif)).foregroundStyle(.primary)
+                                Text("Stay & dine").font(.caption).foregroundStyle(.secondary)
+                            }
+                            Spacer(minLength: 4)
+                            Image(systemName: "arrow.up.right").font(.subheadline).foregroundStyle(Color.bronze)
+                        }.contentShape(.rect)
+                    }.buttonStyle(PressStyle()).matchedTransitionSource(id: hotel.id, in: hotelTransition)
+                }
+            } else {
+                Text("Explore a city to find stays, restaurants and things to do.").font(.subheadline).foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private func heroCard(_ hotel: Hotel) -> some View {
+        NavigationLink(value: hotel) {
+            VStack(alignment: .leading, spacing: 12) {
+                HotelPhoto(hotel: hotel).frame(height: 200).clipShape(.rect(cornerRadius: 20))
+                    .overlay(alignment: .bottomLeading) {
+                        Text(hotel.city + ", " + hotel.country).font(.caption.weight(.medium))
+                            .foregroundStyle(.white).padding(.horizontal, 12).padding(.vertical, 8)
+                            .background(.black.opacity(0.65), in: .capsule).padding(14)
+                    }
+                HStack(alignment: .top, spacing: 10) {
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text(hotel.name).font(.system(.title3, design: .serif)).foregroundStyle(.primary)
+                        Text("Discover the stay and its dining collection.").font(.caption).foregroundStyle(.secondary)
+                    }
+                    Spacer(minLength: 4)
+                    Image(systemName: "arrow.up.right").foregroundStyle(Color.bronze)
+                }
+            }.contentShape(.rect)
+        }.buttonStyle(PressStyle()).matchedTransitionSource(id: hotel.id, in: hotelTransition)
+            .accessibilityIdentifier("hero-hotel")
+    }
+
+    private var conciergeShortcut: some View {
+        VStack(spacing: 0) {
+            Divider()
+            Button {
+                withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) { store.selectedTab = 4 }
+            } label: {
+                planningLabel("Let’s plan it together", detail: "Ask Concierge for ideas or a complete itinerary.", symbol: "sparkles")
+            }.buttonStyle(PressStyle()).accessibilityIdentifier("discover-concierge")
+        }
     }
 }
 

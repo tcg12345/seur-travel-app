@@ -12,6 +12,49 @@ final class AurumUITests: XCTestCase {
         app.tabBars.buttons["Map"].firstMatch.tap()
         if app.buttons["map-saved"].waitForExistence(timeout: 2) { app.buttons["map-saved"].tap() }
     }
+    func testDiscoverClearStartingPointAndCategoryDestinations() {
+        app.terminate(); app.launchArguments = ["--ui-testing", "--location-testing", "--city-testing"]; app.launch()
+        let start = app.buttons["explore-cities"]
+        XCTAssertTrue(start.waitForExistence(timeout: 8)); XCTAssertTrue(start.isHittable)
+        for name in ["Stays", "Dining", "Experiences", "Flights"] {
+            XCTAssertTrue(app.buttons["category-" + name].isHittable)
+        }
+        XCTAssertLessThan(start.frame.minY, app.buttons["category-Stays"].frame.minY)
+        start.tap(); XCTAssertTrue(app.textFields["explore-city-query"].waitForExistence(timeout: 5))
+        app.navigationBars.buttons.firstMatch.tap()
+        app.buttons["category-Stays"].tap()
+        XCTAssertTrue(app.searchFields.firstMatch.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Mandarin Oriental, Bangkok"].exists || app.buttons["search-explore-cities"].exists)
+        app.buttons["Done"].tap()
+        app.buttons["category-Flights"].tap()
+        XCTAssertTrue(app.textFields["flight-origin"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.textFields["flight-destination"].exists)
+        app.navigationBars.buttons.firstMatch.tap()
+        for category in [("Dining", "Restaurants"), ("Experiences", "Things to do")] {
+            app.buttons["category-" + category.0].tap()
+            XCTAssertTrue(app.navigationBars[category.1].waitForExistence(timeout: 5))
+            let query = app.textFields["explore-city-query"]; query.tap(); query.typeText("Lis")
+            let suggestion = app.buttons["explore-city-query-suggestion-0"]
+            XCTAssertTrue(suggestion.waitForExistence(timeout: 5)); suggestion.tap()
+            XCTAssertTrue(app.buttons["city-all-interests"].waitForExistence(timeout: 5))
+            XCTAssertTrue(app.buttons["city-all-interests"].label.contains(category.1))
+            app.navigationBars.buttons.firstMatch.tap(); app.navigationBars.buttons.firstMatch.tap()
+        }
+        let create = app.buttons["discover-create-trip"]; reveal(create); create.tap()
+        XCTAssertTrue(app.textFields["trip-destination"].waitForExistence(timeout: 5))
+    }
+    func testDiscoverResumeTripAndInspirationWithLargeText() {
+        app.terminate(); app.launchArguments = ["--ui-testing", "--map-testing", "--location-testing", "--city-testing", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityM"]; app.launch()
+        XCTAssertTrue(app.buttons["explore-cities"].waitForExistence(timeout: 8))
+        let resume = app.buttons["discover-continue-trip"]; reveal(resume); resume.tap()
+        XCTAssertTrue(app.buttons["journey-add"].waitForExistence(timeout: 8))
+        app.navigationBars.buttons.firstMatch.tap()
+        let hero = app.buttons["hero-hotel"]; reveal(hero); hero.tap()
+        XCTAssertTrue(app.buttons["detail-save"].waitForExistence(timeout: 8))
+        app.navigationBars.buttons.firstMatch.tap()
+        let concierge = app.buttons["discover-concierge"]; reveal(concierge); concierge.tap()
+        XCTAssertTrue(app.tabBars.buttons["Concierge"].isSelected)
+    }
     func testFriendsTabSharedItineraryPeopleAndSearch() {
         app.terminate(); app.launchArguments = ["--ui-testing", "--friends-testing"]; app.launch()
         let bar = app.tabBars.firstMatch
@@ -296,7 +339,7 @@ final class AurumUITests: XCTestCase {
         let hero = app.buttons["hero-hotel"]
         XCTAssertTrue(hero.waitForExistence(timeout: 10))
         capture("01 Discover — Liquid Glass")
-        hero.tap()
+        reveal(hero); hero.tap()
         XCTAssertTrue(app.buttons["plan-stay"].waitForExistence(timeout: 5))
         capture("02 Hotel detail")
         app.buttons["detail-save"].tap()
@@ -326,7 +369,7 @@ final class AurumUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["A little further afield?"].waitForExistence(timeout: 5))
     }
     func testDiningPlan() {
-        app.buttons["hero-hotel"].tap()
+        reveal(app.buttons["hero-hotel"]); app.buttons["hero-hotel"].tap()
         let venue = app.buttons["venue-0"]
         for _ in 0..<4 { if venue.isHittable { break }; app.swipeUp() }
         XCTAssertTrue(venue.isHittable); venue.tap()
@@ -344,7 +387,7 @@ final class AurumUITests: XCTestCase {
         capture("06 Dining planner")
     }
     func testRestaurantVisitAndSavedNavigation() {
-        app.buttons["hero-hotel"].tap()
+        reveal(app.buttons["hero-hotel"]); app.buttons["hero-hotel"].tap()
         let venue = app.buttons["venue-0"]
         for _ in 0..<5 { if venue.isHittable { break }; app.swipeUp() }
         venue.tap()

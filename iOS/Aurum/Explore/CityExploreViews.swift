@@ -3,6 +3,7 @@ import MapKit
 
 struct CityExplorerView: View {
     var initialQuery = ""
+    var initialInterest: ExploreInterest = .highlights
     @Environment(TravelStore.self) private var store
     @State private var query = ""
     @State private var selected: ExploreCity?
@@ -12,8 +13,8 @@ struct CityExplorerView: View {
             VStack(alignment: .leading, spacing: 27) {
                 VStack(alignment: .leading, spacing: 12) {
                     Eyebrow(text: "Cities, without boundaries")
-                    Editorial("The world,\nat your pace.", size: 42)
-                    Text("A remarkable table. A quiet garden. Something you didn’t know you were looking for.").font(.subheadline).foregroundStyle(.secondary).lineSpacing(4)
+                    Editorial("Choose a city", size: 34)
+                    Text(initialInterest == .restaurants ? "Find restaurants, cafés and memorable tables wherever you’re headed." : initialInterest == .attractions ? "Discover sights, activities and places worth making time for." : "Find stays, restaurants and things to do wherever you’re headed.").font(.subheadline).foregroundStyle(.secondary).lineSpacing(4)
                 }
                 VStack(alignment: .leading, spacing: 12) {
                     Label("Where shall we wander?", systemImage: "globe.europe.africa").font(.subheadline.weight(.medium)).foregroundStyle(Color.bronze)
@@ -43,9 +44,9 @@ struct CityExplorerView: View {
                     }
                 }
             }.padding(22).padding(.bottom, 25)
-        }.scrollDismissesKeyboard(.interactively).background(Color.canvas).navigationTitle("Explore cities").navigationBarTitleDisplayMode(.inline)
+        }.scrollDismissesKeyboard(.interactively).background(Color.canvas).navigationTitle(initialInterest == .highlights ? "Explore cities" : initialInterest.title).navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .topBarTrailing) { NavigationLink { SavedExplorePlacesView() } label: { Image(systemName: "bookmark") }.accessibilityLabel("Saved city discoveries") } }
-            .navigationDestination(item: $selected) { CityGuideView(city: $0) }
+            .navigationDestination(item: $selected) { CityGuideView(city: $0, initialInterest: initialInterest) }
             .onAppear { if query.isEmpty { query = initialQuery } }
     }
 }
@@ -55,6 +56,10 @@ struct CityGuideView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let city: ExploreCity
     @State private var model = CityExploreModel()
+    init(city: ExploreCity, initialInterest: ExploreInterest = .highlights) {
+        self.city = city
+        self._interest = State(initialValue: initialInterest)
+    }
     @State private var interest: ExploreInterest = .highlights
     @State private var query = ""
     @State private var sort: ExploreSort = .suggested
