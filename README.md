@@ -2,7 +2,7 @@
 
 The native **iOS 26 SwiftUI app** is now in [`iOS/`](iOS/README.md). Open `iOS/Aurum.xcodeproj` in Xcode. It uses Apple Liquid Glass, native zoom navigation, haptic feedback, and the bundled hotel/dining catalog.
 
-The native app includes unified trip planning and journals, worldwide city discovery, a globe with trip and flight routes, and optional live FlightAware tracking. The [Python backend](backend/README.md) supports accounts, friends, cloud sharing and server-side provider integrations. Keys and local databases are excluded from Git; configure your own server environment from `backend/.env.example`.
+The native app includes unified trip planning and journals, worldwide city discovery, a globe with trip and flight routes, and optional live FlightAware tracking. The [Supabase backend](supabase/README.md) runs accounts, cloud trips, private photos, friends, conversations, sharing and provider integrations. The native app connects directly to its HTTPS Edge Function. Keys are stored in Supabase secrets; `backend/` retains the earlier Python implementation for reference.
 
 The user wants to continue developing native flight booking with detailed cabin comparisons and seat photos. The agreed direction, provider candidates and next steps are saved in the [flight booking roadmap](iOS/FlightBookingRoadmap.md). Real ticketing and subscription payments are not enabled.
 

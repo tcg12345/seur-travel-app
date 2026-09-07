@@ -7,7 +7,7 @@ struct TravelAuthResponse: Codable { var token: String; var user: TravelAccount 
 struct TravelServiceStatus: Codable { var tripadvisor: Bool; var ai: Bool; var publicSharing: Bool; var googlePlaces: Bool?; var flightTracking: Bool?; var flightHistory: Bool? }
 struct GooglePlaceSuggestion: Codable, Identifiable { var id: String; var title: String; var subtitle: String }
 struct TravelFriend: Codable, Identifiable { var id: String; var handle: String; var name: String; var status: String; var incoming: Bool }
-struct RemoteJourney: Codable, Identifiable { var id: String; var owner: TravelAccount; var document: JourneyDocument; var revision: Int }
+struct RemoteJourney: Codable, Identifiable { var id: String; var owner: TravelAccount; var document: JourneyDocument; var revision: Int; var isSummary: Bool? }
 struct TravelConversation: Codable, Identifiable { var id: String; var name: String; var members: [TravelAccount] }
 struct TravelChatMessage: Codable, Identifiable { var id: String; var sender: TravelAccount; var text: String; var documentID: String?; var createdAt: Double; var timestamp: String { Date(timeIntervalSince1970: createdAt).formatted(date: .abbreviated, time: .shortened) } }
 struct TravelLink: Codable { var url: String }
@@ -22,27 +22,41 @@ private struct EmptyReply: Codable { var ok: Bool }
     private var token: String?
     private let defaults = UserDefaults.standard
     init() {
-        #if DEBUG
-        let fallback = "http://localhost:8787"
-        #else
-        let fallback = ""
-        #endif
+        let fallback = "https://bwrodcxmdzrpyrshrlfd.supabase.co/functions/v1/travel-api"
+        let saved = defaults.string(forKey: "aurum.backendURL") ?? ""
+        // Move existing simulator installs to the cloud while retaining local journeys.
+        let previousHost = URL(string: saved)?.host ?? ""
+        let configured = saved.isEmpty || ["localhost", "127.0.0.1", "::1"].contains(previousHost) ? fallback : saved
         let args = ProcessInfo.processInfo.arguments
         #if DEBUG
         if args.contains("--ui-testing"), let index = args.firstIndex(of: "--travel-test-server"), args.indices.contains(index + 1) {
             baseURL = args[index + 1]
-        } else { baseURL = defaults.string(forKey: "aurum.backendURL") ?? fallback }
+        } else { baseURL = configured }
         #else
-        baseURL = defaults.string(forKey: "aurum.backendURL") ?? fallback
+        baseURL = configured
         #endif
         token = Self.readToken(for: baseURL)
     }
     var isSignedIn: Bool { account != nil && token != nil }
-    func refresh() async throws { status = try await request("/v1/status"); if token != nil { account = try await request("/v1/me") } }
+    func refresh() async throws {
+        let server = baseURL, sessionToken = token
+        let value: TravelServiceStatus = try await request("/v1/status")
+        guard baseURL == server else { return }
+        status = value
+        if sessionToken != nil && token == sessionToken {
+            let user: TravelAccount = try await request("/v1/me")
+            guard baseURL == server && token == sessionToken else { return }
+            account = user
+        }
+    }
     func authenticate(handle: String, name: String, password: String, register: Bool) async throws {
         let response: TravelAuthResponse = try await request(register ? "/v1/auth/register" : "/v1/auth/login", method: "POST", body: ["handle": handle, "name": name, "password": password])
         try Self.writeToken(response.token, for: baseURL)
         token = response.token; account = response.user
+    }
+    func deleteAccount() async throws {
+        let _: EmptyReply = try await request("/v1/account", method: "DELETE", body: [:])
+        Self.deleteToken(for: baseURL); token = nil; account = nil
     }
     func logout() async {
         if token != nil { let _: EmptyReply? = try? await request("/v1/auth/logout", method: "POST", body: [:]) }
@@ -99,17 +113,20 @@ private struct EmptyReply: Codable { var ok: Bool }
     }
     private func perform<T: Decodable>(_ path: String, method: String, data: Data?, query: [String: String] = [:], timeout: TimeInterval = 40) async throws -> T {
         guard var url = URLComponents(string: baseURL.trimmingCharacters(in: .whitespacesAndNewlines)), let host = url.host,
-              url.scheme == "https" || (url.scheme == "http" && ["localhost", "127.0.0.1", "::1"].contains(host)) else { throw JourneyError.message("Set your HTTPS backend address in Travel → Account. Simulator development can use http://localhost:8787.") }
+              url.scheme == "https" || (url.scheme == "http" && ["localhost", "127.0.0.1", "::1"].contains(host)) else { throw JourneyError.message("The cloud service address is invalid. Check the server setting in Travel → Account.") }
         url.path = url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/")); url.path = (url.path.isEmpty ? "" : "/" + url.path) + path
         if !query.isEmpty { url.queryItems = query.map { URLQueryItem(name: $0.key, value: $0.value) } }
         guard let address = url.url else { throw JourneyError.message("Invalid backend address.") }
+        let requestToken = token, requestServer = baseURL
         var request = URLRequest(url: address); request.httpMethod = method; request.httpBody = data; request.timeoutInterval = timeout
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        if let token { request.setValue("Bearer " + token, forHTTPHeaderField: "Authorization") }
+        if let requestToken { request.setValue("Bearer " + requestToken, forHTTPHeaderField: "Authorization") }
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let response = response as? HTTPURLResponse else { throw JourneyError.message("The server did not return an HTTP response.") }
         guard (200..<300).contains(response.statusCode) else {
-            if response.statusCode == 401 { account = nil }
+            if response.statusCode == 401 && token == requestToken && baseURL == requestServer {
+                Self.deleteToken(for: requestServer); token = nil; account = nil
+            }
             throw JourneyError.message((try? JSONDecoder().decode(APIProblem.self, from: data))?.error ?? "Request failed (\(response.statusCode)).")
         }
         return try JSONDecoder().decode(T.self, from: data)

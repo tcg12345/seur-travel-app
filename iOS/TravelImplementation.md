@@ -8,18 +8,20 @@ A native Travel dashboard with one Trips library. Every trip combines forward-lo
 - [x] Native dashboard, itinerary editor, multi-city route editor, repeated-day event editor, day/calendar/map views, booking forms and searches.
 - [x] Trip journal editor, category ratings, photos, stats, filters/list/grid/maps, itinerary and rated-restaurant imports.
 - [x] PDF/TXT/CSV/JSON exports, JSON reload and system email/message sharing.
-- [x] Backend authentication, ownership, friend requests, conversations/groups, shared documents, revocable read-only links and browser pages.
+- [x] Backend authentication, ownership, friend requests, conversations/groups, shared documents, revocable read-only links and browser-viewable PDFs.
 - [x] Apple Maps cities/airports/places, Google Flights handoff, Tripadvisor hotel/place details and AI recommendations/overviews through server-side credentials.
 - [x] Native account/friends/chat/sharing and provider configuration/status screens.
 - [x] Swift unit/UI tests, backend integration/security tests, visual review, simulator refresh and source archive.
 
 ## External configuration
-No provider credentials or existing backend configuration were present at task start. User confirmed they have Tripadvisor and AI keys but no Amadeus account, and authorized building the backend without Amadeus. User has been asked where these are configured. Provider adapters are implemented with explicit configuration errors. Live provider acceptance and internet-accessible sharing remain pending credentials and a deployed HTTPS backend. Google Flights opens external live search; booking-record details are entered manually. No supplier booking or payment is performed.
+The backend is deployed entirely on Supabase: Postgres, Auth, private photo Storage and Edge Functions. Both native build configurations connect to Seur Cloud by default. Google Places and FlightAware are configured and live-tested. Tripadvisor and OpenAI adapters are deployed but still need their provider keys. Public links open an inline read-only PDF on the Supabase domain; TXT and JSON downloads preserve full Unicode. Cloud saves and imports remain explicit, and local trip libraries remain available offline.
+
+Google Flights opens external live search; booking-record details are entered manually. No supplier booking or payment is performed. See `../supabase/README.md` for architecture, security and deployment details.
 
 ## Trip add flow and Places search
 The add chooser remains mounted while each selection opens its own native editor. Saving dismisses the editor and chooser in order; cancelling returns to the chooser. Hotels and flights appear first and inherit trip dates. Restaurant and activity are separate choices; all custom event types remain available. Legacy trips without routes receive a minimal destination/date step and resume the original add choice.
 
-Google Places autocomplete is now configured on the local backend. Google suggestions are transient and attributed; selected queries are resolved independently with Apple Maps for saved location records and pins. The app falls back to native Apple suggestions if the backend is unavailable. Hotel, restaurant, activity, event-venue and airport coordinates participate in the trip map and persist with local records. No credentials are packaged in the app or source archives.
+Google Places autocomplete is configured in Supabase Edge Function secrets. Google suggestions are transient and attributed; selected queries are resolved independently with Apple Maps for saved location records and pins. The app falls back to native Apple suggestions if the backend is unavailable. Hotel, restaurant, activity, event-venue and airport coordinates participate in the trip map and persist with local records. No credentials are packaged in the app or source archives.
 
 Existing dated trips without stops now prepare their route from the destination and dates already saved. Undated trips receive the minimal destination/date sheet and then continue into the original selected event editor. Existing IDs, journals and bookings are preserved.
 

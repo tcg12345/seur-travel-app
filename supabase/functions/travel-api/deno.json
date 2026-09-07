@@ -1,0 +1,5 @@
+{
+  "compilerOptions": { "strict": true, "noImplicitAny": false },
+  "nodeModulesDir": "none",
+  "lock": true
+}

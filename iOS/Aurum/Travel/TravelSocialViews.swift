@@ -12,15 +12,17 @@ struct TravelAccountView: View {
     @State private var loading = false
     @State private var error: String?
     @State private var cloud: [RemoteJourney] = []
+    @State private var confirmingDeletion = false
     var body: some View {
         NavigationStack {
             Form {
+                if let error { Section { Text(error).font(.subheadline).foregroundStyle(.secondary).accessibilityIdentifier("account-message") } }
                 if let account = api.account {
                     Section("Your account") { Label(account.name, systemImage: "person.crop.circle"); Text("@" + account.handle).foregroundStyle(.secondary); Button("Sign out") { Task { await api.logout(); cloud = [] } } }
                     Section("Cloud copies") {
                         Button("Refresh cloud journeys") { Task { await loadCloud() } }
                         ForEach(cloud) { remote in
-                            Button { do { _ = try library.importData(JSONEncoder().encode(JourneyArchive(document: remote.document))); error = "A private copy was saved on this device." } catch { self.error = error.localizedDescription } } label: { VStack(alignment: .leading, spacing: 5) { Text(remote.document.title); Text("Download a separate copy").font(.caption).foregroundStyle(.secondary) } }
+                            Button { Task { do { let full = try await api.document(remote.id); _ = try library.importData(JSONEncoder().encode(JourneyArchive(document: full.document))); error = "A private copy was saved on this device." } catch { self.error = error.localizedDescription } } } label: { VStack(alignment: .leading, spacing: 5) { Text(remote.document.title); Text("Download a separate copy").font(.caption).foregroundStyle(.secondary) } }
                         }
                     }
                 } else {
@@ -29,24 +31,32 @@ struct TravelAccountView: View {
                         TextField("Username", text: $handle).textInputAutocapitalization(.never).autocorrectionDisabled().textContentType(.username).accessibilityIdentifier("account-handle")
                         if register { TextField("Display name", text: $name).textContentType(.name) }
                         SecureField("Password (12+ characters)", text: $password).textContentType(register ? .newPassword : .password).accessibilityIdentifier("account-password")
-                        Button(loading ? "Connecting…" : register ? "Create my account" : "Sign in") { Task { loading = true; error = nil; defer { loading = false }; do { try await api.authenticate(handle: handle, name: name, password: password, register: register); password = ""; await loadCloud() } catch { self.error = error.localizedDescription } } }.disabled(loading || handle.isEmpty || password.isEmpty)
+                        Button(loading ? "Connecting…" : register ? "Create my account" : "Sign in") { Task { loading = true; error = nil; defer { loading = false }; do { try await api.authenticate(handle: handle, name: name, password: password, register: register); password = ""; await loadCloud() } catch { self.error = error.localizedDescription } } }.accessibilityIdentifier("account-submit").disabled(loading || handle.isEmpty || password.isEmpty)
                     } header: { Text("Travel is better together") } footer: { Text("Your local journeys work without an account. Sign in to save cloud copies, find friends, and share.") }
                 }
                 Section("Travel services") {
+                    LabeledContent("Seur Cloud", value: "Supabase")
                     LabeledContent("Apple Maps", value: "Available on iOS")
+                    LabeledContent("FlightAware", value: api.status?.flightTracking.map { $0 ? "Connected" : "Not connected" } ?? "Not checked")
                     LabeledContent("Google Places", value: api.status?.googlePlaces.map { $0 ? "Connected" : "Apple Maps fallback" } ?? "Not checked")
                     LabeledContent("Tripadvisor", value: api.status.map { $0.tripadvisor ? "Connected" : "Key needed on server" } ?? "Not checked")
                     LabeledContent("AI recommendations", value: api.status.map { $0.ai ? "Connected" : "Key needed on server" } ?? "Not checked")
-                    LabeledContent("Public links", value: api.status.map { $0.publicSharing ? "Available" : "HTTPS deployment needed" } ?? "Not checked")
+                    LabeledContent("Public links", value: api.status.map { $0.publicSharing ? "Available" : "Not connected" } ?? "Not checked")
                 }
+                #if DEBUG
                 Section {
                     TextField("https://your-backend.example", text: $address).keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
                     Button("Connect to server") { Task { api.baseURL = address.trimmingCharacters(in: .whitespacesAndNewlines); await refresh() } }
-                } header: { Text("Backend address") } footer: { Text("API keys stay on the backend. Local Simulator development uses http://localhost:8787; other devices require your HTTPS deployment.") }
-                if let error { Section { Text(error).font(.subheadline).foregroundStyle(.secondary) } }
+                } header: { Text("Backend address") } footer: { Text("API keys stay on the backend. Your app connects to Seur Cloud on Supabase. Override this address only for development.") }
+                #endif
+                if api.isSignedIn { Section { Button("Delete cloud account", role: .destructive) { confirmingDeletion = true } } footer: { Text("Deletes your cloud account and shared journeys. Trips saved on this device remain available.") } }
             }.scrollContentBackground(.hidden).background(Color.canvas).navigationTitle("Your travel account").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
                 .task { address = api.baseURL; await refresh() }
+                .confirmationDialog("Delete your cloud account and all cloud journeys?", isPresented: $confirmingDeletion, titleVisibility: .visible) {
+                    Button("Delete account", role: .destructive) { Task { do { try await api.deleteAccount(); cloud = [] } catch { self.error = error.localizedDescription } } }
+                    Button("Cancel", role: .cancel) { }
+                }
         }
     }
     private func refresh() async { do { try await api.refresh(); error = nil; if api.isSignedIn { await loadCloud() } } catch { self.error = error.localizedDescription } }
@@ -198,24 +208,38 @@ private struct AttachJourneyView: View {
 struct SharedJourneyPreview: View {
     @Environment(JourneyLibrary.self) private var library
     let remote: RemoteJourney
+    @Environment(TravelAPI.self) private var api
+    @State private var loaded: RemoteJourney?
+    @State private var loading = false
+    private var current: RemoteJourney { loaded ?? remote }
     @State private var imported = false
     @State private var error: String?
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
-                Eyebrow(text: "Shared by \(remote.owner.name)")
-                Editorial(remote.document.title, size: 36)
-                Text(remote.document.routeLabel).foregroundStyle(.secondary)
+                Eyebrow(text: "Shared by \(current.owner.name)")
+                Editorial(current.document.title, size: 36)
+                Text(current.document.routeLabel).foregroundStyle(.secondary)
                 Label("Read-only shared journey", systemImage: "lock").font(.caption)
-                Button { do { _ = try library.importData(JSONEncoder().encode(JourneyArchive(document: remote.document))); imported = true } catch { self.error = error.localizedDescription } } label: { Label(imported ? "Private copy imported" : "Import my own copy", systemImage: imported ? "checkmark" : "square.and.arrow.down").frame(maxWidth: .infinity).padding(.vertical, 11) }.buttonStyle(.glassProminent).disabled(imported)
-                Text(JourneyExporter.text(remote.document)).font(.subheadline).lineSpacing(5).textSelection(.enabled)
-                JourneyMapView(places: remote.document.mapPlaces).frame(height: 280).clipShape(.rect(cornerRadius: 22))
-                ForEach(remote.document.places) { place in
+                Button { do { _ = try library.importData(JSONEncoder().encode(JourneyArchive(document: current.document))); imported = true } catch { self.error = error.localizedDescription } } label: { Label(imported ? "Private copy imported" : "Import my own copy", systemImage: imported ? "checkmark" : "square.and.arrow.down").frame(maxWidth: .infinity).padding(.vertical, 11) }.buttonStyle(.glassProminent).disabled(imported || loading || (remote.isSummary == true && loaded == nil))
+                Text(JourneyExporter.text(current.document)).font(.subheadline).lineSpacing(5).textSelection(.enabled)
+                JourneyMapView(places: current.document.mapPlaces).frame(height: 280).clipShape(.rect(cornerRadius: 22))
+                ForEach(current.document.places) { place in
                     if !place.photos.isEmpty { Text(place.place.name).font(.headline); ScrollView(.horizontal) { HStack { ForEach(place.photos) { photo in if let image = UIImage(data: photo.jpeg) { Image(uiImage: image).resizable().scaledToFit().frame(height: 200).clipShape(.rect(cornerRadius: 20)) } } } } }
                 }
                 if let error { Text(error).foregroundStyle(.red) }
             }.padding(24)
         }.background(Color.canvas).navigationTitle("A shared journey").navigationBarTitleDisplayMode(.inline)
+            .overlay { if loading { ProgressView("Loading shared photos…").padding(20).glassEffect(.regular, in: .rect(cornerRadius: 20)) } }
+            .task(id: remote.id) { await loadFullJourney() }
+            .refreshable { await loadFullJourney() }
+    }
+    private func loadFullJourney() async {
+        guard remote.isSummary == true else { return }
+        loading = true; defer { loading = false }
+        do { loaded = try await api.document(remote.id); error = nil }
+        catch { loaded = nil; self.error = error.localizedDescription }
+
     }
 }
 

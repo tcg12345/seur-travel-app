@@ -10,7 +10,7 @@ A native SwiftUI travel app for **iOS 26 and later**, designed around hotel dini
 
 The app works in Simulator without an Apple developer account. To install on your physical iPhone, choose your Apple development team under **Aurum → Signing & Capabilities**, then select your connected iPhone. TestFlight and App Store distribution require signing and provisioning through your Apple Developer account.
 
-There are no external Swift packages. Offline travel planning works immediately. The optional Python backend enables accounts, friends, cloud copies, provider search and AI; see `../backend/README.md`.
+There are no external Swift packages. Offline travel planning works immediately. The Supabase backend enables accounts, friends, cloud copies, private photos, provider search and sharing; see [the cloud setup](../supabase/README.md). The app defaults to the deployed HTTPS service.
 
 ## Native design and motion
 
@@ -77,7 +77,7 @@ Existing itineraries and journals appear together in Trips with all original dat
 
 JSON exports can be reloaded as private copies. PDF/TXT/CSV exports and the native Apple share sheet support Files, Mail, Messages and AirDrop. JSON and PDF include photos; TXT/CSV include photo counts. New travel data is atomically saved in Application Support, independently of the original hotel favorites and earlier draft plans.
 
-Apple Maps replaces Amadeus for cities/airports/place search. Tripadvisor search/details and AI use server-side keys. The flight dialog performs a live Google Flights handoff and transfers route details to a manual booking-record editor; it does not import live offers automatically. The backend supports username accounts, accepted friends, group conversations, explicit cloud copies, read-only browser links, private/friends/public audiences where applicable, and access revocation. Real public links require an HTTPS deployment; local Simulator server addresses cannot be shared over the internet.
+Apple Maps replaces Amadeus for cities/airports/place search. Tripadvisor search/details and AI use server-side keys. The flight dialog performs a live Google Flights handoff and transfers route details to a manual booking-record editor; it does not import live offers automatically. The backend supports username accounts, accepted friends, group conversations, explicit cloud copies, read-only browser links, private/friends/public audiences where applicable, and access revocation. Public links now open read-only PDFs from the Supabase Edge Function; no local server is required. Native shared previews and imports retain the complete trip.
 
 ## Welcome and Reserve preview
 
@@ -102,7 +102,7 @@ Event types and details persist locally and through cloud sharing/import, and ap
 ## Reliable add-to-trip editors
 Hotels and flights lead the add menu, followed by separate restaurant and activity choices and all custom event types. Each choice opens a dedicated sheet in a stable parent flow. Save persists the item and returns to the trip; Cancel returns to the menu. New bookings inherit trip dates. Older trips without a route can add a destination and dates before continuing into their selected editor.
 
-Place and venue fields now use server-proxied Google Places autocomplete, with Apple Maps fallback. Selecting a prediction independently resolves available Apple Maps details and coordinates; a confirmation indicates the place will appear on the trip map. The supplied Google key is stored only in backend/.env, which is excluded from all source packages. Google search currently works through the local development backend; a physical iPhone needs a configured HTTPS server.
+Place and venue fields now use server-proxied Google Places autocomplete, with Apple Maps fallback. Selecting a prediction independently resolves available Apple Maps details and coordinates; a confirmation indicates the place will appear on the trip map. The supplied Google key is deployed as a Supabase Edge Function secret and is never embedded in iOS. The legacy local credential file remains ignored. Google search now uses the deployed Supabase Edge Function after sign-in, including on physical iPhones.
 
 Existing dated trips without stops now prepare their route from the destination and dates already saved. Undated trips receive the minimal destination/date sheet and then continue into the original selected event editor. Existing IDs, journals and bookings are preserved.
 

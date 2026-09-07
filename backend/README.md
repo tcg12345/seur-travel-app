@@ -1,3 +1,5 @@
+> **Legacy backend:** Seur now runs its backend entirely on Supabase. See [the current setup](../supabase/README.md). This folder is retained for migration reference and regression fixtures; the native app no longer needs a local Python server. The instructions below describe the earlier implementation.
+
 # Aurum backend
 
 A working Python WSGI backend for the native Aurum iOS app. It provides accounts, friend requests, group conversations, private cloud copies, read-only sharing with revocable links, Tripadvisor search/details, and AI recommendations/overviews. It does not require Amadeus.

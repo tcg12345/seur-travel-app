@@ -555,6 +555,43 @@ final class AurumUITests: XCTestCase {
         app.buttons["Sign out"].tap()
         XCTAssertTrue(app.secureTextFields["account-password"].waitForExistence(timeout: 8))
     }
+    @MainActor func testSupabaseNativeAccount() async throws {
+        let root = "https://bwrodcxmdzrpyrshrlfd.supabase.co/functions/v1/travel-api"
+        let handleValue = "native_" + UUID().uuidString.prefix(8).lowercased()
+        let passwordValue = UUID().uuidString + "-cloud"
+        var registration = URLRequest(url: URL(string: root + "/v1/auth/register")!)
+        registration.httpMethod = "POST"; registration.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        registration.httpBody = try JSONSerialization.data(withJSONObject: ["handle": handleValue, "name": "Native Cloud Test", "password": passwordValue])
+        let (data, response) = try await URLSession.shared.data(for: registration)
+        XCTAssertEqual((response as? HTTPURLResponse)?.statusCode, 200)
+        let account = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+        let cleanupToken = account["token"] as! String
+        addTeardownBlock {
+            var removal = URLRequest(url: URL(string: root + "/v1/account")!); removal.httpMethod = "DELETE"
+            removal.setValue("Bearer " + cleanupToken, forHTTPHeaderField: "Authorization")
+            let (_, response) = try await URLSession.shared.data(for: removal)
+            XCTAssertEqual((response as? HTTPURLResponse)?.statusCode, 200)
+        }
+        app.terminate(); app.launchArguments = ["--ui-testing", "--travel-test-server", root + "?native-test=" + handleValue]; app.launch()
+        app.tabBars.buttons["Travel"].tap(); app.buttons["Travel account"].tap()
+        let handle = app.textFields["account-handle"]; XCTAssertTrue(handle.waitForExistence(timeout: 10))
+        handle.tap(); handle.typeText(handleValue)
+        let password = app.secureTextFields["account-password"]; password.tap(); password.typeText(passwordValue)
+        let login = app.buttons["account-submit"]
+        XCTAssertTrue(login.isEnabled); login.tap()
+        // iOS may present its password-saving prompt over the account sheet.
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        let notNow = springboard.buttons["Not Now"]
+        if notNow.waitForExistence(timeout: 10) { notNow.tap() }
+        else if app.buttons["Not Now"].exists { app.buttons["Not Now"].tap() }
+        if !app.buttons["Sign out"].waitForExistence(timeout: 3), app.buttons["Travel account"].exists { app.buttons["Travel account"].tap() }
+        XCTAssertTrue(app.buttons["Sign out"].waitForExistence(timeout: 25), app.staticTexts["account-message"].exists ? app.staticTexts["account-message"].label : "No account error shown")
+        XCTAssertTrue(app.staticTexts["Native Cloud Test"].exists)
+        capture("71 Supabase native account")
+        app.buttons["Refresh cloud journeys"].tap()
+        app.buttons["Sign out"].tap()
+        XCTAssertTrue(handle.waitForExistence(timeout: 10))
+    }
     func testFlightValidation() {
         app.buttons["category-Flights"].tap()
         let origin = app.textFields["flight-origin"]
