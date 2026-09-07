@@ -29,6 +29,7 @@ struct WorldMapView: View {
     @State private var newTrip = false
     @State private var flightInfo = false
     @State private var addingFlight = false
+    @State private var addedFlightNumber: String?
     private var flights: [MapFlight] {
         var values = api.savedFlights.map { MapFlight(tripID: nil, tripTitle: "My flights", flight: $0) }
         for trip in library.documents { for flight in trip.flights { values.append(MapFlight(tripID: trip.id, tripTitle: trip.title, flight: flight)) } }
@@ -52,7 +53,7 @@ struct WorldMapView: View {
             map.ignoresSafeArea()
             topControls.padding(.horizontal, 18).padding(.top, 8)
             if panelVisible {
-                PersistentMapPanel(detent: $detent, contentID: selectedFlightID ?? mode, header: { panelHeader }, content: { panelContent })
+                PersistentMapPanel(detent: $detent, contentID: selectedFlightID ?? (mode + (addedFlightNumber ?? "")), flightDetail: selectedFlightID != nil, header: { panelHeader }, content: { panelContent })
 
             }
         }
@@ -73,7 +74,11 @@ struct WorldMapView: View {
         .sheet(isPresented: $editingFlight) { if let selectedFlight { FlightReservationEditor(documentID: selectedFlight.tripID, reservation: selectedFlight.flight) } }
         .sheet(isPresented: $newTrip) { TripCreationView() }
         .sheet(isPresented: $flightInfo) { FlightDataInfoView() }
-        .sheet(isPresented: $addingFlight) { FlightAddView { flight in openFlight(MapFlight(tripID: nil, tripTitle: "My flights", flight: flight)) } }
+        .sheet(isPresented: $addingFlight) { FlightAddView { flight in
+            mode = "Flights"; selectedFlightID = nil; tracker = FlightTracker()
+            addedFlightNumber = flight.flightNumber.uppercased()
+            focusRoute(MapFlight(tripID: nil, tripTitle: "My flights", flight: flight)); resizePanel(.medium)
+        } }
     }
     private var map: some View {
         Map(position: $camera, selection: $selection) {
@@ -101,7 +106,7 @@ struct WorldMapView: View {
                 Annotation("Reported aircraft position", coordinate: position.coordinate) { Image(systemName: "location.north.fill").rotationEffect(.degrees(position.heading ?? 0)).font(.title2).foregroundStyle(.white).padding(12).background(Color.bronze, in: .circle) }
             }
         }.mapStyle(satellite ? .hybrid(elevation: .realistic, pointsOfInterest: .excludingAll) : .standard(elevation: .realistic, pointsOfInterest: .excludingAll))
-            .safeAreaPadding(.bottom, panelVisible && mode != "Explore" ? mapHeight * 0.59 : 0)
+            .safeAreaPadding(.bottom, panelVisible && mode != "Explore" ? mapHeight * (selectedFlightID == nil ? 0.59 : 0.76) : 0)
             .onMapCameraChange(frequency: .onEnd) { center = $0.region.center }
             .accessibilityIdentifier("world-map")
     }
@@ -120,7 +125,7 @@ struct WorldMapView: View {
     private var panelHeader: some View {
         HStack(spacing: 8) {
             if selectedFlight != nil {
-                Button { selectedFlightID = nil; tracker = FlightTracker() } label: { Label("All flights", systemImage: "chevron.left") }.font(.subheadline.weight(.medium))
+                Button { closeFlight() } label: { Label("All flights", systemImage: "chevron.left") }.font(.subheadline.weight(.medium))
                 Spacer()
             } else {
                 HStack(spacing: 2) {
@@ -147,7 +152,7 @@ struct WorldMapView: View {
                 Button("Close map panel", systemImage: "xmark") { panelVisible = false }.accessibilityIdentifier("map-panel-close")
                 Button("Show the globe", systemImage: "globe") { globe() }
             } label: { Image(systemName: "ellipsis").frame(width: 28, height: 44) }.accessibilityLabel("Panel options").accessibilityIdentifier("map-panel-options")
-        }.padding(.horizontal, 16).padding(.bottom, 12)
+        }.lineLimit(1).dynamicTypeSize(...DynamicTypeSize.xxxLarge).padding(.horizontal, 16).padding(.bottom, 12)
     }
     private var panelContent: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -156,6 +161,8 @@ struct WorldMapView: View {
             else if mode == "Trips" { tripsPanel }
             else { flightsPanel }
         }.frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 20).padding(.bottom, 24)
+            .id(selectedFlightID ?? "flight-list")
+            .transition(reduceMotion ? .opacity : .asymmetric(insertion: .opacity.combined(with: .offset(y: 10)), removal: .opacity))
     }
 
     private var explorePanel: some View {
@@ -203,17 +210,15 @@ struct WorldMapView: View {
                 Spacer()
                 Button { addingFlight = true } label: { Label("Add flight", systemImage: "plus").font(.subheadline) }.buttonStyle(.glassProminent).accessibilityLabel("Add flight").accessibilityIdentifier("map-add-flight")
             }
+            .lineLimit(1).dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+            if let addedFlightNumber { Label(addedFlightNumber + " added to your map", systemImage: "checkmark.circle.fill").font(.subheadline).foregroundStyle(Color.bronze).accessibilityIdentifier("flight-added-confirmation") }
             if let error = api.savedFlightsError { Text(error).font(.caption).foregroundStyle(.secondary); Button("Try again") { Task { await api.loadSavedFlights() } } }
             ForEach(flights) { flight in flightRow(flight) }
         }
     }
     private func flightRow(_ value: MapFlight) -> some View {
         Button { openFlight(value) } label: {
-            VStack(alignment: .leading, spacing: 13) {
-                HStack { Label(value.title, systemImage: "airplane").font(.headline); Spacer(); Text(TravelDay.label(value.flight.departureDay)).font(.caption) }
-                HStack { Text(value.flight.departureAirport).lineLimit(2); Image(systemName: "arrow.right").foregroundStyle(Color.bronze); Text(value.flight.arrivalAirport).lineLimit(2) }.font(.system(.title3, design: .rounded, weight: .medium))
-                HStack { Text(value.tripTitle).lineLimit(1); Spacer(); Text(value.route == nil ? "Locations needed" : "View flight") }.font(.caption).foregroundStyle(.secondary)
-            }.padding(18).background(Color.cardSurface, in: .rect(cornerRadius: 23))
+            FlightCard(flight: value.flight, subtitle: value.tripTitle)
         }.buttonStyle(PressStyle()).accessibilityIdentifier("map-flight-" + value.id)
     }
     private func selected(_ value: String?) {
@@ -229,7 +234,17 @@ struct WorldMapView: View {
     }
 
     private func selectFlight(_ value: MapFlight) {
-        selectedFlightID = value.id; tracker = FlightTracker(); resizePanel(.medium)
+        animateFlightContent { selectedFlightID = value.id; tracker = FlightTracker(); addedFlightNumber = nil }
+        resizePanel(.medium); focusRoute(value)
+    }
+    private func closeFlight() {
+        animateFlightContent { selectedFlightID = nil; tracker = FlightTracker(); selection = nil }
+    }
+    private func animateFlightContent(_ change: () -> Void) {
+        // Keep the same scroll surface and material; animate only the new content.
+        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.24)) { change() }
+    }
+    private func focusRoute(_ value: MapFlight) {
         if let a = value.departure, let b = value.arrival {
             if abs(a.longitude - b.longitude) > 180 {
                 let longitude = (a.longitude + b.longitude) / 2 + (a.longitude + b.longitude > 0 ? -180 : 180)
@@ -251,7 +266,7 @@ struct WorldMapView: View {
     }
     private func resizePanel(_ value: PresentationDetent) { withAnimation(reduceMotion ? nil : .spring(response: 0.36, dampingFraction: 0.86)) { detent = value } }
     private func globe() { move(.camera(MapCamera(centerCoordinate: .init(latitude: 22, longitude: 5), distance: 32_000_000))) }
-    private func move(_ position: MapCameraPosition) { withAnimation(reduceMotion ? nil : .smooth(duration: 0.8)) { camera = position } }
+    private func move(_ position: MapCameraPosition) { withAnimation(reduceMotion ? nil : .smooth(duration: 0.42)) { camera = position } }
 
 }
 
@@ -263,6 +278,7 @@ private struct PersistentMapPanel<Header: View, Content: View>: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Binding var detent: PresentationDetent
     var contentID: String
+    var flightDetail: Bool
     @ViewBuilder var header: () -> Header
     @ViewBuilder var content: () -> Content
     @State private var translation: CGFloat = 0
@@ -271,7 +287,7 @@ private struct PersistentMapPanel<Header: View, Content: View>: View {
         GeometryReader { geo in
             let maximum = max(300, geo.size.height - 8)
             let compact = min(260.0, maximum * 0.48)
-            let medium = max(compact, maximum * 0.60)
+            let medium = max(compact, maximum * (flightDetail ? 0.80 : 0.60))
             let resting = detent == .large ? maximum : detent == .medium ? medium : compact
             let height = min(maximum, max(compact, resting - translation))
             let progress = min(1, max(0, (height - compact) / max(1, maximum - compact)))

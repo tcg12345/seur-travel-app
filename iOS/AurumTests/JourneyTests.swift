@@ -24,6 +24,26 @@ import MapKit
         flight.scheduledIn = nil; flight.scheduledOn = nil
         XCTAssertEqual(flight.reservation(airline: "BA").arrivalTime, "")
     }
+    func testFlightDurationRespectsAirportTimeZonesAndMissingData() {
+        var saved = FlightMapFixtures.snapshot.reservation(airline: "British Airways")
+        XCTAssertEqual(FlightDisplay.duration(saved), "7h 0m")
+        saved.departureZone = ""
+        XCTAssertNil(FlightDisplay.duration(saved))
+        saved.departureZone = "America/New_York"; saved.arrivalDay = "2026-09-05"
+        XCTAssertNil(FlightDisplay.duration(saved))
+        XCTAssertEqual(FlightDisplay.clock("2026-09-06T22:30:00Z", zone: "America/New_York"), "18:30")
+        XCTAssertEqual(FlightDisplay.clock(nil, zone: "America/New_York"), "—")
+    }
+    func testFlightCountdownUsesDepartureZoneAndNeverInventsFlightStatus() throws {
+        var flight = FlightMapFixtures.snapshot.reservation(airline: "British Airways")
+        let departure = try XCTUnwrap(FlightDisplay.localDate(day: flight.departureDay, time: flight.departureTime, zone: flight.departureZone))
+        XCTAssertEqual(FlightDisplay.countdown(flight, now: departure.addingTimeInterval(-5 * 3600 - 42 * 60)), "In 5h 42m")
+        XCTAssertEqual(FlightDisplay.countdown(flight, now: departure.addingTimeInterval(-2 * 86400 - 3 * 3600)), "In 2d 3h")
+        XCTAssertEqual(FlightDisplay.countdown(flight, now: departure.addingTimeInterval(-25)), "In 1m")
+        XCTAssertEqual(FlightDisplay.countdown(flight, now: departure), "Scheduled time passed")
+        flight.departureZone = ""
+        XCTAssertEqual(FlightDisplay.countdown(flight, now: departure), "Departure time unavailable")
+    }
     func testAirlineAutocompleteSupportsNamesCodesAndUnlistedCodes() {
         XCTAssertEqual(FlightAirline.matches("delta").first?.code, "DL")
         XCTAssertTrue(FlightAirline.matches("BA").contains { $0.name == "British Airways" })

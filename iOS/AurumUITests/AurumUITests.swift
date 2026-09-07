@@ -13,7 +13,7 @@ final class AurumUITests: XCTestCase {
         if app.buttons["map-saved"].waitForExistence(timeout: 2) { app.buttons["map-saved"].tap() }
     }
     func testGlobeFlightsTripsAndSaved() {
-        app.terminate(); app.launchArguments = ["--ui-testing", "--map-testing", "--location-testing", "--city-testing"]; app.launch()
+        app.terminate(); app.launchArguments = ["--ui-testing", "--map-testing", "--location-testing", "--city-testing", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryL"]; app.launch()
         app.tabBars.buttons["Map"].firstMatch.tap()
         let content = app.buttons["map-section-Flights"]; XCTAssertTrue(content.waitForExistence(timeout: 8)); capture("63 Globe map")
         app.buttons["map-panel-expand"].tap(); app.buttons["map-section-Flights"].tap()
@@ -22,6 +22,7 @@ final class AurumUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["map-flight-title"].waitForExistence(timeout: 5)); capture("64 Flight route panel")
         app.buttons["map-panel-expand"].tap()
         XCTAssertTrue(app.staticTexts["UI test · Delayed"].waitForExistence(timeout: 5)); capture("65 Flight intelligence")
+        let performance = app.buttons["flight-performance"]; reveal(performance); performance.tap()
         let history = app.buttons["Load delay history"]; reveal(history); history.tap()
         XCTAssertTrue(app.staticTexts["UI test sample only"].waitForExistence(timeout: 5)); capture("66 Flight delay history")
         app.buttons["All flights"].tap(); app.buttons["map-section-Trips"].tap()
@@ -60,7 +61,7 @@ final class AurumUITests: XCTestCase {
         XCTAssertTrue(app.buttons["map-show-panel"].waitForExistence(timeout: 5))
     }
     func testMapSectionSwitchKeepsLayoutAndSearch() {
-        app.terminate(); app.launchArguments = ["--ui-testing", "--map-testing", "--location-testing", "--city-testing"]; app.launch()
+        app.terminate(); app.launchArguments = ["--ui-testing", "--map-testing", "--location-testing", "--city-testing", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryL"]; app.launch()
         app.tabBars.buttons["Map"].tap()
         let expand = app.buttons["map-panel-expand"]
         XCTAssertTrue(expand.waitForExistence(timeout: 8))
@@ -92,7 +93,7 @@ final class AurumUITests: XCTestCase {
         XCTAssertTrue(search.isHittable)
     }
     func testMapBodyDragAndStandaloneFlight() {
-        app.terminate(); app.launchArguments = ["--ui-testing", "--map-testing"]; app.launch()
+        app.terminate(); app.launchArguments = ["--ui-testing", "--map-testing", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryL"]; app.launch()
         let originalBar = app.tabBars.firstMatch.frame
         app.tabBars.buttons["Map"].tap()
         let expand = app.buttons["map-panel-expand"]; XCTAssertTrue(expand.waitForExistence(timeout: 8))
@@ -111,16 +112,30 @@ final class AurumUITests: XCTestCase {
         let airline = app.textFields["flight-airline-query"]; XCTAssertTrue(airline.waitForExistence(timeout: 5))
         airline.tap(); airline.typeText("British")
         app.buttons["flight-airline-BA"].tap()
-        let number = app.textFields["flight-number-query"]; number.tap(); number.typeText("178\n")
+        let number = app.textFields["flight-number-query"]; XCTAssertTrue(number.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.textFields["flight-airline-query"].exists)
+        XCTAssertFalse(app.datePickers["flight-search-date"].exists)
+        XCTAssertFalse(app.buttons["flight-step-continue"].isEnabled)
+        capture("90 Separate flight number page")
+        number.tap(); number.typeText("178\n")
+        XCTAssertTrue(app.buttons["flight-find"].waitForExistence(timeout: 5))
+        XCTAssertFalse(number.exists)
+        capture("91 Separate departure date page")
         app.buttons["flight-find"].tap()
-        let result = app.buttons["flight-result-BAW178-ui-test"]; reveal(result); XCTAssertTrue(result.waitForExistence(timeout: 5))
-        capture("72 Native flight search results")
+        let result = app.buttons["flight-result-BAW178-ui-test"]; XCTAssertTrue(result.waitForExistence(timeout: 8))
+        capture("92 Clear flight search result")
         result.tap()
-        XCTAssertTrue(app.buttons["flight-record-save"].waitForExistence(timeout: 8))
-        capture("73 Standalone flight review")
-        app.buttons["flight-record-save"].tap()
+        XCTAssertTrue(app.staticTexts["flight-added-confirmation"].waitForExistence(timeout: 8))
+        XCTAssertFalse(app.buttons["flight-record-save"].exists)
+        XCTAssertFalse(app.staticTexts["map-flight-title"].exists)
+        let saved = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "map-flight-standalone-")).firstMatch
+        XCTAssertTrue(saved.waitForExistence(timeout: 5))
+        XCTAssertLessThan(saved.frame.height, 175, "Flight rows should stay compact at normal text size")
+        XCTAssertTrue(saved.label.contains("Scheduled time passed"))
+        capture("93 Flight saved directly to map")
+        saved.tap()
         XCTAssertTrue(app.staticTexts["map-flight-title"].waitForExistence(timeout: 8))
-        XCTAssertTrue(app.staticTexts["My flights"].exists)
+        capture("94 Redesigned flight overview")
         app.buttons["map-panel-expand"].tap()
         let footer = app.staticTexts["flight-detail-footer"]
         for _ in 0..<10 {
@@ -134,14 +149,46 @@ final class AurumUITests: XCTestCase {
         XCTAssertTrue(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "map-flight-standalone-")).firstMatch.exists)
         app.buttons["map-add-flight"].tap()
         app.segmentedControls["flight-search-method"].buttons["Route"].tap()
-        let from = app.textFields["flight-route-origin"]; from.tap(); from.typeText("JFK\n")
-        let to = app.textFields["flight-route-destination"]; to.tap(); to.typeText("LHR\n")
+        let from = app.textFields["flight-route-origin"]; from.tap(); from.typeText("JFK")
+        app.buttons["flight-step-continue"].tap()
+        let to = app.textFields["flight-route-destination"]; XCTAssertTrue(to.waitForExistence(timeout: 5)); XCTAssertFalse(from.exists)
+        to.tap(); to.typeText("LHR")
+        app.buttons["flight-step-continue"].tap()
         app.buttons["flight-find"].tap()
         reveal(result); XCTAssertTrue(result.waitForExistence(timeout: 5)); capture("74 Flight route search")
-        app.buttons["Cancel"].firstMatch.tap()
+        app.buttons["flight-add-cancel"].tap()
         app.tabBars.buttons["Travel"].tap(); app.tabBars.buttons["Map"].tap()
         XCTAssertEqual(expand.frame.minY, compactY, accuracy: 2)
         XCTAssertEqual(app.tabBars.firstMatch.frame.minY, originalBar.minY, accuracy: 2)
+    }
+    func testZFlightPagesKeepInputAndSupportLargeText() {
+        defer { app.terminate(); app.launchArguments = ["--ui-testing", "--map-testing", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryL"]; app.launch() }
+        app.terminate()
+        app.launchArguments = ["--ui-testing", "--map-testing", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL", "-AppleInterfaceStyle", "Dark"]
+        app.launch()
+        let map = app.tabBars.buttons["Map"]; XCTAssertTrue(map.waitForExistence(timeout: 8)); map.tap()
+        let section = app.buttons["map-section-Flights"]; XCTAssertTrue(section.waitForExistence(timeout: 8)); section.tap()
+        XCTAssertLessThan(section.frame.height, 65, "Navigation labels must not wrap at accessibility sizes")
+        XCTAssertLessThan(app.buttons["map-add-flight"].frame.height, 65, "The add action must remain compact")
+        app.buttons["map-panel-expand"].tap()
+        let add = app.buttons["map-add-flight"]; XCTAssertTrue(add.waitForExistence(timeout: 5)); add.tap()
+        let airline = app.textFields["flight-airline-query"]; XCTAssertTrue(airline.waitForExistence(timeout: 5)); airline.tap(); airline.typeText("BA")
+        let british = app.buttons["flight-airline-BA"]; reveal(british); british.tap()
+        let number = app.textFields["flight-number-query"]; XCTAssertTrue(number.waitForExistence(timeout: 5)); number.tap(); number.typeText("178\n")
+        XCTAssertTrue(app.buttons["flight-find"].waitForExistence(timeout: 5))
+        app.navigationBars.buttons["BackButton"].tap()
+        XCTAssertTrue(number.waitForExistence(timeout: 5)); XCTAssertEqual(number.value as? String, "178")
+        capture("95 Flight step keeps input at large text")
+        let next = app.buttons["flight-step-continue"]; reveal(next); next.tap()
+        let find = app.buttons["flight-find"]; reveal(find); find.tap()
+        let result = app.buttons["flight-result-BAW178-ui-test"]; XCTAssertTrue(result.waitForExistence(timeout: 8))
+        capture("96 Accessible dark flight result")
+        XCTAssertTrue(app.buttons["flight-add-cancel"].isHittable); app.buttons["flight-add-cancel"].tap()
+        let flight = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "map-flight-")).firstMatch
+        XCTAssertTrue(flight.waitForExistence(timeout: 5)); flight.tap()
+        XCTAssertTrue(app.staticTexts["map-flight-title"].waitForExistence(timeout: 5)); capture("97 Accessible dark flight detail")
+        app.buttons["All flights"].tap()
+        XCTAssertTrue(add.waitForExistence(timeout: 5))
     }
     func testGlobeCitySearchAndGuide() {
         app.terminate(); app.launchArguments = ["--ui-testing", "--location-testing", "--city-testing"]; app.launch()
