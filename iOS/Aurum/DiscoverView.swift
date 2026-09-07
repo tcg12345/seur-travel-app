@@ -196,7 +196,7 @@ struct DiscoverView: View {
     private var collectionNote: some View {
         VStack(spacing: 7) {
             Image(systemName: "sparkle").foregroundStyle(Color.bronze)
-            Text("1,513 hotels. 12 cities. Your next chapter.").font(.caption).foregroundStyle(.secondary)
+            Text("Your next destination. Your next chapter.").font(.caption).foregroundStyle(.secondary)
         }.frame(maxWidth: .infinity).padding(.vertical, 18)
     }
 }

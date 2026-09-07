@@ -204,9 +204,6 @@ struct ProfileView: View {
                     }
                 }.padding(22).cardSurface(cornerRadius: 25)
                 VStack(spacing: 20) {
-                    LabeledContent("The collection", value: "1,513 hotels")
-                    LabeledContent("At the table", value: "5,755 dining entries")
-                    LabeledContent("A world of possibilities", value: "12 cities")
                     Picker("Appearance", selection: $appearance) { Text("System").tag("System"); Text("Light").tag("Light"); Text("Dark").tag("Dark") }
                 }.font(.subheadline).padding(22).cardSurface(cornerRadius: 25)
                 VStack(alignment: .leading, spacing: 16) {

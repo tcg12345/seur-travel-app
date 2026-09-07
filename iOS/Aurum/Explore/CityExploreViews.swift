@@ -20,7 +20,7 @@ struct CityExplorerView: View {
                     LocationAutocompleteField("Search any city in the world", text: $query, kind: .city, identifier: "explore-city-query", onSelect: { selection in
                         if let city = ExploreCity(selection) { selected = city; error = nil } else { error = "Choose a city suggestion so we can find places around it." }
                     }).padding(15).cardSurface(cornerRadius: 17)
-                    Text("Start typing and choose a city. You’re free to explore beyond our hotel collection.").font(.caption).foregroundStyle(.secondary)
+                    Text("Search for a city to discover places nearby.").font(.caption).foregroundStyle(.secondary)
                     if let error { Text(error).font(.caption).foregroundStyle(.red) }
                 }.padding(.vertical, 4)
                 if !store.recentExploreCities.isEmpty {
@@ -31,7 +31,7 @@ struct CityExplorerView: View {
                         } }
                     }.scrollIndicators(.hidden)
                 }
-                SectionHeading(title: "A taste of our collection", subtitle: "Start with hotel dining. Stay for everything else.")
+                SectionHeading(title: "Featured destinations", subtitle: "A little inspiration for where to go next.")
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                     ForEach(ExploreCity.collection) { city in
                         Button { selected = city } label: {
@@ -173,7 +173,7 @@ struct CityGuideView: View {
                 Image(systemName: "fork.knife").foregroundStyle(Color.bronze)
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Hotel dining collection").font(.subheadline.weight(.semibold)).foregroundStyle(.primary).accessibilityIdentifier("city-dining-collection")
-                    Text("\(collection.count) venues · \(Set(collection.compactMap(\.hotelID)).count) hotels").font(.caption).foregroundStyle(.secondary)
+                    Text("Restaurants, bars and cafés to discover").font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
                 Image(systemName: "chevron.right").font(.caption).foregroundStyle(Color.bronze)

@@ -65,7 +65,7 @@ struct ConciergeContext {
         let isFollowUp = contains(["instead", "more", "options", "another"]) || text.contains("what about")
         if destination != nil || context.cuisine != nil || wantsHotels || wantsPlan || (context.city != nil && isFollowUp) {
             guard let city = context.city else {
-                return ConciergeMessage(role: .concierge, text: "Of course. Which city is calling? I can explore the hotel and dining collection across 12 destinations, including Paris, Bangkok, London, and Tokyo.", suggestions: ["Paris", "Bangkok", "Tokyo"])
+                return ConciergeMessage(role: .concierge, text: "Of course. Which city is calling? Start with a destination, a hotel, or a cuisine.", suggestions: ["Paris", "Bangkok", "Tokyo"])
             }
             let hotels = matches(context: context, store: store)
             guard let first = hotels.first else {
