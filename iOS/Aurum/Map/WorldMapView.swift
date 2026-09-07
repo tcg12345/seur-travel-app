@@ -232,7 +232,7 @@ struct WorldMapView: View {
             else if mode == "Explore" { explorePanel }
             else if mode == "Trips" { tripsPanel }
             else { flightsPanel }
-        }.frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 20).padding(.bottom, 24)
+        }.frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, selectedFlight == nil ? 20 : 12).padding(.bottom, 24)
             .id(selectedFlightID ?? "flight-list")
             .transition(reduceMotion ? .opacity : .asymmetric(insertion: .opacity.combined(with: .offset(y: 10)), removal: .opacity))
     }

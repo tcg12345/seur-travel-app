@@ -612,6 +612,28 @@ import MapKit
         XCTAssertNil(flight.route); XCTAssertNil(flight.distance)
         XCTAssertNil(MapFlight.coordinate(91, 20)); XCTAssertNil(MapFlight.coordinate(20, nil))
     }
+    func testFlightDetailPunctualitySeparatesDepartureAndArrival() {
+        var flight = FlightMapFixtures.snapshot
+        XCTAssertEqual(flight.timing(departure: true), .late(30))
+        XCTAssertEqual(flight.timing(departure: false), .late(35))
+        flight.estimatedIn = "2026-09-07T04:50:00Z"
+        XCTAssertEqual(flight.timing(departure: false), .early(10))
+        XCTAssertEqual(flight.summaryTiming, .late(30))
+        flight.actualOut = flight.estimatedOut
+        XCTAssertEqual(flight.summaryTiming, .early(10))
+        flight.actualIn = flight.scheduledIn
+        XCTAssertEqual(flight.timing(departure: false), .onTime)
+        flight.cancelled = true
+        XCTAssertEqual(flight.timing(departure: false), .cancelled)
+        flight.cancelled = false; flight.diverted = true
+        XCTAssertEqual(flight.summaryTiming, .diverted)
+        flight.diverted = false; flight.actualIn = nil; flight.estimatedIn = nil; flight.arrivalDelay = nil
+        XCTAssertEqual(flight.timing(departure: false), .unknown)
+        flight.arrivalDelay = -300
+        XCTAssertEqual(flight.timing(departure: false), .early(5))
+        flight.arrivalDelay = 0
+        XCTAssertEqual(flight.timing(departure: false), .onTime)
+    }
     func testFlightTimesUseAirportZonesAndUnknownDelayStaysUnknown() throws {
         let date = "2026-09-07T01:00:00Z"
         XCTAssertTrue(FlightSnapshot.time(date, zone: "America/New_York").contains("21:00"))

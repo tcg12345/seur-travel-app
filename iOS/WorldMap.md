@@ -43,3 +43,9 @@ As checked September 6, 2026, AeroAPI Personal is limited to personal/academic u
 - Provider-reported positions can be unavailable or stale; their timestamps are displayed. The app does not animate a guessed aircraft position.
 - This integration does not reproduce Flighty's proprietary predictions, monitor inbound aircraft chains, or implement background alerts, APNs or ActivityKit Live Activities. Those need additional implementation and appropriate provider/push services.
 - Maps require network access for imagery and discovery. Device performance and provider coverage vary.
+
+## Flight detail organization
+
+The flight detail sheet uses wide sections with 12-point outer margins: current status/refresh, departure, arrival, tracking/alerts, and expandable additional information. Each section uses one shared adaptive surface; gates and terminals are unboxed within their airport section.
+
+Punctuality is evaluated independently for departure and arrival. Actual timestamps take precedence over estimates, then reported delay seconds provide a fallback. Green means on time, blue early, amber late/diverted, red cancelled, and neutral means timing is not confirmed. Text and symbols repeat the meaning so color is never the only cue. Before departure the status accent accounts for either endpoint’s delay; after departure it follows arrival timing. The saved countdown remains explicitly labeled as scheduled.

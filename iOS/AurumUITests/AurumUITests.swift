@@ -12,6 +12,23 @@ final class AurumUITests: XCTestCase {
         app.tabBars.buttons["Map"].firstMatch.tap()
         if app.buttons["map-saved"].waitForExistence(timeout: 2) { app.buttons["map-saved"].tap() }
     }
+    func testOrganizedFlightDetailSectionsAndTimingLabels() {
+        app.terminate(); app.launchArguments = ["--ui-testing", "--map-testing", "--location-testing", "--city-testing"]; app.launch()
+        app.tabBars.buttons["Map"].tap()
+        XCTAssertTrue(app.buttons["map-section-Flights"].waitForExistence(timeout: 8))
+        resizeMapPanel(expanded: true); app.buttons["map-section-Flights"].tap()
+        let flight = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "map-flight-")).firstMatch
+        XCTAssertTrue(flight.waitForExistence(timeout: 5)); flight.tap(); resizeMapPanel(expanded: true)
+        XCTAssertTrue(app.staticTexts["map-flight-title"].waitForExistence(timeout: 5))
+        let departure = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "30m late")).firstMatch
+        XCTAssertTrue(departure.waitForExistence(timeout: 8)); XCTAssertTrue(departure.label.contains("30m late"))
+        let arrival = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "35m late")).firstMatch; reveal(arrival)
+        XCTAssertTrue(arrival.label.contains("35m late"))
+        let performance = app.buttons["flight-performance"]; reveal(performance); performance.tap()
+        XCTAssertTrue(app.buttons["Load delay history"].waitForExistence(timeout: 5))
+        app.buttons["All flights"].tap()
+        XCTAssertTrue(app.buttons["map-section-Flights"].waitForExistence(timeout: 5))
+    }
     private func openWishlist(preserve: Bool = false) {
         app.terminate(); app.launchArguments = ["--ui-testing", "--map-testing", "--location-testing", "--city-testing"] + (preserve ? ["--preserve-state"] : []); app.launch()
         app.tabBars.buttons["Travel"].tap()

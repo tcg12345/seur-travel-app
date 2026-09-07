@@ -50,6 +50,39 @@ struct FlightSnapshot: Codable, Identifiable, Hashable {
     }
     var delayMinutes: Int? { arrivalDelay.map { Int(($0 / 60).rounded()) } }
 }
+/// Punctuality is independent for each airport; a missing estimate is not on-time evidence.
+enum FlightTiming: Equatable {
+    case unknown, onTime, early(Int), late(Int), cancelled, diverted
+    var label: String {
+        switch self { case .unknown: "Timing not confirmed"; case .onTime: "On time"; case .early(let minutes): "\(minutes)m early"; case .late(let minutes): "\(minutes)m late"; case .cancelled: "Cancelled"; case .diverted: "Diverted" }
+    }
+    var symbol: String {
+        switch self { case .unknown: "clock"; case .onTime: "checkmark.circle.fill"; case .early: "arrow.down.right.circle.fill"; case .late: "clock.badge.exclamationmark"; case .cancelled: "xmark.circle.fill"; case .diverted: "arrow.triangle.branch" }
+    }
+    var color: Color {
+        switch self { case .unknown: .secondary; case .onTime: FlightDisplay.green; case .early: FlightDisplay.blue; case .late, .diverted: FlightDisplay.caution; case .cancelled: .red }
+    }
+}
+extension FlightSnapshot {
+    func timing(departure: Bool) -> FlightTiming {
+        if cancelled { return .cancelled }; if diverted { return .diverted }
+        let schedule = Self.date(departure ? scheduledOut : scheduledIn)
+        let current = Self.date(departure ? actualOut : actualIn) ?? Self.date(departure ? estimatedOut : estimatedIn)
+        let seconds: Double?
+        if let schedule, let current { seconds = current.timeIntervalSince(schedule) }
+        else { seconds = departure ? departureDelay : arrivalDelay }
+        guard let seconds, seconds.isFinite, abs(seconds) < 365 * 86400 else { return .unknown }
+        let minutes = Int((seconds / 60).rounded())
+        return minutes == 0 ? .onTime : minutes < 0 ? .early(-minutes) : .late(minutes)
+    }
+    var summaryTiming: FlightTiming {
+        let arrival = timing(departure: false), departure = timing(departure: true)
+        if actualOut != nil || actualOff != nil { return arrival }
+        if case .late = departure { return departure }
+        if case .late = arrival { return arrival }
+        return departure == .unknown ? arrival : departure
+    }
+}
 struct FlightFeed: Codable { var flights: [FlightSnapshot]; var fetchedAt: Double; var historyEnabled: Bool; var message: String }
 struct FlightPosition: Codable {
     var latitude: Double; var longitude: Double; var timestamp: String?; var altitude: Double?; var groundspeed: Double?; var heading: Double?
@@ -137,6 +170,7 @@ struct MapFlight: Identifiable {
 enum FlightDisplay {
     static let teal = Color(uiColor: UIColor { $0.userInterfaceStyle == .dark ? UIColor(red: 0.43, green: 0.80, blue: 0.76, alpha: 1) : UIColor(red: 0.10, green: 0.39, blue: 0.38, alpha: 1) })
     static let blue = Color(uiColor: UIColor { $0.userInterfaceStyle == .dark ? UIColor(red: 0.56, green: 0.74, blue: 0.98, alpha: 1) : UIColor(red: 0.22, green: 0.36, blue: 0.58, alpha: 1) })
+    static let green = Color(uiColor: UIColor { $0.userInterfaceStyle == .dark ? UIColor(red: 0.43, green: 0.81, blue: 0.59, alpha: 1) : UIColor(red: 0.12, green: 0.43, blue: 0.27, alpha: 1) })
     static let caution = Color(uiColor: UIColor { $0.userInterfaceStyle == .dark ? UIColor(red: 0.98, green: 0.73, blue: 0.38, alpha: 1) : UIColor(red: 0.58, green: 0.30, blue: 0.02, alpha: 1) })
     static func clock(_ value: String?, zone: String) -> String {
         guard let date = FlightSnapshot.date(value) else { return "—" }
@@ -239,9 +273,9 @@ struct FlightDetailPanel: View {
     var track: (FlightPosition) -> Void
     @State private var setup = false
     private var live: FlightSnapshot? { tracker.selected }
-    private var statusColor: Color { live?.cancelled == true ? .red : (live?.delayMinutes ?? 0) > 0 ? FlightDisplay.caution : FlightDisplay.teal }
+    private var statusColor: Color { live?.summaryTiming.color ?? .secondary }
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 12) {
                 Image(systemName: "airplane").font(.title3).foregroundStyle(FlightDisplay.blue)
                 VStack(alignment: .leading, spacing: 3) {
@@ -250,31 +284,33 @@ struct FlightDetailPanel: View {
                 }
                 Spacer()
                 Button(action: edit) { Image(systemName: "pencil").font(.subheadline).frame(width: 44, height: 44) }.buttonStyle(.plain).foregroundStyle(Color.bronze).accessibilityLabel("Edit saved flight")
-            }.padding(.bottom, 14)
-            ViewThatFits(in: .horizontal) {
-                HStack { status; Spacer(minLength: 12); delay }
-                VStack(alignment: .leading, spacing: 5) { status; delay }
-            }.padding(.bottom, 8)
-            if live?.actualOut == nil && live?.cancelled != true {
-                TimelineView(.periodic(from: .now, by: 60)) { context in
-                    let countdown = FlightDisplay.countdown(flight.flight, now: context.date)
-                    if countdown.hasPrefix("In ") { Text("Scheduled departure " + countdown.lowercased()).font(.caption).foregroundStyle(.secondary).padding(.bottom, 6) }
+            }.padding(.horizontal, 4).padding(.bottom, 2)
+            VStack(alignment: .leading, spacing: 9) {
+                Text("Flight status").font(.caption).foregroundStyle(.secondary)
+                status
+                if live?.actualOut == nil && live?.cancelled != true {
+                    TimelineView(.periodic(from: .now, by: 60)) { context in
+                        let countdown = FlightDisplay.countdown(flight.flight, now: context.date)
+                        if countdown.hasPrefix("In ") { Text("Scheduled departure " + countdown.lowercased()).font(.caption).foregroundStyle(.secondary) }
+                    }
                 }
-            }
-            Divider()
+                updates
+            }.padding(16).cardSurface(cornerRadius: 20)
+                .overlay(alignment: .leading) { Capsule().fill(statusColor).frame(width: 3).padding(.vertical, 18) }
+                .accessibilityIdentifier("flight-status-section")
             endpoint(departure: true)
-            HStack(spacing: 10) {
-                Capsule().fill(Color.bronze.opacity(0.25)).frame(height: 1)
-                Image(systemName: "airplane").font(.caption).foregroundStyle(Color.bronze)
-                if let duration = FlightDisplay.duration(flight.flight) { Text(duration + " scheduled").font(.caption).foregroundStyle(.secondary).fixedSize() }
-                Capsule().fill(FlightDisplay.teal.opacity(0.25)).frame(height: 1)
-            }.padding(.vertical, 2).accessibilityHidden(true)
+            HStack(spacing: 8) {
+                Image(systemName: "airplane").foregroundStyle(FlightDisplay.blue)
+                if let duration = FlightDisplay.duration(flight.flight) { Text(duration + " scheduled") }
+                Text("· Airport local times")
+            }.font(.caption).foregroundStyle(.secondary).frame(maxWidth: .infinity).padding(.vertical, 1)
             endpoint(departure: false)
-            Divider()
-            updates
-            aircraftPosition
-            FlightNotificationControls(flight: live, day: flight.flight.departureDay)
-            Divider()
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Tracking & alerts").font(.subheadline.weight(.semibold))
+                aircraftPosition
+                FlightNotificationControls(flight: live, day: flight.flight.departureDay)
+            }.padding(16).cardSurface(cornerRadius: 20)
+            VStack(alignment: .leading, spacing: 0) {
             if let feed = tracker.feed, feed.flights.count > 1 {
                 VStack(alignment: .leading, spacing: 10) {
                     Text("Choose your departure").font(.subheadline.weight(.semibold))
@@ -312,6 +348,7 @@ struct FlightDetailPanel: View {
             Divider()
             if let link = validatedURL(flight.flight.bookingLink) { Link(destination: link) { Label("Open booking", systemImage: "arrow.up.right.square").font(.subheadline) }.padding(.vertical, 14); Divider() }
             if !flight.flight.notes.isEmpty { DisclosureGroup("Notes") { Text(flight.flight.notes).font(.body).frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 12) }.font(.subheadline).padding(.vertical, 12); Divider() }
+            }.padding(.horizontal, 16).cardSurface(cornerRadius: 20)
             HStack(alignment: .top) {
                 Text("Airport local times · Live updates by FlightAware").font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("flight-detail-footer")
                 Spacer(minLength: 12)
@@ -355,10 +392,7 @@ struct FlightDetailPanel: View {
         }.padding(.vertical, 10).accessibilityIdentifier("flight-aircraft-position")
     }
     private var status: some View {
-        Label(live?.status ?? "Saved schedule", systemImage: live?.cancelled == true ? "xmark.circle.fill" : "circle.fill").font(.subheadline.weight(.semibold)).foregroundStyle(statusColor)
-    }
-    @ViewBuilder private var delay: some View {
-        if let minutes = live?.delayMinutes, minutes != 0 { Text(minutes > 0 ? "Arrival \(minutes)m late" : "Arrival \(-minutes)m early").font(.caption.weight(.medium)).foregroundStyle(statusColor) }
+        Label(live?.status ?? "Saved schedule", systemImage: live?.summaryTiming.symbol ?? "clock").font(.subheadline.weight(.semibold)).foregroundStyle(statusColor)
     }
     private var updates: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -382,11 +416,12 @@ struct FlightDetailPanel: View {
         let zone = departure ? live?.originZone ?? saved.departureZone : live?.destinationZone ?? saved.arrivalZone
         let clock = live == nil ? (departure ? saved.departureTime : saved.arrivalTime) : FlightDisplay.clock(actual ?? estimated ?? scheduled, zone: zone)
         let date = live == nil ? TravelDay.label(departure ? saved.departureDay : saved.arrivalDay) : String(FlightSnapshot.time(actual ?? estimated ?? scheduled, zone: zone).split(separator: ",").first ?? "—")
-        let accent = departure ? Color.bronze : FlightDisplay.teal
+        let accent = departure ? FlightDisplay.blue : FlightDisplay.teal
+        let timing = live?.timing(departure: departure) ?? .unknown
         let gate = departure ? live?.gateOrigin : live?.gateDestination
         let terminal = departure ? live?.terminalOrigin : live?.terminalDestination
         return VStack(alignment: .leading, spacing: 8) {
-            HStack { Text(departure ? "Departure" : "Arrival"); Spacer(); Text(date) }.font(.caption).foregroundStyle(.secondary)
+            HStack { Label(departure ? "Departure" : "Arrival", systemImage: departure ? "airplane.departure" : "airplane.arrival").foregroundStyle(accent); Spacer(); Text(date).foregroundStyle(.secondary) }.font(.caption.weight(.medium))
             let layout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8)) : AnyLayout(HStackLayout(alignment: .top, spacing: 16))
             layout {
                 VStack(alignment: .leading, spacing: 3) {
@@ -394,25 +429,29 @@ struct FlightDetailPanel: View {
                     if let name { Text(name).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true) }
                 }.frame(maxWidth: .infinity, alignment: .leading)
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(clock.isEmpty ? "—" : clock).font(.title2.weight(.semibold).monospacedDigit()).fixedSize()
+                    Text(clock.isEmpty ? "—" : clock).font(.title2.weight(.semibold).monospacedDigit()).foregroundStyle(timing == .unknown ? Color.primary : timing.color).fixedSize()
                     Text(live == nil ? "Scheduled" : actual != nil ? "Actual" : estimated != nil ? "Expected" : "Scheduled").font(.caption2).foregroundStyle(.secondary)
                     if let scheduled, let current = actual ?? estimated, FlightSnapshot.date(current) != FlightSnapshot.date(scheduled) {
                         Text(FlightDisplay.clock(scheduled, zone: zone) + " scheduled").font(.caption2).foregroundStyle(.secondary).strikethrough()
                     }
                 }
             }
+            Label(timing.label, systemImage: timing.symbol).font(.caption.weight(.semibold)).foregroundStyle(timing.color)
+                .accessibilityIdentifier(departure ? "flight-departure-timing" : "flight-arrival-timing")
             if live != nil {
+                Divider().padding(.vertical, 3)
                 ViewThatFits(in: .horizontal) {
                     HStack(spacing: 12) { gateLabel(gate, accent: accent); if let terminal, !terminal.isEmpty { Text("Terminal " + terminal).font(.caption).foregroundStyle(.secondary) } }
                     VStack(alignment: .leading, spacing: 6) { gateLabel(gate, accent: accent); if let terminal, !terminal.isEmpty { Text("Terminal " + terminal).font(.caption).foregroundStyle(.secondary) } }
                 }
                 if !departure, let baggage = live?.baggageClaim, !baggage.isEmpty { Label("Baggage belt " + baggage, systemImage: "suitcase.rolling").font(.caption).foregroundStyle(.secondary) }
             }
-        }.padding(.vertical, 14)
+        }.padding(16).frame(maxWidth: .infinity, alignment: .leading).cardSurface(cornerRadius: 20)
+            .accessibilityIdentifier(departure ? "flight-departure-section" : "flight-arrival-section")
     }
     private func gateLabel(_ gate: String?, accent: Color) -> some View {
         Text(gate?.isEmpty == false ? "Gate " + gate! : "Gate not reported").font(.caption.weight(.semibold)).foregroundStyle(gate?.isEmpty == false ? accent : .secondary)
-            .padding(.horizontal, 8).padding(.vertical, 4).background(accent.opacity(0.09), in: .capsule)
+            .padding(.vertical, 3)
     }
     private func fact(_ title: String, _ value: String?) -> some View {
         HStack(alignment: .firstTextBaseline) { Text(title).foregroundStyle(.secondary); Spacer(); Text(value?.isEmpty == false ? value! : "Not reported") }.font(.subheadline)
