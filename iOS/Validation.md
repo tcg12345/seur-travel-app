@@ -234,3 +234,9 @@ The SwiftUI source uses native iOS 26 Liquid Glass APIs and system controls. The
 
 - Replaced the Travel toolbar's plus menu with a direct New trip button that opens the existing trip creation form. Removed the JSON import option and its file picker from this page.
 - The signed Debug simulator build passed. This small toolbar change was checked in the source diff; no new UI test was added.
+
+## Cleaner trip navigation and scrolling add button — September 7, 2026
+
+- Replaced the stacked Plan/Journal and Agenda/Calendar/Map segmented controls with one underlined navigation row: Plan, Calendar, Map and Journal. Tightened the trip heading and displayed the trip metrics directly on the page.
+- Removed the full-width promotional footer. The lower-right Add to plan button animates to a compact plus after scrolling and expands again near the top. The footer reserves a constant height so the transition does not resize the scroll viewport. Separate scroll thresholds prevent flicker near the top; Reduce Motion is respected. Journal uses the same behavior for Log a place.
+- The signed Debug simulator build passed. Extended the existing trip-creation UI regression to cover the direct toolbar plus, single navigation row, compact/expanded button states, opening the add flow from the compact button, and Calendar/Map/Journal navigation. It passed in `/tmp/SeurTripLayoutQA.xcresult` (1 test, 0 failures). Reviewed the expanded and collapsed screenshots, saved locally in `iOS/Preview/102-clean-trip-page.png` and `103-collapsed-trip-add.png` (ignored artifacts).

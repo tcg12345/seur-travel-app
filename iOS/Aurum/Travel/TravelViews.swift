@@ -88,6 +88,8 @@ private struct JourneyCard: View {
 }
 
 struct JourneyDetailView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var compactAdd = false
     @Environment(JourneyLibrary.self) private var library
     @Environment(\.dismiss) private var dismiss
     let id: UUID
@@ -116,10 +118,18 @@ struct JourneyDetailView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 25) {
                         header(document)
-                        Picker("Trip section", selection: $chapter) { Text("Plan").tag("Plan"); Text("Journal").tag("Journal") }.pickerStyle(.segmented).accessibilityIdentifier("trip-section")
+                        tripNavigation
                         if chapter == "Plan" { itinerary(document) } else { journal(document) }
                     }.padding(22)
                 }.background(Color.canvas)
+                    .accessibilityIdentifier("journey-scroll")
+                    .onScrollGeometryChange(for: CGFloat.self) { geometry in
+                        max(0, geometry.contentOffset.y + geometry.contentInsets.top)
+                    } action: { _, offset in
+                        // Separate thresholds keep the button steady near the top and during bounce.
+                        if offset > 80 { compactAdd = true }
+                        else if offset < 24 { compactAdd = false }
+                    }
                     .navigationBarTitleDisplayMode(.inline).toolbar(.hidden, for: .tabBar)
                     .toolbar {
                         ToolbarItem(placement: .topBarTrailing) { Button { share = true } label: { Image(systemName: "square.and.arrow.up") }.accessibilityLabel("Share journey") }
@@ -140,16 +150,13 @@ struct JourneyDetailView: View {
                             } label: { Image(systemName: "ellipsis") }.accessibilityIdentifier("journey-menu")
                         }
                     }
-                    .safeAreaInset(edge: .bottom) {
-                        HStack(spacing: 12) {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(chapter == "Plan" ? "Room for a little more" : "Keep the memory").font(.subheadline.weight(.medium))
-                                Text(chapter == "Plan" ? "Make every day your own" : "Add a place you visited").font(.caption2).foregroundStyle(.secondary)
-                            }.frame(maxWidth: .infinity, alignment: .leading)
-                            if chapter == "Plan" {
-                                Button { addingDay = nil; addingPlan = true } label: { Label("Add to plan", systemImage: "plus").padding(.vertical, 10) }.buttonStyle(.glassProminent).accessibilityIdentifier("journey-add")
-                            } else { Button { rated = RatedPlace() } label: { Label("Log a place", systemImage: "plus").padding(.vertical, 10) }.buttonStyle(.glassProminent).accessibilityIdentifier("trip-add-place") }
-                        }.padding(14).glassEffect(.regular, in: .rect(cornerRadius: 27)).padding(.horizontal, 16).padding(.bottom, 8)
+                    .safeAreaInset(edge: .bottom, spacing: 0) {
+                        HStack {
+                            Spacer(minLength: 0)
+                            addButton
+                        }
+                        .padding(.horizontal, 22)
+                        .frame(height: 70, alignment: .top)
                     }
                     .sheet(isPresented: $editInfo) { JourneyEditor(document: document) }
                     .sheet(isPresented: $addingPlan) { TripAddFlowView(documentID: id, day: addingDay) }
@@ -167,10 +174,61 @@ struct JourneyDetailView: View {
             } else { ContentUnavailableView("Journey unavailable", systemImage: "suitcase", description: Text("This journey may have been removed.")) }
         }.alert("Travel", isPresented: Binding(get: { error != nil || library.error != nil }, set: { if !$0 { error = nil; library.error = nil } })) { Button("OK") { error = nil; library.error = nil } } message: { Text(error ?? library.error ?? "") }
     }
+    private var tripNavigation: some View {
+        HStack(spacing: 0) {
+            ForEach(["Plan", "Calendar", "Map", "Journal"], id: \.self) { tab in
+                let selected = tab == "Journal" ? chapter == "Journal" : chapter == "Plan" && mode == (tab == "Plan" ? "Agenda" : tab)
+                Button {
+                    withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) {
+                        chapter = tab == "Journal" ? "Journal" : "Plan"
+                        if tab != "Journal" { mode = tab == "Plan" ? "Agenda" : tab }
+                    }
+                } label: {
+                    Text(tab)
+                        .font(.subheadline.weight(selected ? .semibold : .medium))
+                        .foregroundStyle(selected ? Color.bronze : .secondary)
+                        .lineLimit(1)
+                        .frame(maxWidth: .infinity, minHeight: 46)
+                        .overlay(alignment: .bottom) {
+                            Capsule().fill(selected ? Color.bronze : .clear).frame(height: 2)
+                        }
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(selected ? .isSelected : [])
+            }
+        }
+        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+        .background(alignment: .bottom) { Rectangle().fill(.quaternary).frame(height: 1) }
+        .accessibilityIdentifier("trip-section")
+    }
+    private var addButton: some View {
+        Button {
+            if chapter == "Plan" { addingDay = nil; addingPlan = true }
+            else { rated = RatedPlace() }
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "plus").font(.title3.weight(.medium)).frame(width: 22)
+                if !compactAdd {
+                    Text(chapter == "Plan" ? "Add to plan" : "Log a place")
+                        .font(.subheadline.weight(.semibold)).lineLimit(1)
+                        .transition(.opacity)
+                }
+            }
+            .padding(.horizontal, compactAdd ? 16 : 20)
+            .frame(height: 54)
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.glassProminent)
+        .buttonBorderShape(.capsule)
+        .animation(reduceMotion ? nil : .smooth(duration: 0.24), value: compactAdd)
+        .accessibilityLabel(chapter == "Plan" ? "Add to plan" : "Log a place")
+        .accessibilityValue(compactAdd ? "Compact" : "Expanded")
+        .accessibilityIdentifier(chapter == "Plan" ? "journey-add" : "trip-add-place")
+    }
     private func header(_ d: JourneyDocument) -> some View {
-        VStack(alignment: .leading, spacing: 15) {
-            Eyebrow(text: "Your trip")
-            Editorial(d.title, size: 37).accessibilityIdentifier("journey-title")
+        VStack(alignment: .leading, spacing: 10) {
+            Editorial(d.title, size: 32).accessibilityIdentifier("journey-title")
             Label(d.routeLabel.isEmpty ? "Add your destination" : d.routeLabel, systemImage: "mappin.and.ellipse").font(.subheadline).foregroundStyle(.secondary)
             if let start = d.startDate { Text(TravelDay.label(start) + (d.endDate.map { " – " + TravelDay.label($0) } ?? "")).font(.caption).foregroundStyle(Color.bronze) }
             if !d.description.isEmpty { Text(d.description).font(.subheadline).foregroundStyle(.secondary).lineSpacing(4) }
@@ -180,7 +238,7 @@ struct JourneyDetailView: View {
                 metric("\(d.planCount)", "Plans")
                 Divider().frame(height: 34)
                 metric("\(d.places.count)", "Journal places")
-            }.padding(.vertical, 19).background(.background, in: .rect(cornerRadius: 24))
+            }.padding(.top, 8)
         }
     }
     private func metric(_ value: String, _ caption: String) -> some View { VStack(spacing: 6) { Text(value).font(.system(.title2, design: .serif)); Text(caption).font(.caption2).foregroundStyle(.secondary) }.frame(maxWidth: .infinity) }
@@ -192,7 +250,6 @@ struct JourneyDetailView: View {
                     Button("Add destinations", systemImage: "mappin.and.ellipse") { editInfo = true }.buttonStyle(.glass).accessibilityIdentifier("trip-add-route")
                 }.padding(20).background(Color.cardSurface, in: .rect(cornerRadius: 24))
             }
-            Picker("Itinerary view", selection: $mode) { Text("Agenda").tag("Agenda"); Text("Calendar").tag("Calendar"); Text("Map").tag("Map") }.pickerStyle(.segmented)
             if mode != "Map" && (!d.hotels.isEmpty || !d.flights.isEmpty) { bookingSection(d) }
             if mode == "Map" { JourneyMapView(places: d.mapPlaces).frame(height: 380).clipShape(.rect(cornerRadius: 26)) }
             else {

@@ -1043,7 +1043,7 @@ final class AurumUITests: XCTestCase {
 
     func testSimpleTripCreationBuildsRouteAutomatically() {
         app.terminate(); app.launchArguments = ["--ui-testing", "--location-testing"]; app.launch()
-        app.tabBars.buttons["Travel"].tap(); app.buttons["travel-create"].tap()
+        app.tabBars.buttons["Travel"].tap(); app.buttons["travel-new-trip"].tap()
         let create = app.buttons["journey-save"]
         XCTAssertFalse(create.isEnabled)
         XCTAssertFalse(app.textFields["journey-name"].exists)
@@ -1062,7 +1062,27 @@ final class AurumUITests: XCTestCase {
         XCTAssertTrue(trip.waitForExistence(timeout: 5)); trip.tap()
         XCTAssertFalse(app.buttons["trip-add-route"].exists)
         XCTAssertTrue(app.buttons["journey-add"].exists)
+        XCTAssertFalse(app.segmentedControls["trip-section"].exists)
+        let add = app.buttons["journey-add"]
+        XCTAssertEqual(add.value as? String, "Expanded")
         capture("47 Automatically prepared trip")
+        let scroll = app.scrollViews["journey-scroll"]
+        scroll.swipeUp()
+        let collapsed = expectation(for: NSPredicate(format: "value == %@", "Compact"), evaluatedWith: add)
+        wait(for: [collapsed], timeout: 3)
+        capture("101 Compact trip add button")
+        add.tap()
+        XCTAssertTrue(app.buttons["add-plan-hotel"].waitForExistence(timeout: 5))
+        app.buttons["Close"].firstMatch.tap()
+        for _ in 0..<5 { if add.value as? String == "Expanded" { break }; scroll.swipeDown() }
+        XCTAssertEqual(add.value as? String, "Expanded")
+        app.buttons["Calendar"].tap()
+        XCTAssertTrue(app.buttons["Calendar"].isSelected)
+        app.buttons["Map"].tap()
+        XCTAssertTrue(app.staticTexts["trip-map-count"].waitForExistence(timeout: 5))
+        app.buttons["Journal"].tap()
+        XCTAssertTrue(app.buttons["trip-add-place"].waitForExistence(timeout: 5))
+        app.buttons["Plan"].tap()
         app.buttons["journey-menu"].tap(); app.buttons["Edit journey"].tap()
         XCTAssertEqual(app.textFields["journey-name"].value as? String, "Trip to Paris, France")
         let savedStop = app.collectionViews.staticTexts["Paris, France"]
