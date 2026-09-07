@@ -116,7 +116,7 @@ struct WorldMapView: View {
                         Toggle("With a website", isOn: $websiteOnly)
                         Toggle("Only saved places", isOn: $savedOnly)
                     }
-                    Section { Button("Reset filters") { diningFilters = DiningSearchPreferences(); exploreSort = .suggested; websiteOnly = false; savedOnly = false } }
+                    Section { Button("Reset filters", action: resetExploreFilters) }
                 }.navigationTitle(interest == .restaurants ? "Restaurant filters" : "Explore filters")
                     .navigationBarTitleDisplayMode(.inline)
                     .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { showExploreFilters = false } } }
@@ -208,44 +208,99 @@ struct WorldMapView: View {
     }
 
     private var explorePanel: some View {
-        VStack(alignment: .leading, spacing: 17) {
-            LocationAutocompleteField("Search any city", text: $cityQuery, kind: .city, identifier: "world-city-search", onEdit: { if detent != .large { resizePanel(.large) } }, onSelect: { result in
-                guard let city = ExploreCity(result) else { return }; selectedCity = city; store.rememberExploreCity(city); move(.region(city.region)); resizePanel(.medium); Task { await browse(city) }
-            }).padding(15).background(Color.cardSurface, in: .rect(cornerRadius: 19))
-            HStack {
-                Menu {
-                    ForEach(ExploreInterest.allCases) { value in
-                        Button(value.title, systemImage: value.symbol) { interest = value; if let searchArea { Task { await browse(searchArea) } } }
+        VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 8) {
+                LocationAutocompleteField("Search any city", text: $cityQuery, kind: .city, identifier: "world-city-search", onEdit: { if detent != .large { resizePanel(.large) } }, onSelect: { result in
+                    guard let city = ExploreCity(result) else { return }; selectedCity = city; store.rememberExploreCity(city); move(.region(city.region)); resizePanel(.medium); Task { await browse(city) }
+                }).padding(15).background(Color.cardSurface, in: .rect(cornerRadius: 19))
+                HStack(spacing: 14) {
+                    Menu {
+                        ForEach(ExploreInterest.allCases) { value in
+                            Button(value.title, systemImage: value.symbol) { interest = value; if let searchArea { Task { await browse(searchArea) } } }
+                        }
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: interest.symbol).foregroundStyle(Color.bronze)
+                            Text(interest.title).foregroundStyle(.primary).lineLimit(1)
+                            Image(systemName: "chevron.down").font(.caption2).foregroundStyle(.secondary)
+                        }.frame(maxWidth: .infinity, minHeight: 44, alignment: .leading).contentShape(Rectangle())
+                    }.accessibilityIdentifier("map-explore-category")
+                    Divider().frame(height: 20)
+                    Button { showExploreFilters = true } label: {
+                        HStack(spacing: 7) {
+                            Image(systemName: "slider.horizontal.3").foregroundStyle(Color.bronze)
+                            Text("Filters").foregroundStyle(.primary)
+                            if exploreFiltersActive || !placeQuery.isEmpty || widerSearch { Circle().fill(Color.bronze).frame(width: 5, height: 5) }
+                        }.frame(minHeight: 44).contentShape(Rectangle())
+                    }.buttonStyle(.plain).accessibilityIdentifier("map-explore-filters")
+                }.font(.subheadline.weight(.medium))
+                if !exploreSearchSummary.isEmpty {
+                    HStack(alignment: .top) {
+                        Text(exploreSearchSummary).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                        Spacer(minLength: 8)
+                        Button("Reset", action: resetExploreFilters).font(.caption)
                     }
-                } label: { Label(interest.title, systemImage: interest.symbol).font(.subheadline.weight(.medium)); Image(systemName: "chevron.down").font(.caption2) }
-                Spacer()
-                Button { let city = ExploreCity(name: selectedCity?.name ?? "Map area", country: selectedCity?.country ?? "", latitude: center.latitude, longitude: center.longitude); Task { await browse(city) }; resizePanel(.medium) } label: { Label("Search area", systemImage: "scope").font(.subheadline) }.accessibilityIdentifier("map-search-area")
-            }.padding(.vertical, 4)
-            HStack(spacing: 10) {
-                Button { showExploreFilters = true } label: {
-                    Label(exploreFiltersActive ? "Filters •" : "Filters", systemImage: "slider.horizontal.3")
-                        .font(.subheadline.weight(.medium)).padding(.vertical, 7)
-                }.buttonStyle(.glass).accessibilityIdentifier("map-explore-filters")
-                if interest == .restaurants && diningFilters.active {
-                    Text(diningFilters.summary).font(.caption).foregroundStyle(.secondary).lineLimit(2)
                 }
-                Spacer(minLength: 0)
-                if exploreFiltersActive { Button("Reset") { diningFilters = DiningSearchPreferences(); exploreSort = .suggested; websiteOnly = false; savedOnly = false }.font(.caption) }
             }
-            if !placeQuery.isEmpty || widerSearch {
-                HStack {
-                    Text([placeQuery.isEmpty ? nil : "Search: " + placeQuery, widerSearch ? "Wider city" : nil].compactMap { $0 }.joined(separator: " · ")).font(.caption).foregroundStyle(.secondary)
+            if let selectedCity {
+                NavigationLink { CityGuideView(city: selectedCity).toolbar(.visible, for: .navigationBar) } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: "globe.europe.africa").foregroundStyle(Color.bronze)
+                        Text("Explore " + selectedCity.name).foregroundStyle(.primary)
+                        Spacer()
+                        Text("City guide").foregroundStyle(.secondary)
+                        Image(systemName: "chevron.right").font(.caption2).foregroundStyle(.secondary)
+                    }.font(.subheadline).padding(.vertical, 12).contentShape(Rectangle())
+                }.buttonStyle(.plain).accessibilityIdentifier("map-city-guide")
+            }
+            Divider()
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .center) {
+                    Text(searchArea == nil ? "On the map" : "Places nearby").font(.subheadline.weight(.semibold))
                     Spacer()
-                    Button("Clear") { placeQuery = ""; widerSearch = false; if let searchArea { Task { await browse(searchArea) } } }.font(.caption)
+                    Button {
+                        let city = ExploreCity(name: selectedCity?.name ?? "Map area", country: selectedCity?.country ?? "", latitude: center.latitude, longitude: center.longitude)
+                        Task { await browse(city) }; resizePanel(.medium)
+                    } label: { Label("Search this area", systemImage: "scope").font(.caption.weight(.semibold)).padding(.vertical, 8) }
+                        .accessibilityIdentifier("map-search-area")
                 }
+                if search.loading { ProgressView("Finding places…").font(.subheadline) }
+                else if let error = search.sections.first(where: { $0.error != nil })?.error { Text(error).font(.subheadline).foregroundStyle(.secondary) }
+                else if searchArea == nil { Text("Choose a city or search the area shown on your map.").font(.caption).foregroundStyle(.secondary) }
+                else if visiblePlaces.isEmpty { Text(exploreFiltersActive ? "No places match. Try changing your filters or searching another area." : "No places found. Try another area.").font(.subheadline).foregroundStyle(.secondary) }
+                if let selected = selectedPlace { exploreResultRow(selected) }
+                ForEach(visiblePlaces.filter { $0.id != selectedPlace?.id }) { place in exploreResultRow(place) }
             }
-            if let selectedCity { NavigationLink { CityGuideView(city: selectedCity).toolbar(.visible, for: .navigationBar) } label: { HStack { VStack(alignment: .leading, spacing: 5) { Text(selectedCity.name).font(.system(.title2, design: .serif)); Text("City guide").font(.caption) }; Spacer(); Image(systemName: "arrow.up.right") }.padding(17).background(Color.cardSurface, in: .rect(cornerRadius: 21)) }.accessibilityIdentifier("map-city-guide") }
-            if let selected = selectedPlace { ExplorePlaceRow(place: selected, add: { adding = selected }) }
-            if search.loading { ProgressView("Finding places…") }
-            if let error = search.sections.first(where: { $0.error != nil })?.error { Text(error).font(.caption).foregroundStyle(.secondary) }
-            if searchArea != nil && !search.loading && visiblePlaces.isEmpty { Text(exploreFiltersActive ? "No places match. Try changing your filters or searching another area." : "No places found. Try another area.").font(.subheadline).foregroundStyle(.secondary) }
-            ForEach(visiblePlaces) { place in ExplorePlaceRow(place: place, add: { adding = place }) }
-            if searchArea == nil { NavigationLink { CityExplorerView().toolbar(.visible, for: .navigationBar) } label: { HStack { Label("City guides", systemImage: "globe.europe.africa"); Spacer(); Image(systemName: "chevron.right").font(.caption) }.font(.subheadline).padding(.vertical, 8) } }
+            if selectedCity == nil {
+                NavigationLink { CityExplorerView().toolbar(.visible, for: .navigationBar) } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: "globe.europe.africa").foregroundStyle(Color.bronze)
+                        Text("Browse city guides").foregroundStyle(.primary)
+                        Spacer()
+                        Image(systemName: "chevron.right").font(.caption2).foregroundStyle(.secondary)
+                    }.font(.subheadline).padding(.vertical, 12).contentShape(Rectangle())
+                }.buttonStyle(.plain)
+            }
+        }
+    }
+    private var exploreSearchSummary: String {
+        [interest == .restaurants && diningFilters.active ? diningFilters.summary : nil,
+         websiteOnly ? "Has website" : nil, savedOnly ? "Saved places" : nil,
+         exploreSort == .suggested ? nil : exploreSort.rawValue,
+         placeQuery.isEmpty ? nil : "Search: " + placeQuery,
+         widerSearch ? "Wider city" : nil].compactMap { $0 }.joined(separator: " · ")
+    }
+    private func resetExploreFilters() {
+        let reloadSearch = !placeQuery.isEmpty || widerSearch
+        let diningWillReload = interest == .restaurants && diningFilters.active
+        diningFilters = DiningSearchPreferences(); exploreSort = .suggested; websiteOnly = false; savedOnly = false
+        placeQuery = ""; widerSearch = false
+        if reloadSearch && !diningWillReload, let searchArea { Task { await browse(searchArea) } }
+    }
+    private func exploreResultRow(_ place: ExplorePlace) -> some View {
+        VStack(spacing: 0) {
+            ExplorePlaceRow(place: place, add: { adding = place }, inset: false)
+            Divider()
         }
     }
     private var selectedPlace: ExplorePlace? { guard let selection, selection.hasPrefix("place:") else { return nil }; return places.first { "place:" + $0.id == selection } }
