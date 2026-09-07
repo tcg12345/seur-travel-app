@@ -9,6 +9,7 @@ struct WorldMapView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var camera: MapCameraPosition = .camera(MapCamera(centerCoordinate: .init(latitude: 22, longitude: 5), distance: 32_000_000))
     @State private var mapHeight: CGFloat = 800
+    @State private var mapBottomInset: CGFloat = 0
     @State private var center = CLLocationCoordinate2D(latitude: 22, longitude: 5)
     @State private var mode = "Explore"
     @State private var detent: PresentationDetent = .height(260)
@@ -47,6 +48,15 @@ struct WorldMapView: View {
     }
     private var tripPlaces: [PlaceRecord] { var seen = Set<String>(); return (trip.map { [$0] } ?? library.documents).flatMap(\.mapPlaces).filter { $0.hasCoordinate && seen.insert($0.id).inserted } }
     private var routes: [MapFlight] { if let selectedFlight { return [selectedFlight] }; if mode == "Trips", let tripID { return flights.filter { $0.tripID == tripID } }; return flights }
+    private var mapBottomPadding: CGFloat {
+        let layout = MapPanelLayout(availableHeight: mapHeight, flightDetail: selectedFlightID != nil)
+        // Keep the camera's usable area identical across Explore, Trips and Flights.
+        // Native attribution sits just above the resting sheet, clear of the tab bar.
+        // A fully expanded sheet covers the map. Keep a useful viewport
+        // instead of squeezing MapKit into the few points left above the sheet.
+        let mapDetent: PresentationDetent = detent == .large ? .medium : detent
+        return layout.height(for: mapDetent) + mapBottomInset + 8
+    }
     var body: some View {
         ZStack(alignment: .top) {
             map.ignoresSafeArea()
@@ -54,6 +64,7 @@ struct WorldMapView: View {
             PersistentMapPanel(detent: $detent, contentID: selectedFlightID ?? (mode + (addedFlightNumber ?? "")), flightDetail: selectedFlightID != nil, header: { panelHeader }, content: { panelContent })
         }
         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { mapHeight = $0 }
+        .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.bottom } action: { mapBottomInset = $0 }
         .toolbar(.hidden, for: .navigationBar)
         .onChange(of: store.selectedTab) { _, _ in
             var transaction = Transaction(); transaction.disablesAnimations = true
@@ -99,7 +110,7 @@ struct WorldMapView: View {
                 Annotation("Reported aircraft position", coordinate: position.coordinate) { Image(systemName: "location.north.fill").rotationEffect(.degrees(position.heading ?? 0)).font(.title2).foregroundStyle(.white).padding(12).background(Color.bronze, in: .circle) }
             }
         }.mapStyle(satellite ? .hybrid(elevation: .realistic, pointsOfInterest: .excludingAll) : .standard(elevation: .realistic, pointsOfInterest: .excludingAll))
-            .safeAreaPadding(.bottom, mode != "Explore" ? mapHeight * (selectedFlightID == nil ? 0.59 : 0.76) : 0)
+            .safeAreaPadding(.bottom, mapBottomPadding)
             .onMapCameraChange(frequency: .onEnd) { center = $0.region.center }
             .accessibilityIdentifier("world-map")
     }
@@ -255,6 +266,17 @@ struct WorldMapView: View {
 
 }
 
+private struct MapPanelLayout {
+    let availableHeight: CGFloat
+    let flightDetail: Bool
+    var maximum: CGFloat { max(300, availableHeight - 8) }
+    var compact: CGFloat { min(260, maximum * 0.48) }
+    var medium: CGFloat { max(compact, maximum * (flightDetail ? 0.80 : 0.60)) }
+    func height(for detent: PresentationDetent) -> CGFloat {
+        detent == .large ? maximum : detent == .medium ? medium : compact
+    }
+}
+
 /// This panel belongs to the map, so the original system tab bar never moves or changes owners.
 /// Drag state stays here, keeping continuous gesture updates out of the map renderer.
 // Content stops at the tab-bar safe area, while the same sheet material continues
@@ -270,10 +292,11 @@ private struct PersistentMapPanel<Header: View, Content: View>: View {
     private var spring: Animation? { reduceMotion ? nil : .spring(response: 0.38, dampingFraction: 0.88) }
     var body: some View {
         GeometryReader { geo in
-            let maximum = max(300, geo.size.height - 8)
-            let compact = min(260.0, maximum * 0.48)
-            let medium = max(compact, maximum * (flightDetail ? 0.80 : 0.60))
-            let resting = detent == .large ? maximum : detent == .medium ? medium : compact
+            let layout = MapPanelLayout(availableHeight: geo.size.height, flightDetail: flightDetail)
+            let maximum = layout.maximum
+            let compact = layout.compact
+            let medium = layout.medium
+            let resting = layout.height(for: detent)
             let height = min(maximum, max(compact, resting - translation))
             let progress = min(1, max(0, (height - compact) / max(1, maximum - compact)))
             let shape = UnevenRoundedRectangle(topLeadingRadius: 30 - progress * 6, bottomLeadingRadius: 30 * (1 - progress), bottomTrailingRadius: 30 * (1 - progress), topTrailingRadius: 30 - progress * 6)

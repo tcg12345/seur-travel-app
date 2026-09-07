@@ -77,13 +77,24 @@ final class AurumUITests: XCTestCase {
         let tabY = app.tabBars.firstMatch.frame.minY
         for expanded in [false, true] {
             if expanded { resizeMapPanel(expanded: true); RunLoop.current.run(until: Date().addingTimeInterval(0.7)) }
-            let headerY = expand.frame.minY
+            let handle = app.otherElements["map-panel-handle"]
+            let headerY = handle.frame.minY
+            let legal = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "Legal")).firstMatch
+            if !expanded {
+                XCTAssertTrue(legal.waitForExistence(timeout: 5))
+                XCTAssertLessThan(legal.frame.maxY, app.otherElements["map-panel-handle"].frame.minY)
+            }
+            let legalY = legal.exists ? legal.frame.minY : 0
             for _ in 0..<2 {
                 for section in ["Trips", "Flights", "Explore"] {
                     app.buttons["map-section-" + section].tap()
-                    XCTAssertEqual(expand.frame.minY, headerY, accuracy: 2)
+                    XCTAssertEqual(handle.frame.minY, headerY, accuracy: 2)
                     XCTAssertEqual(app.tabBars.firstMatch.frame.minY, tabY, accuracy: 2)
                     XCTAssertEqual(app.scrollViews.matching(identifier: "map-panel-scroll").count, 1)
+                    if !expanded {
+                        XCTAssertTrue(legal.exists)
+                        XCTAssertEqual(legal.frame.minY, legalY, accuracy: 2)
+                    }
                 }
                 let search = app.textFields["world-city-search"]
                 XCTAssertTrue(search.isHittable)
