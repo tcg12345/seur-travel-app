@@ -12,6 +12,28 @@ final class AurumUITests: XCTestCase {
         app.tabBars.buttons["Map"].firstMatch.tap()
         if app.buttons["map-saved"].waitForExistence(timeout: 2) { app.buttons["map-saved"].tap() }
     }
+    func testMapPanelReachesEdgesAndCollapsesAfterContentScrolling() {
+        app.terminate(); app.launchArguments = ["--ui-testing", "--map-testing", "--location-testing", "--city-testing"]; app.launch()
+        app.tabBars.buttons["Map"].tap()
+        XCTAssertTrue(app.buttons["map-section-Flights"].waitForExistence(timeout: 8))
+        let surface = app.otherElements["map-panel-surface"].firstMatch
+        XCTAssertTrue(surface.waitForExistence(timeout: 5))
+        let compactWidth = surface.frame.width
+        XCTAssertEqual(compactWidth, app.frame.width - 24, accuracy: 2)
+        resizeMapPanel(expanded: true)
+        XCTAssertEqual(surface.frame.width, app.frame.width, accuracy: 2)
+        app.buttons["map-section-Flights"].tap()
+        let flight = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "map-flight-")).firstMatch
+        XCTAssertTrue(flight.waitForExistence(timeout: 5)); flight.tap(); resizeMapPanel(expanded: true)
+        let scroll = app.scrollViews["map-panel-scroll"].firstMatch
+        scroll.swipeUp(); scroll.swipeUp()
+        XCTAssertTrue(app.buttons["flight-performance"].exists)
+        resizeMapPanel(expanded: false)
+        XCTAssertEqual(surface.frame.width, compactWidth, accuracy: 2)
+        resizeMapPanel(expanded: true)
+        XCTAssertEqual(surface.frame.width, app.frame.width, accuracy: 2)
+        XCTAssertEqual(app.scrollViews.matching(identifier: "map-panel-scroll").count, 1)
+    }
     func testOrganizedFlightDetailSectionsAndTimingLabels() {
         app.terminate(); app.launchArguments = ["--ui-testing", "--map-testing", "--location-testing", "--city-testing"]; app.launch()
         app.tabBars.buttons["Map"].tap()

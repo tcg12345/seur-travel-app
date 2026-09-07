@@ -612,6 +612,18 @@ import MapKit
         XCTAssertNil(flight.route); XCTAssertNil(flight.distance)
         XCTAssertNil(MapFlight.coordinate(91, 20)); XCTAssertNil(MapFlight.coordinate(20, nil))
     }
+    func testMapPanelSurfaceExpandsContinuouslyWithoutChangingItsContentHeight() {
+        for flightDetail in [false, true] {
+            let layout = MapPanelLayout(availableHeight: 760, flightDetail: flightDetail)
+            XCTAssertEqual(layout.surfaceInset(for: layout.compact), 12)
+            XCTAssertEqual(layout.surfaceInset(for: layout.maximum), 0)
+            XCTAssertEqual(layout.surfaceInset(for: (layout.maximum + layout.compact) / 2), 6, accuracy: 0.001)
+            XCTAssertEqual(layout.surfaceInset(for: layout.maximum + 100), 0)
+            XCTAssertEqual(layout.surfaceInset(for: layout.compact - 100), 12)
+            XCTAssertGreaterThan(layout.medium, layout.compact)
+            XCTAssertLessThan(layout.medium, layout.maximum)
+        }
+    }
     func testFlightDetailPunctualitySeparatesDepartureAndArrival() {
         var flight = FlightMapFixtures.snapshot
         XCTAssertEqual(flight.timing(departure: true), .late(30))

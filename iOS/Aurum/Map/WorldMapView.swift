@@ -415,12 +415,16 @@ struct WorldMapView: View {
 
 }
 
-private struct MapPanelLayout {
+struct MapPanelLayout {
     let availableHeight: CGFloat
     let flightDetail: Bool
     var maximum: CGFloat { max(300, availableHeight - 8) }
     var compact: CGFloat { min(260, maximum * 0.48) }
     var medium: CGFloat { max(compact, maximum * (flightDetail ? 0.80 : 0.60)) }
+    func expansion(for height: CGFloat) -> CGFloat {
+        min(1, max(0, (height - compact) / max(1, maximum - compact)))
+    }
+    func surfaceInset(for height: CGFloat) -> CGFloat { 12 * (1 - expansion(for: height)) }
     func height(for detent: PresentationDetent) -> CGFloat {
         detent == .large ? maximum : detent == .medium ? medium : compact
     }
@@ -447,9 +451,13 @@ private struct PersistentMapPanel<Header: View, Content: View>: View {
             let medium = layout.medium
             let resting = layout.height(for: detent)
             let height = min(maximum, max(compact, resting - translation))
-            let progress = min(1, max(0, (height - compact) / max(1, maximum - compact)))
+            let progress = layout.expansion(for: height)
             let shape = UnevenRoundedRectangle(topLeadingRadius: 30 - progress * 6, bottomLeadingRadius: 30 * (1 - progress), bottomTrailingRadius: 30 * (1 - progress), topTrailingRadius: 30 - progress * 6)
-            let change: (CGFloat) -> Void = { translation = $0 }
+            let change: (CGFloat) -> Void = { distance in
+                // Follow the finger directly; only settling into a detent springs.
+                var transaction = Transaction(); transaction.disablesAnimations = true
+                withTransaction(transaction) { translation = distance }
+            }
             let end: (CGFloat, CGFloat) -> Void = { distance, velocity in
                 let projected = resting - distance - velocity * 0.18
                 let target = [compact, medium, maximum].min(by: { abs($0 - projected) < abs($1 - projected) }) ?? compact
@@ -482,6 +490,9 @@ private struct PersistentMapPanel<Header: View, Content: View>: View {
                         }
                 }
             }
+            // The scroll viewport stays at expanded size. Only the outer reveal
+            // changes during dragging, avoiding per-frame layout of long details.
+            .frame(height: maximum, alignment: .top)
             .frame(height: height, alignment: .top)
             .clipShape(.rect(topLeadingRadius: 30 - progress * 6, topTrailingRadius: 30 - progress * 6))
             .background(alignment: .top) {
@@ -489,11 +500,11 @@ private struct PersistentMapPanel<Header: View, Content: View>: View {
                 // Standard material keeps the sheet translucent without that lens.
                 shape.fill(.regularMaterial)
                     .overlay { shape.fill(Color.canvas.opacity(0.7 + progress * 0.3)) }
-                    .frame(height: height + geo.safeAreaInsets.bottom)
+                    .frame(width: geo.size.width - 2 * layout.surfaceInset(for: height), height: height + geo.safeAreaInsets.bottom)
                     .shadow(color: .black.opacity(0.12), radius: 16, y: -2)
                     .accessibilityIdentifier("map-panel-surface")
             }
-            // Fixed width prevents text and result rows reflowing on every drag frame.
+            // The surface expands to the edges while content keeps stable side insets.
             .padding(.horizontal, 12)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
             .animation(spring, value: detent)
