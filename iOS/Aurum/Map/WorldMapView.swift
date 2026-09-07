@@ -101,6 +101,11 @@ struct WorldMapView: View {
             withTransaction(transaction) { detent = .height(260) }
         }
         .onChange(of: selection) { _, value in selected(value) }
+        .onChange(of: tracker.position?.timestamp) { old, _ in
+            if old == nil, store.selectedTab == 1, mode == "Flights", let position = tracker.position, position.valid {
+                move(.camera(MapCamera(centerCoordinate: position.coordinate, distance: 800_000)))
+            }
+        }
         .onChange(of: FlightNotifications.shared.openFlights, initial: true) {
             if FlightNotifications.shared.openFlights { mode = "Flights"; detent = .medium; FlightNotifications.shared.openFlights = false }
         }
@@ -156,7 +161,14 @@ struct WorldMapView: View {
                 }
             }
             if mode == "Flights", selectedFlight != nil, let position = tracker.position, position.valid {
-                Annotation("Reported aircraft position", coordinate: position.coordinate) { Image(systemName: "location.north.fill").rotationEffect(.degrees(position.heading ?? 0)).font(.title2).foregroundStyle(.white).padding(12).background(Color.bronze, in: .circle) }
+                Annotation("Reported aircraft position", coordinate: position.coordinate) {
+                    TimelineView(.periodic(from: .now, by: 30)) { context in
+                        Image(systemName: "airplane").rotationEffect(.degrees((position.heading ?? 0) - 90)).font(.title2.weight(.semibold)).foregroundStyle(.white).padding(12)
+                            .background(position.isRecent(at: context.date) ? FlightDisplay.teal : Color.gray, in: .circle)
+                            .overlay(Circle().stroke(.white.opacity(0.85), lineWidth: 2))
+                            .accessibilityLabel(position.isRecent(at: context.date) ? "Reported aircraft position" : "Last known aircraft position")
+                    }
+                }
             }
         }.mapStyle(satellite ? .hybrid(elevation: .realistic, pointsOfInterest: .excludingAll) : .standard(elevation: .realistic, pointsOfInterest: .excludingAll))
             .safeAreaPadding(.bottom, mapBottomPadding)

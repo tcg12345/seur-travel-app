@@ -27,3 +27,7 @@ Flight watches belong to an account, installation and session. RLS, server-only 
 ## Verification
 
 See `Validation.md` for actual results. Automated tests never use real Apple or paid provider credentials. DEBUG-only `--apple-service-check` can create a temporary `SEUR TEST` Live Activity and request one destination forecast. It stores private diagnostic tokens in the app’s protected cache; do not print or commit that file. `--apple-service-cleanup` ends only that test activity and deletes the diagnostic file. Neither diagnostic path is present in Release builds.
+
+## Aircraft positions on the map
+
+Map → Flights → open a saved flight to show its last reported aircraft position automatically after departure. If multiple operating departures match, choose the correct one first. The visible Show on map action centers the aircraft. Position reports refresh every 90 seconds while the flight is open and Map is active. This uses the existing FlightAware position endpoint, independently of push-notification permission. The map labels older reports as last-known; it does not simulate live movement between reports. Missing provider coverage is shown explicitly.

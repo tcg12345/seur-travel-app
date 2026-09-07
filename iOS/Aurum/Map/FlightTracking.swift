@@ -45,12 +45,19 @@ struct FlightSnapshot: Codable, Identifiable, Hashable {
         let formatter = DateFormatter(); formatter.timeZone = TimeZone(identifier: zone) ?? TimeZone(secondsFromGMT: 0); formatter.dateFormat = "MMM d, HH:mm"
         return formatter.string(from: date)
     }
+    var canTrackPosition: Bool {
+        !cancelled && actualIn == nil && actualOn == nil && (actualOff != nil || actualOut != nil)
+    }
     var delayMinutes: Int? { arrivalDelay.map { Int(($0 / 60).rounded()) } }
 }
 struct FlightFeed: Codable { var flights: [FlightSnapshot]; var fetchedAt: Double; var historyEnabled: Bool; var message: String }
 struct FlightPosition: Codable {
     var latitude: Double; var longitude: Double; var timestamp: String?; var altitude: Double?; var groundspeed: Double?; var heading: Double?
     var coordinate: CLLocationCoordinate2D { .init(latitude: latitude, longitude: longitude) }
+    func isRecent(at now: Date = .now) -> Bool {
+        guard let date = FlightSnapshot.date(timestamp) else { return false }
+        return (-60...300).contains(now.timeIntervalSince(date))
+    }
     var valid: Bool { latitude.isFinite && longitude.isFinite && (-90...90).contains(latitude) && (-180...180).contains(longitude) }
 }
 struct MapFlight: Identifiable {
@@ -81,6 +88,9 @@ struct MapFlight: Identifiable {
     var loading = false
     var historyLoading = false
     var positionLoading = false
+    var positionMessage: String?
+    private var positionRequest = UUID()
+    private var lastPositionAttempt: Date?
     private var generation = UUID()
     var selected: FlightSnapshot? { feed?.flights.first { $0.id == selectedID } }
     func load(_ flight: FlightReservation, api: TravelAPI) async {
@@ -89,20 +99,37 @@ struct MapFlight: Identifiable {
             let result = try await api.flightStatus(flight.flightNumber, day: flight.departureDay)
             guard generation == token, !Task.isCancelled else { return }
             feed = result
-            if !result.flights.contains(where: { $0.id == selectedID }) { selectedID = result.flights.count == 1 ? result.flights.first?.id : nil; position = nil; history = nil }
+            if !result.flights.contains(where: { $0.id == selectedID }) { choose(result.flights.count == 1 ? result.flights.first?.id : nil) }
         } catch { guard generation == token else { return }; message = error.localizedDescription }
         if generation == token { loading = false }
     }
-    func choose(_ id: String) { selectedID = id; position = nil; history = nil }
+    func choose(_ id: String?) {
+        selectedID = id; position = nil; history = nil; positionMessage = nil
+        positionRequest = UUID(); positionLoading = false; lastPositionAttempt = nil
+    }
     func loadHistory(_ flight: FlightReservation, api: TravelAPI) async {
         historyLoading = true
         do { history = try await api.flightHistory(flight.flightNumber, day: flight.departureDay) } catch { message = error.localizedDescription }
         historyLoading = false
     }
     func locate(api: TravelAPI) async {
-        guard let selectedID else { return }; positionLoading = true
-        do { let value = try await api.flightPosition(selectedID); if self.selectedID == selectedID && value.valid { position = value } } catch { message = error.localizedDescription }
-        positionLoading = false
+        await locate { try await api.flightPosition($0) }
+    }
+    func locate(now: Date = .now, fetch: (String) async throws -> FlightPosition) async {
+        guard let selectedID, !positionLoading else { return }
+        guard lastPositionAttempt.map({ now.timeIntervalSince($0) >= 60 }) ?? true else { return }
+        let request = UUID(); positionRequest = request; lastPositionAttempt = now
+        positionLoading = true; positionMessage = nil
+        defer { if positionRequest == request { positionLoading = false } }
+        do {
+            let value = try await fetch(selectedID)
+            guard !Task.isCancelled, positionRequest == request, self.selectedID == selectedID else { return }
+            guard value.valid else { throw JourneyError.message("The provider returned an unavailable aircraft position.") }
+            position = value
+        } catch {
+            guard !Task.isCancelled, positionRequest == request, self.selectedID == selectedID else { return }
+            positionMessage = position == nil ? "No aircraft position is available yet. We’ll check again while this flight is open." : "Position update unavailable. Showing the last report."
+        }
     }
 }
 
@@ -204,6 +231,7 @@ struct FlightCard: View {
 struct FlightDetailPanel: View {
     @Environment(TravelAPI.self) private var api
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(TravelStore.self) private var store
     @Environment(\.dynamicTypeSize) private var typeSize
     let flight: MapFlight
     @Bindable var tracker: FlightTracker
@@ -244,6 +272,7 @@ struct FlightDetailPanel: View {
             endpoint(departure: false)
             Divider()
             updates
+            aircraftPosition
             FlightNotificationControls(flight: live, day: flight.flight.departureDay)
             Divider()
             if let feed = tracker.feed, feed.flights.count > 1 {
@@ -269,16 +298,12 @@ struct FlightDetailPanel: View {
                     VStack(alignment: .leading, spacing: 14) {
                         fact("Aircraft", live.aircraft)
                         fact("Registration", live.registration)
-                        Button { Task { await tracker.locate(api: api); if let position = tracker.position { track(position) } } } label: {
-                            Label(tracker.positionLoading ? "Locating aircraft…" : "Show aircraft on map", systemImage: "location.north.line").font(.subheadline)
-                        }.disabled(tracker.positionLoading)
                         if let position = tracker.position {
-                            Text("Reported " + FlightSnapshot.time(position.timestamp, zone: "UTC") + " UTC").font(.caption).foregroundStyle(.secondary)
                             if let speed = position.groundspeed { Text("\(Int(speed)) knots ground speed").font(.caption) }
                             if let altitude = position.altitude { Text("\(Int(altitude * 100)) ft altitude").font(.caption) }
                         }
                     }.padding(.vertical, 12)
-                } label: { Label("Aircraft & position", systemImage: "airplane").font(.subheadline.weight(.medium)) }.padding(.vertical, 12)
+                } label: { Label("Aircraft details", systemImage: "airplane").font(.subheadline.weight(.medium)) }.padding(.vertical, 12)
                 Divider()
             }
             DisclosureGroup { historyPanel.padding(.vertical, 12) } label: {
@@ -292,15 +317,42 @@ struct FlightDetailPanel: View {
                 Spacer(minLength: 12)
                 Button { setup = true } label: { Image(systemName: "info.circle").frame(width: 32, height: 32) }.accessibilityLabel("About flight information")
             }.padding(.top, 14)
-        }.task(id: "\(flight.flight.hashValue)-\(scenePhase)") {
-            guard scenePhase == .active else { return }
+        }.task(id: "\(flight.flight.hashValue)-\(scenePhase)-\(store.selectedTab)") {
+            guard scenePhase == .active, store.selectedTab == 1 else { return }
             await tracker.load(flight.flight, api: api)
             while !Task.isCancelled && tracker.feed != nil {
                 do { try await Task.sleep(for: .seconds(90)) } catch { break }
                 guard !Task.isCancelled else { break }
                 await tracker.load(flight.flight, api: api)
             }
+        }.task(id: "\(tracker.selectedID ?? "")-\(scenePhase)-\(store.selectedTab)-\(live?.canTrackPosition == true)") {
+            guard scenePhase == .active, store.selectedTab == 1, live?.canTrackPosition == true else { return }
+            while !Task.isCancelled {
+                await tracker.locate(api: api)
+                do { try await Task.sleep(for: .seconds(90)) } catch { break }
+            }
         }.sheet(isPresented: $setup) { FlightDataInfoView() }
+    }
+    private var aircraftPosition: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if let position = tracker.position {
+                TimelineView(.periodic(from: .now, by: 30)) { context in
+                    HStack {
+                        Label(position.isRecent(at: context.date) ? "Aircraft position" : "Last known position", systemImage: "airplane").font(.subheadline.weight(.medium))
+                        Spacer()
+                        Button("Show on map") { track(position) }.font(.subheadline)
+                    }.foregroundStyle(position.isRecent(at: context.date) ? FlightDisplay.teal : .secondary)
+                    if let date = FlightSnapshot.date(position.timestamp) {
+                        Text("Reported \(date, style: .relative) ago").font(.caption).foregroundStyle(.secondary)
+                    } else { Text("Report time unavailable").font(.caption).foregroundStyle(.secondary) }
+                }
+            } else if tracker.positionLoading { Label("Locating aircraft…", systemImage: "airplane").font(.subheadline).foregroundStyle(FlightDisplay.teal) }
+            else if live?.canTrackPosition == true { Text("Waiting for an aircraft position").font(.subheadline).foregroundStyle(.secondary) }
+            else if live?.actualIn != nil || live?.actualOn != nil { Label("Flight has landed", systemImage: "airplane.arrival").font(.caption).foregroundStyle(.secondary) }
+            else if live?.cancelled == true { Text("Aircraft tracking unavailable for a cancelled flight").font(.caption).foregroundStyle(.secondary) }
+            else { Text("Aircraft location appears here after departure, when reported by FlightAware.").font(.caption).foregroundStyle(.secondary) }
+            if let message = tracker.positionMessage { Text(message).font(.caption).foregroundStyle(.secondary) }
+        }.padding(.vertical, 10).accessibilityIdentifier("flight-aircraft-position")
     }
     private var status: some View {
         Label(live?.status ?? "Saved schedule", systemImage: live?.cancelled == true ? "xmark.circle.fill" : "circle.fill").font(.subheadline.weight(.semibold)).foregroundStyle(statusColor)

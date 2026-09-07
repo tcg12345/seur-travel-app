@@ -581,6 +581,29 @@ import MapKit
 }
 
 @MainActor final class FlightMapTests: XCTestCase {
+    func testPositionPollingOnlyForDepartedUnfinishedFlights() {
+        var flight = FlightMapFixtures.snapshot
+        XCTAssertFalse(flight.canTrackPosition)
+        flight.actualOut = flight.scheduledOut; XCTAssertTrue(flight.canTrackPosition)
+        flight.actualOn = flight.scheduledIn; XCTAssertFalse(flight.canTrackPosition)
+        flight.actualOn = nil; flight.cancelled = true; XCTAssertFalse(flight.canTrackPosition)
+    }
+    func testPositionFreshnessRequiresRecentProviderTimestamp() {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        var position = FlightPosition(latitude: 40, longitude: -30)
+        XCTAssertFalse(position.isRecent(at: now))
+        position.timestamp = ISO8601DateFormatter().string(from: now.addingTimeInterval(-120)); XCTAssertTrue(position.isRecent(at: now))
+        position.timestamp = ISO8601DateFormatter().string(from: now.addingTimeInterval(-600)); XCTAssertFalse(position.isRecent(at: now))
+    }
+    func testPositionRequestsAreThrottledAndOldSelectionCannotOverwriteNewOne() async {
+        let tracker = FlightTracker(); tracker.choose("first")
+        let now = Date.now; var calls = 0
+        await tracker.locate(now: now) { _ in calls += 1; return FlightPosition(latitude: 40, longitude: -30) }
+        await tracker.locate(now: now.addingTimeInterval(10)) { _ in calls += 1; return FlightPosition(latitude: 41, longitude: -30) }
+        XCTAssertEqual(calls, 1); XCTAssertEqual(tracker.position?.latitude, 40)
+        await tracker.locate(now: now.addingTimeInterval(90)) { _ in tracker.choose("second"); return FlightPosition(latitude: 42, longitude: -30) }
+        XCTAssertNil(tracker.position); XCTAssertEqual(tracker.selectedID, "second"); XCTAssertFalse(tracker.positionLoading)
+    }
     func testRoutesUseValidCoordinatesAndCrossDateLine() {
         var reservation = FlightReservation(departureLatitude: 35.5, departureLongitude: 139.7, arrivalLatitude: 37.6, arrivalLongitude: -122.4)
         var flight = MapFlight(tripID: UUID(), tripTitle: "Across the Pacific", flight: reservation)
