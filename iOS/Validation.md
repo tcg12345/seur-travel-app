@@ -192,3 +192,10 @@ The SwiftUI source uses native iOS 26 Liquid Glass APIs and system controls. The
 - Removed introductory paragraphs, duplicate flight actions, coordinate explanations and promotional Travel headings. Map empty states use a short label plus one action; flight explanations are available through the options menu. Travel hides unused filters when the library is empty and provides a clear-filters action for no matches. Booking/budget headings and the add chooser are shorter.
 - The existing native sheet/tab-navigation UI check passed in `/tmp/SeurDeclutterQA.xcresult`, including compact/expanded placement, dragging, tab-bar stability, return to Travel and closing the panel. Screenshots of Travel and each map section were visually reviewed. No new behavioral tests were added for this copy/layout change.
 - Final Debug simulator and physical-iPhone Release builds passed. Both existing user simulators were updated without erasing data.
+
+
+## Stable Explore transitions — September 7, 2026
+
+- Frame inspection of the supplied recording showed overlapping old/new scroll surfaces and a bright rectangular material flash on returning to Explore. The panel now preserves one ScrollView and its native pan observer across sections, resets content to the top without animation, and animates only the selected-section indicator. Sheet height and the original tab bar retain their existing ownership and gesture behavior.
+- The standalone-flight/body-drag regression passed in `/tmp/SeurExploreTransitionQA.xcresult`. Repeated Trips/Flights/Explore switching passed in `/tmp/SeurExploreTransitionVerified.xcresult` at compact and expanded heights, checking one scroll surface, stable header/tab-bar positions, visible search, city selection and selection persistence. The first run sampled the expansion mid-animation; the test now waits for it to settle. A simulator recording was reviewed alongside the supplied recording.
+- Final Debug simulator and physical-iPhone Release builds passed; both existing user simulators were updated without erasing saved data.

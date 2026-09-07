@@ -59,6 +59,38 @@ final class AurumUITests: XCTestCase {
         app.buttons["map-panel-options"].tap(); app.buttons["map-panel-close"].tap()
         XCTAssertTrue(app.buttons["map-show-panel"].waitForExistence(timeout: 5))
     }
+    func testMapSectionSwitchKeepsLayoutAndSearch() {
+        app.terminate(); app.launchArguments = ["--ui-testing", "--map-testing", "--location-testing", "--city-testing"]; app.launch()
+        app.tabBars.buttons["Map"].tap()
+        let expand = app.buttons["map-panel-expand"]
+        XCTAssertTrue(expand.waitForExistence(timeout: 8))
+        let tabY = app.tabBars.firstMatch.frame.minY
+        for expanded in [false, true] {
+            if expanded { expand.tap(); RunLoop.current.run(until: Date().addingTimeInterval(0.7)) }
+            let headerY = expand.frame.minY
+            for _ in 0..<2 {
+                for section in ["Trips", "Flights", "Explore"] {
+                    app.buttons["map-section-" + section].tap()
+                    XCTAssertEqual(expand.frame.minY, headerY, accuracy: 2)
+                    XCTAssertEqual(app.tabBars.firstMatch.frame.minY, tabY, accuracy: 2)
+                    XCTAssertEqual(app.scrollViews.matching(identifier: "map-panel-scroll").count, 1)
+                }
+                let search = app.textFields["world-city-search"]
+                XCTAssertTrue(search.isHittable)
+                XCTAssertGreaterThan(search.frame.minY, expand.frame.minY)
+                XCTAssertLessThan(search.frame.maxY, expand.frame.maxY + 100)
+            }
+            capture(expanded ? "88 Stable expanded Explore" : "87 Stable compact Explore")
+        }
+        let search = app.textFields["world-city-search"]
+        search.tap(); search.typeText("Par")
+        let result = app.buttons["world-city-search-suggestion-0"]
+        XCTAssertTrue(result.waitForExistence(timeout: 5)); result.tap()
+        XCTAssertTrue(app.buttons["map-city-guide"].waitForExistence(timeout: 8))
+        app.buttons["map-section-Flights"].tap(); app.buttons["map-section-Explore"].tap()
+        XCTAssertEqual(search.value as? String, "Paris")
+        XCTAssertTrue(search.isHittable)
+    }
     func testMapBodyDragAndStandaloneFlight() {
         app.terminate(); app.launchArguments = ["--ui-testing", "--map-testing"]; app.launch()
         let originalBar = app.tabBars.firstMatch.frame

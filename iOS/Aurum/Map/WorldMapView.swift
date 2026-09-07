@@ -126,7 +126,8 @@ struct WorldMapView: View {
                 HStack(spacing: 2) {
                     ForEach(["Explore", "Trips", "Flights"], id: \.self) { section in
                         Button {
-                            withAnimation(reduceMotion ? nil : .smooth(duration: 0.25)) { mode = section }
+                            guard mode != section else { return }
+                            mode = section
                         } label: {
                             Text(section).font(.subheadline.weight(mode == section ? .semibold : .medium))
                                 .foregroundStyle(mode == section ? Color.primary : Color.secondary)
@@ -135,7 +136,7 @@ struct WorldMapView: View {
                         }.buttonStyle(.plain).accessibilityIdentifier("map-section-" + section)
                             .accessibilityAddTraits(mode == section ? .isSelected : [])
                     }
-                }
+                }.animation(reduceMotion ? nil : .smooth(duration: 0.22), value: mode)
                 Spacer(minLength: 0)
             }
             Button { resizePanel(detent == .large ? .height(260) : .large) } label: {
@@ -155,7 +156,6 @@ struct WorldMapView: View {
             else if mode == "Trips" { tripsPanel }
             else { flightsPanel }
         }.frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 20).padding(.bottom, 24)
-            .transition(.opacity).id(selectedFlightID ?? mode)
     }
 
     private var explorePanel: some View {
@@ -290,10 +290,24 @@ private struct PersistentMapPanel<Header: View, Content: View>: View {
                 }.contentShape(Rectangle()).simultaneousGesture(DragGesture(minimumDistance: 8, coordinateSpace: .global)
                     .onChanged { value in if abs(value.translation.height) > abs(value.translation.width) { change(value.translation.height) } }
                     .onEnded { value in end(value.translation.height, value.velocity.height) })
-                ScrollView {
-                    content().background(MapScrollBridge(expanded: detent == .large, onDrag: change, onEnd: end).frame(width: 0, height: 0))
-                }.id(contentID).scrollDismissesKeyboard(.interactively).scrollBounceBehavior(.always)
-                    .accessibilityIdentifier("map-panel-scroll")
+                // Keep one scroll view and one gesture bridge across sections. Replacing
+                // a scroll view inside a crossfade duplicates its scroll-edge material.
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        VStack(spacing: 0) {
+                            Color.clear.frame(height: 0).id("map-panel-top")
+                            content()
+                        }.background(MapScrollBridge(expanded: detent == .large, onDrag: change, onEnd: end).frame(width: 0, height: 0))
+                    }.scrollDismissesKeyboard(.interactively).scrollBounceBehavior(.always)
+                        .accessibilityIdentifier("map-panel-scroll")
+                        .onChange(of: contentID) {
+                            var transaction = Transaction(); transaction.disablesAnimations = true
+                            withTransaction(transaction) {
+                                translation = 0
+                                proxy.scrollTo("map-panel-top", anchor: .top)
+                            }
+                        }
+                }
             }
             .frame(height: height, alignment: .top)
             .clipShape(.rect(topLeadingRadius: 30 - progress * 6, topTrailingRadius: 30 - progress * 6))
