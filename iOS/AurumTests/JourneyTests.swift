@@ -284,7 +284,7 @@ import MapKit
             let store = OnboardingStore(defaults: defaults)
             XCTAssertEqual(store.profile, TravelerProfile())
             store.move(to: 999); store.chooseDestination("Not in collection"); store.toggleCuisine("Unsupported")
-            XCTAssertEqual(store.profile.step, 4)
+            XCTAssertEqual(store.profile.step, 5)
             XCTAssertTrue(store.profile.destination.isEmpty)
             XCTAssertTrue(store.profile.cuisines.isEmpty)
             store.toggleInterest("Exceptional stays"); store.toggleInterest("Exceptional stays")

@@ -29,14 +29,14 @@ enum PreviewPlan: String, Codable, CaseIterable, Identifiable {
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         if let data = defaults.data(forKey: Self.key), var saved = try? JSONDecoder().decode(TravelerProfile.self, from: data) {
-            saved.step = min(max(saved.step, 0), 4)
+            saved.step = min(max(saved.step, 0), 5)
             saved.interests.formIntersection(Self.interests)
             saved.cuisines.formIntersection(Self.cuisines)
             if !TravelStore.cities.contains(saved.destination) { saved.destination = "" }
             profile = saved
         } else { profile = TravelerProfile() }
     }
-    func move(to step: Int) { profile.step = min(max(step, 0), 4); save() }
+    func move(to step: Int) { profile.step = min(max(step, 0), 5); save() }
     func toggleInterest(_ value: String) {
         guard Self.interests.contains(value) else { return }
         if !profile.interests.insert(value).inserted { profile.interests.remove(value) }
@@ -52,6 +52,6 @@ enum PreviewPlan: String, Codable, CaseIterable, Identifiable {
         profile.destination = value; save()
     }
     func selectPreview(_ plan: PreviewPlan?) { profile.previewPlan = plan; save() }
-    func complete() { profile.completed = true; profile.step = 4; save() }
+    func complete() { profile.completed = true; profile.step = 5; save() }
     private func save() { if let data = try? JSONEncoder().encode(profile) { defaults.set(data, forKey: Self.key) } }
 }

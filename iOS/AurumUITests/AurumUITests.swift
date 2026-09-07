@@ -639,6 +639,83 @@ final class AurumUITests: XCTestCase {
         app.launch()
         XCTAssertTrue(app.buttons["onboarding-start"].waitForExistence(timeout: 8))
     }
+    @MainActor func testOnboardingCloudRegistrationAndSignIn() throws {
+        let root = "https://bwrodcxmdzrpyrshrlfd.supabase.co/functions/v1/travel-api"
+        let username = "onboard_" + UUID().uuidString.prefix(8).lowercased()
+        let passwordValue = UUID().uuidString + "-cloud"
+        // Only this test's account is ever touched, including cleanup after a failed assertion.
+        addTeardownBlock {
+            var login = URLRequest(url: URL(string: root + "/v1/auth/login")!)
+            login.httpMethod = "POST"; login.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            login.httpBody = try JSONSerialization.data(withJSONObject: ["handle": username, "password": passwordValue])
+            let (data, response) = try await URLSession.shared.data(for: login)
+            if (response as? HTTPURLResponse)?.statusCode == 401 { return }
+            let result = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+            let token = try XCTUnwrap(result?["token"] as? String)
+            var removal = URLRequest(url: URL(string: root + "/v1/account")!); removal.httpMethod = "DELETE"
+            removal.setValue("Bearer " + token, forHTTPHeaderField: "Authorization")
+            let (_, deleted) = try await URLSession.shared.data(for: removal)
+            XCTAssertEqual((deleted as? HTTPURLResponse)?.statusCode, 200)
+        }
+        let serverArgs = ["--travel-test-server", root + "?onboarding-test=" + username]
+        beginOnboarding(extra: serverArgs)
+        app.buttons["onboarding-start"].tap(); app.buttons["onboarding-skip"].tap()
+        let name = app.textFields["onboarding-account-name"]
+        XCTAssertTrue(name.waitForExistence(timeout: 8)); capture("74 Create your account"); name.tap(); name.typeText("Onboarding Traveler")
+        app.keyboards.buttons["next"].tap()
+        let handle = app.textFields["onboarding-account-handle"]
+        handle.typeText(username)
+        app.keyboards.buttons["next"].tap()
+        let password = app.secureTextFields["onboarding-account-password"]
+        dismissStrongPasswordIfNeeded()
+        for character in passwordValue { password.typeText(String(character)) }
+        app.keyboards.buttons["next"].tap()
+        let confirmation = app.secureTextFields["onboarding-account-confirmation"]
+        dismissStrongPasswordIfNeeded()
+        confirmation.typeText("does-not-match")
+        app.buttons["onboarding-account-submit"].tap()
+        XCTAssertTrue(app.staticTexts["onboarding-account-error"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["onboarding-account-error"].label.contains("don’t match"), app.staticTexts["onboarding-account-error"].label)
+        confirmation.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 14))
+        for character in passwordValue { confirmation.typeText(String(character)) }
+        app.buttons["onboarding-account-submit"].tap()
+        dismissSavePasswordIfNeeded()
+        XCTAssertTrue(app.buttons["membership-skip"].waitForExistence(timeout: 30), "Registration must reach the membership preview")
+        capture("72 Onboarding account created")
+        app.buttons["membership-skip"].tap()
+        app.tabBars.buttons["Travel"].tap(); app.buttons["Travel account"].tap()
+        XCTAssertTrue(app.staticTexts["Onboarding Traveler"].waitForExistence(timeout: 10))
+        app.terminate()
+        app.launchArguments = ["--ui-testing", "--onboarding-testing", "--preserve-state"] + serverArgs; app.launch()
+        app.tabBars.buttons["Travel"].tap(); app.buttons["Travel account"].tap()
+        XCTAssertTrue(app.buttons["Sign out"].waitForExistence(timeout: 15), "Account must survive relaunch in Keychain")
+        app.buttons["Sign out"].tap()
+        XCTAssertTrue(app.textFields["account-handle"].waitForExistence(timeout: 10))
+        beginOnboarding(extra: serverArgs)
+        app.buttons["onboarding-sign-in"].tap()
+        XCTAssertFalse(app.textFields["onboarding-account-name"].exists)
+        handle.tap(); handle.typeText(username)
+        app.keyboards.buttons["next"].tap()
+        password.typeText("wrong-password-value")
+        app.buttons["onboarding-account-submit"].tap()
+        XCTAssertTrue(app.staticTexts["onboarding-account-error"].waitForExistence(timeout: 20))
+        XCTAssertFalse(app.buttons["membership-skip"].exists)
+        password.tap(); password.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 20) + passwordValue)
+        app.buttons["onboarding-account-submit"].tap()
+        dismissSavePasswordIfNeeded()
+        XCTAssertTrue(app.buttons["membership-skip"].waitForExistence(timeout: 30))
+        app.buttons["membership-skip"].tap()
+        app.tabBars.buttons["Travel"].tap(); app.buttons["Travel account"].tap()
+        XCTAssertTrue(app.staticTexts["Onboarding Traveler"].waitForExistence(timeout: 10))
+    }
+    private func dismissStrongPasswordIfNeeded() {
+        if app.staticTexts["Use Strong Password?"].waitForExistence(timeout: 3) { app.buttons["Close"].tap() }
+    }
+    private func dismissSavePasswordIfNeeded() {
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        if springboard.buttons["Not Now"].waitForExistence(timeout: 3) { springboard.buttons["Not Now"].tap() }
+        else if app.buttons["Not Now"].exists { app.buttons["Not Now"].tap() }
+    }
     func testOnboardingPersonalizationAndPreview() {
         beginOnboarding()
         capture("21 Onboarding welcome")
@@ -660,6 +737,7 @@ final class AurumUITests: XCTestCase {
         app.buttons["destination-Paris"].tap()
         capture("24 First destination")
         app.buttons["onboarding-continue"].tap()
+        app.buttons["onboarding-account-skip"].tap()
         XCTAssertTrue(app.buttons["membership-preview"].waitForExistence(timeout: 5))
         capture("25 Reserve introduction")
         reveal(app.buttons["membership-monthly"])
@@ -716,6 +794,9 @@ final class AurumUITests: XCTestCase {
         XCTAssertTrue(app.buttons["onboarding-continue"].isHittable)
         capture("30 Preferences accessibility text")
         app.buttons["onboarding-skip"].tap()
+        capture("73 Account accessibility text")
+        XCTAssertTrue(app.buttons["onboarding-account-skip"].isHittable)
+        app.buttons["onboarding-account-skip"].tap()
         XCTAssertTrue(app.buttons["membership-preview"].isHittable)
         app.buttons["membership-close"].tap()
         XCTAssertTrue(app.tabBars.buttons["Discover"].waitForExistence(timeout: 5))

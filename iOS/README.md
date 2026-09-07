@@ -81,7 +81,7 @@ Apple Maps replaces Amadeus for cities/airports/place search. Tripadvisor search
 
 ## Welcome and Reserve preview
 
-First launch now includes an optional native onboarding flow for travel interests, dining tastes and a first destination, followed by a simulated subscription experience. Progress resumes after relaunch and preferences feed Discover shortcuts. Revisit preferences and the Reserve preview in **Discover → Your workspace**.
+First launch now includes an optional native onboarding flow for travel interests, dining tastes and a first destination, followed by real Supabase account creation/sign-in and a simulated subscription experience. The welcome screen also offers a direct sign-in shortcut and guest exploration. Progress resumes after relaunch and preferences feed Discover shortcuts. Revisit preferences and the Reserve preview in **Discover → Your workspace**.
 
 Reserve's monthly/annual prices are illustrative. Confirmation and restoration only save/read a local preview plan; no payment, trial, renewal, StoreKit purchase or real entitlement exists. Skipping membership keeps all current features available. See `Onboarding.md` for details.
 
