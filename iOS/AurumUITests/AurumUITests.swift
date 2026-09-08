@@ -12,6 +12,30 @@ final class AurumUITests: XCTestCase {
         app.tabBars.buttons["Map"].firstMatch.tap()
         if app.buttons["map-saved"].waitForExistence(timeout: 2) { app.buttons["map-saved"].tap() }
     }
+    func testMultiCityRouteSuggestionManualOrderAndPersistence() {
+        app.terminate(); app.launchArguments = ["--ui-testing", "--routing-testing", "--location-testing", "--city-testing"]; app.launch()
+        app.tabBars.buttons["Travel"].tap()
+        let trip = app.buttons.containing(.staticText, identifier: "European route").firstMatch
+        XCTAssertTrue(trip.waitForExistence(timeout: 5)); trip.tap()
+        let route = app.buttons["trip-route-planner"]; XCTAssertTrue(route.waitForExistence(timeout: 5)); route.tap()
+        XCTAssertTrue(app.staticTexts["route-suggestion-message"].waitForExistence(timeout: 8))
+        XCTAssertTrue(app.staticTexts["route-suggestion-message"].label.contains("Suggested order ready"))
+        let restore = app.buttons["route-restore"]; reveal(restore); restore.tap()
+        let move = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "Move Amsterdam")).firstMatch
+        for _ in 0..<5 { if move.exists && move.isHittable { break }; app.swipeDown(velocity: .slow) }
+        XCTAssertTrue(move.exists, app.debugDescription); move.tap()
+        app.buttons["Move later"].tap()
+        app.buttons["route-apply"].tap()
+        XCTAssertTrue(app.staticTexts["Paris → Brussels → Amsterdam"].waitForExistence(timeout: 5))
+        app.terminate(); app.launchArguments += ["--preserve-state"]; app.launch()
+        app.tabBars.buttons["Travel"].tap()
+        XCTAssertTrue(trip.waitForExistence(timeout: 5)); trip.tap()
+        XCTAssertTrue(app.staticTexts["Paris → Brussels → Amsterdam"].waitForExistence(timeout: 5))
+        app.buttons["trip-route-planner"].tap()
+        XCTAssertTrue(app.buttons["route-apply"].waitForExistence(timeout: 5))
+        app.buttons["Cancel"].tap()
+        let transfer = app.staticTexts["Travel to Brussels"].firstMatch; reveal(transfer); XCTAssertTrue(transfer.exists)
+    }
     func testFlightTimetableAndImmersedAirportDetails() {
         app.terminate(); app.launchArguments = ["--ui-testing", "--map-testing", "--location-testing", "--city-testing"]; app.launch()
         app.tabBars.buttons["Map"].tap(); XCTAssertTrue(app.buttons["map-section-Flights"].waitForExistence(timeout: 8))

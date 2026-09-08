@@ -108,6 +108,7 @@ struct JourneyDetailView: View {
     @State private var chapter = "Plan"
     @State private var selectedDay: String?
     @State private var editInfo = false
+    @State private var routing = false
     @State private var event: JourneyEvent?
     @State private var addingPlan = false
     @State private var addingDay: JourneyAgendaDay?
@@ -130,6 +131,18 @@ struct JourneyDetailView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 25) {
                         header(document)
+                        if !document.stops.isEmpty {
+                            Button { if document.stops.count > 1 { routing = true } else { editInfo = true } } label: {
+                                HStack(spacing: 13) {
+                                    Image(systemName: "point.topleft.down.to.point.bottomright.curvepath").font(.title2).foregroundStyle(Color.bronze)
+                                    VStack(alignment: .leading, spacing: 5) {
+                                        Text(document.stops.count > 1 ? "Plan your route" : "Add another destination").font(.headline).foregroundStyle(.primary)
+                                        Text(document.stops.count > 1 ? "Compare city order and transfer days" : "Turn this into a multi-city trip").font(.caption).foregroundStyle(.secondary)
+                                    }
+                                    Spacer(); Image(systemName: "chevron.right").font(.caption).foregroundStyle(Color.bronze)
+                                }.padding(16).cardSurface(cornerRadius: 18)
+                            }.buttonStyle(.plain).accessibilityIdentifier("trip-route-planner")
+                        }
                         tripNavigation
                         if chapter == "Plan" { itinerary(document) } else { journal(document) }
                     }.padding(22)
@@ -168,6 +181,10 @@ struct JourneyDetailView: View {
                         .padding(.horizontal, 22)
                         .frame(height: 70, alignment: .top)
                     }
+                    .sheet(isPresented: $routing) { RoutePlannerView(document: document) { updated in
+                        guard library.documents.first(where: { $0.id == id }) == document else { return "This trip changed while you were planning. Close and reopen the route planner to use the latest version." }
+                        return library.save(updated) ? nil : library.error
+                    } }
                     .sheet(isPresented: $editInfo) { JourneyEditor(document: document) }
                     .sheet(isPresented: $addingPlan) { TripAddFlowView(documentID: id, day: addingDay) }
                     .sheet(item: $event) { JourneyEventEditor(documentID: id, event: $0) }

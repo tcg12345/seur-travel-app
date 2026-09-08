@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		B7D82862EDC97260E7DE4110 /* RoutePlannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BB83D9302419E585880114D /* RoutePlannerView.swift */; };
+		8AFFDA6BF21475208DEEC9A1 /* MultiCityRouting.swift in Sources */ = {isa = PBXBuildFile; fileRef = C01E6561AC28934707E6C8EE /* MultiCityRouting.swift */; };
 		00194D9641B7405F8697AEBB /* Travel/JourneyEditors.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED71E368AD0C9DF9B974CE5D /* Travel/JourneyEditors.swift */; };
 		09DD320B78932A3F05280890 /* AurumTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A14D818E1437513932C4F421 /* AurumTests.swift */; };
 		0A188AE6033B645CEA0B28AD /* Onboarding/OnboardingState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BD9635E44F55FE5166EA77B /* Onboarding/OnboardingState.swift */; };
@@ -68,6 +70,8 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		1BB83D9302419E585880114D /* RoutePlannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Travel/RoutePlannerView.swift; sourceTree = "<group>"; };
+		C01E6561AC28934707E6C8EE /* MultiCityRouting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Travel/MultiCityRouting.swift; sourceTree = "<group>"; };
 		0749CAC36E1330F48EB188EF /* AurumApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AurumApp.swift; sourceTree = "<group>"; };
 		1590ED954DF1DC4130655C2D /* Resources/hotels.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = Resources/hotels.json; sourceTree = "<group>"; };
 		19252540FA5E304E7378258A /* Travel/TravelSocialViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Travel/TravelSocialViews.swift; sourceTree = "<group>"; };
@@ -164,6 +168,8 @@
 				35EF526550BED1EC047737E1 /* Travel/TravelServices.swift */,
 				19252540FA5E304E7378258A /* Travel/TravelSocialViews.swift */,
 				836A3CFEC5E2BE5AF3AB29DC /* Travel/TravelViews.swift */,
+				1BB83D9302419E585880114D /* RoutePlannerView.swift */,
+				C01E6561AC28934707E6C8EE /* MultiCityRouting.swift */,
 				ADDD00000000000000000002 /* RestaurantDetailView.swift */,
 				B2B4367B873474FE1C68712A /* Assets.xcassets */,
 				1590ED954DF1DC4130655C2D /* Resources/hotels.json */,
@@ -352,6 +358,8 @@
 				B9EB3F10090B13AF70D9B66B /* Travel/TravelServices.swift in Sources */,
 				F143A7B751A70AAA3AAE8C26 /* Travel/TravelSocialViews.swift in Sources */,
 				C8A40D988C9FC3F7F1EA24DF /* Travel/TravelViews.swift in Sources */,
+				B7D82862EDC97260E7DE4110 /* RoutePlannerView.swift in Sources */,
+				8AFFDA6BF21475208DEEC9A1 /* MultiCityRouting.swift in Sources */,
 				ADDD00000000000000000001 /* RestaurantDetailView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

@@ -163,3 +163,18 @@ Deno.test("Runway estimates survive flight normalization without fabricated valu
   assert.equal(row.estimatedOn, "2026-09-08T08:40:00Z");
   assert.equal(normalize({ fa_flight_id: "missing" }).estimatedOff, undefined);
 });
+
+Deno.test("Route planning metadata and transfer blocks retain the journey contract", () => {
+  const d: any = fixture();
+  d.routePlan = { keepFirst: true, keepLast: false, preferTrain: true, objective: "distance", choices: [], reserveTransfers: true, returnHome: true };
+  d.events[0].kind = "train";
+  d.events[0].title = "Travel to Brussels";
+  d.events[0].routeLegID = d.stops[0].id + ">destination";
+  d.events[0].routeMode = "train";
+  d.events[0].allDay = true;
+  d.events[0].description = "Planning allowance, not a booking.";
+  assert.doesNotThrow(() => validateDocument(d));
+  const restored = JSON.parse(JSON.stringify(d));
+  assert.deepEqual(restored.routePlan, d.routePlan);
+  assert.equal(restored.events[0].routeLegID, d.events[0].routeLegID);
+});

@@ -125,10 +125,12 @@ struct JourneyEvent: Codable, Hashable, Identifiable {
     var allDay: Bool?
     var durationMinutes: Int?
     var attendees: String?
+    var routeLegID: String?
+    var routeMode: RouteMode?
     var isPlaceVisit: Bool { kind == nil || kind == .place }
     var displayTitle: String { isPlaceVisit ? place.name : (title ?? "") }
-    var categoryTitle: String { isPlaceVisit ? place.category.title : (kind?.title ?? "Event") }
-    var symbol: String { isPlaceVisit ? place.category.symbol : (kind?.symbol ?? "calendar") }
+    var categoryTitle: String { if let routeMode, routeLegID != nil { return routeMode.title + " · Planning allowance" }; return isPlaceVisit ? place.category.title : (kind?.title ?? "Event") }
+    var symbol: String { if let routeMode, routeLegID != nil { return routeMode.symbol }; return isPlaceVisit ? place.category.symbol : (kind?.symbol ?? "calendar") }
     var sortMinute: Int { allDay == true ? -1 : minute }
     var endTimeLabel: String? {
         guard allDay != true, let durationMinutes else { return nil }
@@ -200,6 +202,7 @@ struct JourneyDocument: Codable, Hashable, Identifiable {
     var places: [RatedPlace] = []
     var updatedAt: Double = Date.now.timeIntervalSince1970
     var importedFrom: String?
+    var routePlan: JourneyRoutePlan?
     /// Older trips stored a destination and dates without a route. Reuse those choices.
     @discardableResult mutating func preparePlanningRoute() -> Bool {
         guard stops.isEmpty, !destination.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
@@ -273,6 +276,7 @@ struct JourneyDocument: Codable, Hashable, Identifiable {
         return trip
     }
     func validationError() -> String? {
+        if routePlan?.valid == false { return "Check the saved route planning choices." }
         if title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return "Give your journey a title." }
         if title.count > 200 || description.count > 20000 { return "Shorten the title or description." }
         if stops.count > 40 || events.count > 2000 || places.count > 500 { return "This journey exceeds the supported size." }
@@ -337,6 +341,7 @@ struct JourneyLibraryArchive: Codable { var version = 1; var documents: [Journey
         self.url = url ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent(testing ? "AurumUITestTravel/library.json" : "AurumTravel/library.json")
         if url == nil && testing && !ProcessInfo.processInfo.arguments.contains("--preserve-state") { try? FileManager.default.removeItem(at: self.url) }
         #if DEBUG
+        if url == nil && testing && ProcessInfo.processInfo.arguments.contains("--routing-testing") && !ProcessInfo.processInfo.arguments.contains("--preserve-state") { documents = [MultiCityRouteFixtures.trip]; return }
         if url == nil && FlightMapFixtures.enabled && !ProcessInfo.processInfo.arguments.contains("--preserve-state") { documents = [FlightMapFixtures.trip]; return }
         #endif
         guard FileManager.default.fileExists(atPath: self.url.path) else { return }

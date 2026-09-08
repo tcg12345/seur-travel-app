@@ -60,6 +60,7 @@ struct JourneyEditor: View {
     @State private var stop: JourneyStop?
     @State private var error: String?
     @State private var hasDates = false
+    @State private var routing = false
     var body: some View {
         NavigationStack {
             Form {
@@ -89,10 +90,13 @@ struct JourneyEditor: View {
                         }.onDelete { offsets in
                             let ids = Set(offsets.map { document.stops[$0].id })
                             if document.events.contains(where: { ids.contains($0.stopID) }) { error = "Remove or move this destination’s events before deleting it." }
-                            else { document.stops.remove(atOffsets: offsets) }
-                        }.onMove { source, target in document.stops.move(fromOffsets: source, toOffset: target); if document.dateMode == .dates { reflowDates() } }
+                            else { document.stops.remove(atOffsets: offsets); clearRoutePlan() }
+                        }.onMove { source, target in let start = document.stops.first?.arrival; document.stops.move(fromOffsets: source, toOffset: target); clearRoutePlan(); if document.dateMode == .dates { if let start { document.stops[0].arrival = start }; reflowDates() } }
                         Button { var next = JourneyStop(); if let last = document.stops.last { next.arrival = last.departure } else { next.name = document.destination; if let start = document.startDate { next.arrival = start }; if let start = document.startDate, let end = document.endDate { next.nights = max(1, TravelDay.distance(start, end)) } }; stop = next } label: { Label("Add destination", systemImage: "plus") }.accessibilityIdentifier("journey-add-stop")
                     } header: { HStack { Text("Your route"); Spacer(); EditButton().font(.caption) } } footer: { Text("Stops follow the order shown. In exact-date mode, reordering keeps the nights and recalculates arrivals.") }
+                }
+                if document.stops.count > 1 {
+                    Section { Button("Plan multi-city route", systemImage: "point.topleft.down.to.point.bottomright.curvepath") { routing = true }.accessibilityIdentifier("editor-route-planner") }
                 }
                 Section { Label("Private until you choose to share", systemImage: "lock").font(.subheadline); Text("Visibility and sharing are managed from the journey’s Share button.").font(.caption).foregroundStyle(.secondary) }
                 if let error { Section { Text(error).foregroundStyle(.red) } }
@@ -101,11 +105,13 @@ struct JourneyEditor: View {
                     ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                     ToolbarItem(placement: .confirmationAction) { Button("Save") { save() }.accessibilityIdentifier("journey-save") }
                 }
+                .sheet(isPresented: $routing) { RoutePlannerView(document: document) { updated in document = updated; return nil } }
                 .onAppear { hasDates = document.startDate != nil }
                 .onChange(of: hasDates) { if hasDates { document.startDate = document.startDate ?? TravelDay.key(.now); document.endDate = document.endDate ?? document.startDate } }
-                .navigationDestination(item: $stop) { value in StopEditor(stop: value, mode: document.dateMode) { edited in if let i = document.stops.firstIndex(where: { $0.id == edited.id }) { document.stops[i] = edited } else { document.stops.append(edited) } }.environment(\.tripEditorEmbedded, true) }
+                .navigationDestination(item: $stop) { value in StopEditor(stop: value, mode: document.dateMode) { edited in if let i = document.stops.firstIndex(where: { $0.id == edited.id }) { document.stops[i] = edited } else { document.stops.append(edited) }; clearRoutePlan() }.environment(\.tripEditorEmbedded, true) }
         }
     }
+    private func clearRoutePlan() { document.routePlan = nil; document.events.removeAll { $0.routeLegID != nil } }
     private func reflowDates() { guard !document.stops.isEmpty else { return }; for i in document.stops.indices.dropFirst() { document.stops[i].arrival = document.stops[i - 1].departure } }
     private func save() {
         document.title = document.title.trimmingCharacters(in: .whitespacesAndNewlines)

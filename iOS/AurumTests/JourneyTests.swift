@@ -13,6 +13,128 @@ import MapKit
         d.events = [JourneyEvent(stopID: stop.id, place: PlaceRecord(id: "dinner", name: "Dinner", category: .restaurant), cost: TravelMoney(amount: Decimal(string: "85.50")!, currency: "EUR"))]
         return d
     }
+    func testMultiCitySuggestionMatchesExhaustiveSearchAndPreservesEndpoints() throws {
+        let stops = (0..<6).map { i in JourneyStop(name: "City \(i)", nights: 2, latitude: [48.8,52.3,50.8,55.6,53.5,59.3][i], longitude: [2.3,4.9,4.3,12.5,9.9,18.0][i]) }
+        func permutations(_ items: [JourneyStop]) -> [[JourneyStop]] {
+            if items.isEmpty { return [[]] }
+            return items.indices.flatMap { i in var rest = items; let first = rest.remove(at: i); return permutations(rest).map { [first] + $0 } }
+        }
+        for objective in RouteObjective.allCases {
+            var plan = JourneyRoutePlan(); plan.objective = objective; plan.keepLast = true
+            plan.home = .init(id: "home", name: "London", latitude: 51.5, longitude: -0.1)
+            let suggested = try XCTUnwrap(MultiCityRouting.suggest(stops, plan: plan))
+            XCTAssertEqual(suggested.first?.id, stops.first?.id); XCTAssertEqual(suggested.last?.id, stops.last?.id)
+            let minimum = permutations(Array(stops.dropFirst().dropLast())).map { [stops[0]] + $0 + [stops.last!] }.map { MultiCityRouting.cost($0, plan: plan) }.min()!
+            XCTAssertEqual(MultiCityRouting.cost(suggested, plan: plan), minimum, accuracy: 0.001)
+        }
+        var open = JourneyRoutePlan(); open.keepFirst = false
+        let suggestion = try XCTUnwrap(MultiCityRouting.suggest(stops, plan: open))
+        let minimum = permutations(stops).map { MultiCityRouting.cost($0, plan: open) }.min()!
+        XCTAssertEqual(MultiCityRouting.cost(suggestion, plan: open), minimum, accuracy: 0.001)
+    }
+    func testMultiCityDateReflowRetainsCityPlansAndBookedReservations() throws {
+        var original = MultiCityRouteFixtures.trip
+        original.hotels = [HotelReservation(place: PlaceRecord(name: "Booked hotel", category: .hotel), checkIn: "2026-10-04", checkOut: "2026-10-06")]
+        original.flights = [FlightMapFixtures.trip.flights[0]]
+        let proposed = try XCTUnwrap(MultiCityRouting.suggest(original.stops, plan: .init()))
+        XCTAssertEqual(proposed.map(\.name), ["Paris", "Brussels", "Amsterdam"])
+        let result = try MultiCityRouting.applying(proposed, plan: .init(), to: original)
+        XCTAssertEqual(result.stops.map(\.arrival), ["2026-10-01", "2026-10-04", "2026-10-06"])
+        XCTAssertEqual(result.startDate, original.startDate); XCTAssertEqual(result.endDate, original.endDate)
+        XCTAssertEqual(result.events.first { $0.id == original.events[0].id }, original.events[0])
+        XCTAssertEqual(result.date(for: original.events[0]), "2026-10-07")
+        XCTAssertEqual(result.hotels, original.hotels); XCTAssertEqual(result.flights, original.flights)
+        XCTAssertEqual(Set(result.stops.map(\.id)), Set(original.stops.map(\.id)))
+        XCTAssertNil(result.validationError())
+    }
+    func testMultiCityTransfersPersistWithoutDuplicatesAndCanBeRemoved() throws {
+        let original = MultiCityRouteFixtures.trip, plan = JourneyRoutePlan()
+        let once = try MultiCityRouting.applying(original.stops, plan: plan, to: original)
+        let twice = try MultiCityRouting.applying(once.stops, plan: plan, to: once)
+        XCTAssertEqual(once.events, twice.events)
+        XCTAssertEqual(twice.events.filter { $0.routeLegID != nil }.count, 2)
+        let library = JourneyLibrary(url: directory.appendingPathComponent("route.json"))
+        XCTAssertTrue(library.save(twice))
+        let restored = try XCTUnwrap(JourneyLibrary(url: directory.appendingPathComponent("route.json")).documents.first)
+        XCTAssertEqual(restored.routePlan, plan); XCTAssertEqual(restored.events, twice.events)
+        var noBlocks = plan; noBlocks.reserveTransfers = false
+        let cleared = try MultiCityRouting.applying(restored.stops, plan: noBlocks, to: restored)
+        XCTAssertEqual(cleared.events, original.events)
+        let old = try JSONSerialization.jsonObject(with: JSONEncoder().encode(original)) as! [String: Any]
+        XCTAssertNotNil(try JSONDecoder().decode(JourneyDocument.self, from: JSONSerialization.data(withJSONObject: old)))
+    }
+    func testMultiCityOvernightAndFlexibleDates() throws {
+        let original = MultiCityRouteFixtures.trip
+        let firstLeg = MultiCityRouting.legs(original.stops, plan: .init())[0]
+        var plan = JourneyRoutePlan()
+        plan.choices = [.init(key: firstLeg.id, mode: .train, minutes: 1500, extraDays: 1)]
+        let dated = try MultiCityRouting.applying(original.stops, plan: plan, to: original)
+        XCTAssertEqual(dated.stops[1].arrival, "2026-10-05"); XCTAssertEqual(dated.stops[2].arrival, "2026-10-07")
+        XCTAssertEqual(dated.endDate, "2026-10-09")
+        XCTAssertEqual(dated.events.first { $0.routeLegID == firstLeg.id }?.durationMinutes, 1440)
+        XCTAssertEqual(dated.events.first { $0.routeLegID == firstLeg.id }?.allDay, true)
+        var flexible = original; flexible.dateMode = .nights; flexible.startDate = nil; flexible.endDate = nil
+        let result = try MultiCityRouting.applying(Array(flexible.stops.reversed()), plan: plan, to: flexible)
+        XCTAssertNil(result.startDate); XCTAssertNil(result.endDate)
+        for stop in result.stops { XCTAssertEqual(stop.nights, original.stops.first { $0.id == stop.id }?.nights) }
+    }
+    func testMultiCityRailEstimatesAndHomeLegsAreExplicit() throws {
+        let stops = MultiCityRouteFixtures.trip.stops
+        let paris = try XCTUnwrap(RoutePoint(stops[0])), brussels = try XCTUnwrap(RoutePoint(stops[2]))
+        let rail = try XCTUnwrap(MultiCityRouting.options(paris, brussels).first { $0.mode == .train })
+        XCTAssertEqual(rail.rideMinutes, 82); XCTAssertEqual(rail.bufferMinutes, 45); XCTAssertNotNil(rail.source)
+        let remote = RoutePoint(id: "remote", name: "Remote city", latitude: -33.8, longitude: 151.2)
+        XCTAssertFalse(MultiCityRouting.options(paris, remote).contains { $0.mode == .train })
+        XCTAssertTrue(MultiCityRouting.options(paris, remote)[0].explanation.contains("not verified"))
+        var plan = JourneyRoutePlan(); plan.home = remote
+        let roundTrip = MultiCityRouting.legs(stops, plan: plan)
+        XCTAssertEqual(roundTrip.count, stops.count + 1); XCTAssertEqual(roundTrip.first?.from, remote); XCTAssertEqual(roundTrip.last?.to, remote)
+        plan.returnHome = false
+        XCTAssertEqual(MultiCityRouting.legs(stops, plan: plan).count, stops.count)
+        let cph = RoutePoint(id: "cph", name: "Copenhagen", latitude: 55.6761, longitude: 12.5683)
+        let oslo = RoutePoint(id: "osl", name: "Oslo", latitude: 59.9139, longitude: 10.7522)
+        let connecting = try XCTUnwrap(MultiCityRouting.options(cph, oslo).first { $0.mode == .train })
+        XCTAssertTrue(connecting.explanation.contains("Gothenburg")); XCTAssertGreaterThan(connecting.total, 420)
+    }
+    func testMultiCityOvernightHomeLegsExtendTripWithoutChangingFirstStay() throws {
+        let original = MultiCityRouteFixtures.trip
+        var plan = JourneyRoutePlan(); plan.home = .init(id: "home", name: "Sydney", latitude: -33.8, longitude: 151.2)
+        let legs = MultiCityRouting.legs(original.stops, plan: plan)
+        plan.choices = [.init(key: legs.first!.id, mode: .flight, minutes: 1500, extraDays: 1), .init(key: legs.last!.id, mode: .flight, minutes: 1500, extraDays: 2)]
+        let result = try MultiCityRouting.applying(original.stops, plan: plan, to: original)
+        XCTAssertEqual(result.startDate, "2026-09-30"); XCTAssertEqual(result.endDate, "2026-10-10")
+        XCTAssertEqual(result.stops.first?.arrival, "2026-10-01")
+        XCTAssertEqual(result.events.filter { $0.routeLegID != nil }.count, 4)
+        XCTAssertEqual(result.events.first { $0.routeLegID == legs.first!.id }?.displayTitle, "Arrive in Paris")
+    }
+    func testMultiCityMissingCoordinatesAndInvalidChoicesFailSafely() throws {
+        let original = MultiCityRouteFixtures.trip
+        var missing = original.stops; missing[0].latitude = nil
+        XCTAssertNil(MultiCityRouting.suggest(missing, plan: .init()))
+        XCTAssertThrowsError(try MultiCityRouting.applying(missing, plan: .init(), to: original))
+        var invalid = JourneyRoutePlan(); invalid.home = .init(id: "bad", name: "Invalid", latitude: .nan, longitude: 0)
+        XCTAssertNil(MultiCityRouting.suggest(original.stops, plan: invalid))
+        invalid.home = nil; invalid.choices = [.init(key: "bad", mode: .flight, minutes: 1500, extraDays: 0)]
+        XCTAssertThrowsError(try MultiCityRouting.applying(original.stops, plan: invalid, to: original))
+        invalid.choices = [.init(key: "boundary", mode: .flight, minutes: 1440, extraDays: 0)]
+        XCTAssertFalse(invalid.valid)
+        invalid.choices[0].extraDays = 1; XCTAssertTrue(invalid.valid)
+        invalid.choices = [.init(key: "bad", mode: .flight, minutes: -50)]
+        XCTAssertThrowsError(try MultiCityRouting.applying(original.stops, plan: invalid, to: original))
+        XCTAssertThrowsError(try MultiCityRouting.applying(Array(original.stops.dropFirst()), plan: .init(), to: original))
+    }
+    func testMultiCityLargeRouteNeverRegressesOrDropsStops() throws {
+        let stops: [JourneyStop] = (0..<16).map { i in
+            let latitude = Double((i * 23) % 130 - 65)
+            let longitude = Double((i * 47) % 340 - 170)
+            return JourneyStop(name: "City \(i)", latitude: latitude, longitude: longitude)
+        }
+        var plan = JourneyRoutePlan(); plan.keepLast = true
+        let result = try XCTUnwrap(MultiCityRouting.suggest(stops, plan: plan))
+        XCTAssertEqual(result.first, stops.first); XCTAssertEqual(result.last, stops.last)
+        XCTAssertEqual(Set(result.map(\.id)), Set(stops.map(\.id)))
+        XCTAssertLessThanOrEqual(MultiCityRouting.cost(result, plan: plan), MultiCityRouting.cost(stops, plan: plan))
+    }
     func testFlightSearchConversionUsesScheduledAirportLocalTimes() throws {
         var flight = FlightMapFixtures.snapshot
         flight.originZone = "America/New_York"; flight.destinationZone = "Europe/London"
