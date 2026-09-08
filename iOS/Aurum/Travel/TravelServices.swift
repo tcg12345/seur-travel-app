@@ -8,8 +8,8 @@ struct TravelServiceStatus: Codable { var tripadvisor: Bool; var ai: Bool; var p
 struct GooglePlaceSuggestion: Codable, Identifiable { var id: String; var title: String; var subtitle: String }
 struct TravelFriend: Codable, Identifiable { var id: String; var handle: String; var name: String; var status: String; var incoming: Bool }
 struct RemoteJourney: Codable, Identifiable { var id: String; var owner: TravelAccount; var document: JourneyDocument; var revision: Int; var isSummary: Bool? }
-struct TravelConversation: Codable, Identifiable, Hashable { var id: String; var name: String; var members: [TravelAccount] }
-struct TravelChatMessage: Codable, Identifiable { var id: String; var sender: TravelAccount; var text: String; var documentID: String?; var createdAt: Double; var timestamp: String { Date(timeIntervalSince1970: createdAt).formatted(date: .abbreviated, time: .shortened) } }
+struct TravelConversation: Codable, Identifiable, Hashable { var id: String; var name: String; var members: [TravelAccount]; var pendingRequests: Int? = nil }
+struct TravelChatMessage: Codable, Identifiable { var id: String; var sender: TravelAccount; var text: String; var documentID: String?; var createdAt: Double; var tripRequest: TripRequestIntent? = nil; var replyTo: String? = nil; var documentIsTemplate: Bool? = nil; var timestamp: String { Date(timeIntervalSince1970: createdAt).formatted(date: .abbreviated, time: .shortened) } }
 struct TravelLink: Codable { var url: String }
 struct AITravelResponse: Codable { var text: String; var places: [PlaceRecord] }
 private struct APIProblem: Codable { var error: String }
@@ -227,9 +227,16 @@ private struct EmptyReply: Codable { var ok: Bool }
     func conversations() async throws -> [TravelConversation] { try await request("/v1/conversations") }
     func createConversation(name: String, members: [String]) async throws -> TravelConversation { try await request("/v1/conversations", method: "POST", body: ["name": name, "members": members]) }
     func messages(_ conversation: String) async throws -> [TravelChatMessage] { try await request("/v1/conversations/\(conversation)/messages") }
-    func send(_ conversation: String, text: String, documentID: String?) async throws -> TravelChatMessage {
+    func send(_ conversation: String, text: String, documentID: String?, replyTo: String? = nil) async throws -> TravelChatMessage {
         var body: [String: Any] = ["text": text]; if let documentID { body["documentID"] = documentID }
+        if let replyTo { body["replyTo"] = replyTo }
         return try await request("/v1/conversations/\(conversation)/messages", method: "POST", body: body)
+    }
+    func requestTrip(_ conversation: String, intent: TripRequestIntent, note: String) async throws -> TravelChatMessage {
+        try await request("/v1/conversations/\(conversation)/messages", method: "POST", body: [
+            "text": note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? intent.prompt : note,
+            "tripRequest": ["city": intent.city, "month": intent.month]
+        ])
     }
     private func request<T: Decodable, Body: Encodable>(_ path: String, method: String, encodable: Body) async throws -> T {
         try await perform(path, method: method, data: JSONEncoder().encode(encodable))

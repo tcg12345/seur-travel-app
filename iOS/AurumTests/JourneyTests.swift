@@ -1108,6 +1108,59 @@ import MapKit
         own.stops[0].country = "France"; own.stops[0].arrival = "2026-09-20"; XCTAssertNil(FriendsTravel.overlap(other, with: [own], today: "2026-09-07"))
         own.dateMode = .nights; XCTAssertNil(FriendsTravel.overlap(other, with: [own]))
     }
+    func testOverlapNormalizesCountriesAndAccentsWithoutGuessingUnknownCities() {
+        var a = JourneyStop(name: "  Montréal ", country: "Canada", arrival: "2026-09-10", nights: 4)
+        var b = JourneyStop(name: "Montreal", country: "CA", arrival: "2026-09-12", nights: 4)
+        XCTAssertTrue(FriendOverlaps.sameCity(a,b))
+        b.country = "France"; XCTAssertFalse(FriendOverlaps.sameCity(a,b))
+        a.country = ""; b.country = ""; XCTAssertFalse(FriendOverlaps.sameCity(a,b))
+        a.latitude = 45.5; a.longitude = -73.57; b.latitude = 45.51; b.longitude = -73.56
+        XCTAssertTrue(FriendOverlaps.sameCity(a,b))
+        b.latitude = 48.8; b.longitude = 2.3; XCTAssertFalse(FriendOverlaps.sameCity(a,b))
+    }
+    func testOverlapIncludesCheckoutDayAndKeepsDismissalIdentityAsTodayAdvances() {
+        var remote = FriendsFixtures.remote
+        remote.document.stops = [.init(name: "Paris", country: "France", arrival: "2026-09-10", nights: 4)]
+        let own = JourneyDocument(title: "My Paris", stops: [.init(name: "Paris", country: "FR", arrival: "2026-09-12", nights: 4)])
+        let first = FriendOverlaps.matches(remote: [remote], local: [own], friendIDs: [remote.owner.id], today: "2026-09-07")
+        XCTAssertEqual(first.count,1); XCTAssertEqual(first.first?.start,"2026-09-12"); XCTAssertEqual(first.first?.end,"2026-09-14")
+        let last = FriendOverlaps.matches(remote: [remote], local: [own], friendIDs: [remote.owner.id], today: "2026-09-14")
+        XCTAssertEqual(last.first?.start,"2026-09-14"); XCTAssertEqual(first.first?.id,last.first?.id)
+        XCTAssertTrue(FriendOverlaps.matches(remote: [remote], local: [own], friendIDs: [remote.owner.id], today: "2026-09-15").isEmpty)
+        remote.document.stops[0].nights += 1
+        XCTAssertNotEqual(first.first?.id,FriendOverlaps.matches(remote: [remote], local: [own], friendIDs: [remote.owner.id], today: "2026-09-07").first?.id)
+    }
+    func testOverlapRequiresAcceptedFriendAndExcludesTemplatesAndFlexibleDates() {
+        var remote = FriendsFixtures.remote
+        var own = remote.document; own.id = UUID()
+        let today = remote.document.stops[0].arrival
+        XCTAssertTrue(FriendOverlaps.matches(remote: [remote], local: [own], friendIDs: [], today: today).isEmpty)
+        own.isTemplate = true
+        XCTAssertTrue(FriendOverlaps.matches(remote: [remote], local: [own], friendIDs: [remote.owner.id], today: today).isEmpty)
+        own.isTemplate = false; remote.document.isTemplate = true
+        XCTAssertTrue(FriendOverlaps.matches(remote: [remote], local: [own], friendIDs: [remote.owner.id], today: today).isEmpty)
+        remote.document.isTemplate = false; own.dateMode = .nights
+        XCTAssertTrue(FriendOverlaps.matches(remote: [remote], local: [own], friendIDs: [remote.owner.id], today: today).isEmpty)
+    }
+    func testOverlapDeduplicatesEquivalentSharedAndLocalCopies() {
+        let remote = FriendsFixtures.remote
+        var own = remote.document; own.id = UUID()
+        var another = own; another.id = UUID()
+        XCTAssertEqual(FriendOverlaps.matches(remote: [remote,remote], local: [own,another], friendIDs: [remote.owner.id], today: remote.document.stops[0].arrival).count,1)
+    }
+    func testTripRequestAndReplyMetadataPreserveLegacyMessageDecoding() throws {
+        let legacy = #"{"id":"message","sender":{"id":"person","handle":"maya","name":"Maya"},"text":"Hello","createdAt":0}"#.data(using: .utf8)!
+        var message = try JSONDecoder().decode(TravelChatMessage.self,from:legacy)
+        XCTAssertNil(message.tripRequest); XCTAssertNil(message.replyTo); XCTAssertNil(message.documentIsTemplate)
+        message.tripRequest = .init(city:"Tokyo",month:"2027-03")
+        let restored = try JSONDecoder().decode(TravelChatMessage.self,from:JSONEncoder().encode(message))
+        XCTAssertEqual(restored.tripRequest?.city,"Tokyo"); XCTAssertTrue(restored.tripRequest?.prompt.contains("2027") == true)
+        message.tripRequest = nil; message.replyTo = "request"; message.documentID = "trip"; message.documentIsTemplate = true
+        let reply = try JSONDecoder().decode(TravelChatMessage.self,from:JSONEncoder().encode(message))
+        XCTAssertEqual(reply.replyTo,"request"); XCTAssertEqual(reply.documentIsTemplate,true)
+        let chat = try JSONDecoder().decode(TravelConversation.self,from:#"{"id":"chat","name":"Friends","members":[]}"#.data(using:.utf8)!)
+        XCTAssertNil(chat.pendingRequests)
+    }
     func testDirectConversationDoesNotReuseLargerGroup() {
         let owner = FriendsFixtures.owner, friend = FriendsFixtures.maya
         var group = FriendsFixtures.chat; group.members.append(.init(id: "third", handle: "third", name: "Third"))
@@ -1115,8 +1168,8 @@ import MapKit
         XCTAssertNotNil(FriendsTravel.directConversation(friend: friend.id, owner: owner.id, chats: [group, FriendsFixtures.chat]))
     }
     func testAccountResetClearsPersonalSocialData() {
-        let model = FriendsHomeModel(); model.friends = FriendsFixtures.friends; model.trips = [FriendsFixtures.remote]; model.chats = [FriendsFixtures.chat]; model.saved = [FriendsFixtures.remote.id]
-        model.reset(); XCTAssertTrue(model.friends.isEmpty); XCTAssertTrue(model.trips.isEmpty); XCTAssertTrue(model.chats.isEmpty); XCTAssertTrue(model.saved.isEmpty)
+        let model = FriendsHomeModel(); model.friends = FriendsFixtures.friends; model.trips = [FriendsFixtures.remote]; model.chats = [FriendsFixtures.chat]; model.saved = [FriendsFixtures.remote.id]; model.dismissedOverlaps = ["private"]; model.overlapsEnabled = false
+        model.reset(); XCTAssertTrue(model.friends.isEmpty); XCTAssertTrue(model.trips.isEmpty); XCTAssertTrue(model.chats.isEmpty); XCTAssertTrue(model.saved.isEmpty); XCTAssertTrue(model.dismissedOverlaps.isEmpty); XCTAssertTrue(model.overlapsEnabled)
     }
 }
 

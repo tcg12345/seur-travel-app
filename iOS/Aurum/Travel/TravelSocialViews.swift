@@ -236,18 +236,11 @@ enum FriendsTravel {
         return (term.isEmpty || text.localizedCaseInsensitiveContains(term)) && (filter == .all || (filter == .saved ? saved.contains(remote.id) : phase(remote.document, today: today) == filter))
     }
     static func overlap(_ remote: JourneyDocument, with local: [JourneyDocument], today: String = TravelDay.key(.now)) -> String? {
-        guard remote.dateMode == .dates else { return nil }
-        for own in local where own.dateMode == .dates && own.id != remote.id {
-            for a in own.stops { for b in remote.stops {
-                guard !a.name.isEmpty, a.name.localizedCaseInsensitiveCompare(b.name) == .orderedSame,
-                      a.country.localizedCaseInsensitiveCompare(b.country) == .orderedSame,
-                      TravelDay.date(a.arrival) != nil, TravelDay.date(b.arrival) != nil else { continue }
-                let start = max(a.arrival, b.arrival, today), end = min(TravelDay.adding(a.nights, to: a.arrival), TravelDay.adding(b.nights, to: b.arrival))
-                if start <= end { return "Your dates overlap in " + b.name + " · " + TravelDay.label(start) }
-            } }
-        }
-        return nil
+        let shared = RemoteJourney(id: remote.id.uuidString, owner: .init(id: "friend", handle: "", name: ""), document: remote, revision: 0)
+        guard let match = FriendOverlaps.matches(remote: [shared], local: local, friendIDs: ["friend"], today: today).first else { return nil }
+        return "Your dates overlap in " + match.city + " · " + match.dates
     }
+
     static func directConversation(friend: String, owner: String, chats: [TravelConversation]) -> TravelConversation? {
         chats.first { Set($0.members.map(\.id)) == Set([friend, owner]) && $0.members.count == 2 }
     }
@@ -258,6 +251,8 @@ enum FriendsTravel {
     var trips: [RemoteJourney] = []
     var chats: [TravelConversation] = []
     var saved = Set<String>()
+    var dismissedOverlaps = Set<String>()
+    var overlapsEnabled = true
     var error: String?
     var loading = false
     private var owner: String?
@@ -265,10 +260,10 @@ enum FriendsTravel {
     var accepted: [TravelFriend] { friends.filter { $0.status == "accepted" }.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending } }
     var incoming: [TravelFriend] { friends.filter { $0.status == "pending" && $0.incoming } }
     var outgoing: [TravelFriend] { friends.filter { $0.status == "pending" && !$0.incoming } }
-    func reset() { generation = UUID(); owner = nil; friends = []; trips = []; chats = []; saved = []; error = nil; loading = false }
+    func reset() { generation = UUID(); owner = nil; friends = []; trips = []; chats = []; saved = []; dismissedOverlaps = []; overlapsEnabled = true; error = nil; loading = false }
     func refresh(api: TravelAPI) async {
         guard api.isSignedIn, let user = api.account?.id else { reset(); return }
-        if owner != user { reset(); owner = user; saved = Set(UserDefaults.standard.stringArray(forKey: "seur.friends.saved." + user) ?? []) }
+        if owner != user { reset(); owner = user; saved = Set(UserDefaults.standard.stringArray(forKey: "seur.friends.saved." + user) ?? []); dismissedOverlaps = Set(UserDefaults.standard.stringArray(forKey: "seur.friends.overlaps.dismissed." + user) ?? []); overlapsEnabled = UserDefaults.standard.object(forKey: "seur.friends.overlaps.enabled." + user) as? Bool ?? true }
         guard !loading else { return }
         let request = UUID(); generation = request; loading = true
         defer { if generation == request { loading = false } }
@@ -279,6 +274,14 @@ enum FriendsTravel {
             friends = result.0; trips = result.1; chats = result.2; error = nil
             saved.formIntersection(Set(trips.map(\.id))); persist()
         } catch { if generation == request, api.account?.id == user, !Task.isCancelled { self.error = error.localizedDescription } }
+    }
+    func dismissOverlap(_ id: String) { dismissedOverlaps.insert(id); persistOverlaps() }
+    func restoreOverlaps() { dismissedOverlaps = []; persistOverlaps() }
+    func setOverlaps(_ enabled: Bool) { overlapsEnabled = enabled; persistOverlaps() }
+    private func persistOverlaps() {
+        guard let owner else { return }
+        UserDefaults.standard.set(Array(dismissedOverlaps).sorted().suffix(500).map { $0 }, forKey: "seur.friends.overlaps.dismissed." + owner)
+        UserDefaults.standard.set(overlapsEnabled, forKey: "seur.friends.overlaps.enabled." + owner)
     }
     func bookmark(_ id: String) { if !saved.insert(id).inserted { saved.remove(id) }; persist() }
     private func persist() { if let owner { UserDefaults.standard.set(Array(saved), forKey: "seur.friends.saved." + owner) } }
@@ -297,6 +300,7 @@ struct FriendsHubView: View {
     @State private var inviting = false
     @State private var sharing = false
     @State private var grouping = false
+    @State private var requesting = false
     @State private var busy = false
     @State private var chat: TravelConversation?
     @State private var removing: TravelFriend?
@@ -321,7 +325,11 @@ struct FriendsHubView: View {
                         Menu {
                             Button("Add a friend", systemImage: "person.badge.plus") { inviting = true }
                             Button("Share an itinerary", systemImage: "square.and.arrow.up") { sharing = true }
+                            Button("Ask about a trip", systemImage: "bubble.left.and.text.bubble.right") { requesting = true }
                             Button("Create a group", systemImage: "person.3") { grouping = true }
+                            Divider()
+                            Toggle("Overlap notices", isOn: Binding(get: { model.overlapsEnabled }, set: { model.setOverlaps($0) }))
+                            if !model.dismissedOverlaps.isEmpty { Button("Restore dismissed overlaps") { model.restoreOverlaps() } }
                         } label: { Image(systemName: "plus") }.accessibilityLabel("Friends actions")
                     }
                 }
@@ -340,6 +348,7 @@ struct FriendsHubView: View {
             .fullScreenCover(isPresented: $signingIn) { TravelAccountView() }
             .sheet(isPresented: $inviting, onDismiss: reload) { FriendInviteView() }
             .sheet(isPresented: $grouping, onDismiss: reload) { ConversationEditor(friends: model.accepted) }
+            .sheet(isPresented: $requesting, onDismiss: reload) { TripRequestComposer(friends: model.accepted, chats: model.chats) { chat = $0 } }
             .sheet(isPresented: $sharing, onDismiss: reload) { FriendsShareComposer(friends: model.accepted, chats: model.chats) }
             .navigationDestination(item: $chat) { TravelChatView(conversation: $0) }
             .confirmationDialog("Remove this friend?", isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } }), titleVisibility: .visible) {
@@ -362,7 +371,7 @@ struct FriendsHubView: View {
             ForEach(["Trips", "People", "Messages"], id: \.self) { value in
                 Button { section = value; query = "" } label: {
                     VStack(spacing: 10) {
-                        HStack(spacing: 5) { Text(value); if value == "People", !model.incoming.isEmpty { Text("\(model.incoming.count)").font(.caption.weight(.bold)).foregroundStyle(FlightDisplay.blue) } }
+                        HStack(spacing: 5) { Text(value); if value == "Messages", model.chats.contains(where: { ($0.pendingRequests ?? 0) > 0 }) { Image(systemName: "circle.fill").font(.system(size: 6)).foregroundStyle(FlightDisplay.teal) }; if value == "People", !model.incoming.isEmpty { Text("\(model.incoming.count)").font(.caption.weight(.bold)).foregroundStyle(FlightDisplay.blue) } }
                         Rectangle().fill(section == value ? Color.bronze : .clear).frame(height: 2)
                     }.fixedSize(horizontal: true, vertical: false)
                 }.buttonStyle(.plain).font(.subheadline.weight(.semibold)).foregroundStyle(section == value ? Color.bronze : .secondary).accessibilityIdentifier("friends-section-" + value)
@@ -372,6 +381,7 @@ struct FriendsHubView: View {
     }
     private var sharedTrips: some View {
         VStack(alignment: .leading, spacing: 20) {
+            overlapNotices
             HStack {
                 Text("Shared with you").font(.headline)
                 Spacer()
@@ -391,7 +401,6 @@ struct FriendsHubView: View {
                         Button { model.bookmark(remote.id) } label: { Image(systemName: model.saved.contains(remote.id) ? "bookmark.fill" : "bookmark").frame(width: 36, height: 36) }.buttonStyle(.plain).accessibilityLabel(model.saved.contains(remote.id) ? "Unsave shared trip" : "Save shared trip")
                     }
                     NavigationLink { SharedJourneyPreview(remote: remote) } label: { FriendsTripRow(remote: remote) }.buttonStyle(.plain).accessibilityIdentifier("friends-trip-" + remote.id)
-                    if let overlap = FriendsTravel.overlap(remote.document, with: library.documents) { Label(overlap, systemImage: "person.2.wave.2").font(.caption).foregroundStyle(FlightDisplay.teal) }
                 }.padding(.vertical, 4)
                 Divider()
             }
@@ -399,6 +408,29 @@ struct FriendsHubView: View {
             NavigationLink { FriendsSharingSettingsView() } label: { Label("Manage your shared itineraries", systemImage: "person.badge.shield.checkmark").font(.subheadline) }
         }
     }
+    private var overlapNotices: some View {
+        let matches = FriendOverlaps.matches(remote: model.trips, local: library.documents, friendIDs: Set(model.accepted.map(\.id)))
+        let visible = matches.filter { !model.dismissedOverlaps.contains($0.id) }
+        return VStack(alignment: .leading, spacing: 14) {
+            if model.overlapsEnabled && !visible.isEmpty {
+                Label("Your paths cross", systemImage: "person.2.wave.2").font(.subheadline.weight(.semibold)).foregroundStyle(FlightDisplay.teal)
+                ForEach(visible) { overlap in
+                    HStack(alignment: .top, spacing: 12) {
+                        NavigationLink { SharedJourneyPreview(remote: overlap.remote) } label: {
+                            VStack(alignment: .leading, spacing: 5) {
+                                Text(overlap.remote.owner.name + " · " + overlap.city).font(.subheadline.weight(.semibold))
+                                Text(overlap.dates).font(.caption).foregroundStyle(FlightDisplay.teal)
+                                Text("You both have plans here · View their trip").font(.caption).foregroundStyle(.secondary)
+                            }.frame(maxWidth: .infinity, alignment: .leading)
+                        }.buttonStyle(.plain)
+                        Button { model.dismissOverlap(overlap.id) } label: { Image(systemName: "xmark").font(.caption).frame(width: 36, height: 36) }.buttonStyle(.plain).foregroundStyle(.secondary).accessibilityLabel("Dismiss overlap with " + overlap.remote.owner.name)
+                    }
+                }
+                Divider()
+            }
+        }
+    }
+
     private var people: some View {
         VStack(alignment: .leading, spacing: 18) {
             HStack { Text("Your people").font(.headline); Spacer(); Button("Add friend", systemImage: "person.badge.plus") { inviting = true }.font(.subheadline).accessibilityIdentifier("friends-add-person") }
@@ -445,7 +477,7 @@ struct FriendsHubView: View {
                 NavigationLink { TravelChatView(conversation: conversation) } label: {
                     HStack(spacing: 12) {
                         FriendsAvatar(name: conversation.name, size: 44)
-                        VStack(alignment: .leading, spacing: 4) { Text(conversation.name).font(.subheadline.weight(.semibold)); Text(conversation.members.filter { $0.id != api.account?.id }.map(\.name).joined(separator: ", ")).font(.caption).foregroundStyle(.secondary).lineLimit(2) }
+                        VStack(alignment: .leading, spacing: 4) { Text(conversation.name).font(.subheadline.weight(.semibold)); Text(conversation.members.filter { $0.id != api.account?.id }.map(\.name).joined(separator: ", ")).font(.caption).foregroundStyle(.secondary).lineLimit(2); if let pending = conversation.pendingRequests, pending > 0 { Text("\(pending) trip request\(pending == 1 ? "" : "s") awaiting your reply").font(.caption).foregroundStyle(FlightDisplay.teal) } }
                         Spacer(); Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary)
                     }.padding(.vertical, 7)
                 }.buttonStyle(.plain)
@@ -513,6 +545,7 @@ struct FriendProfileView: View {
     let friend: TravelFriend
     let trips: [RemoteJourney]
     let chats: [TravelConversation]
+    @State private var requesting = false
     @State private var chat: TravelConversation?
     @State private var error: String?
     @State private var busy = false
@@ -522,12 +555,13 @@ struct FriendProfileView: View {
                 FriendsAvatar(name: friend.name, size: 64)
                 VStack(alignment: .leading, spacing: 5) { Text(friend.name).font(.title.bold()); Text("@" + friend.handle).foregroundStyle(.secondary) }
                 Button("Message", systemImage: "bubble.left") { busy = true; Task { defer { busy = false }; do { chat = FriendsTravel.directConversation(friend: friend.id, owner: api.account?.id ?? "", chats: chats); if chat == nil { chat = try await api.createConversation(name: friend.name + " & " + (api.account?.name ?? "You"), members: [friend.id]) } } catch { self.error = error.localizedDescription } } }.buttonStyle(.glassProminent).disabled(busy)
+                Button("Ask about a trip", systemImage: "bubble.left.and.text.bubble.right") { requesting = true }.font(.subheadline)
                 Text("Shared journeys").font(.headline)
                 if trips.isEmpty { Text("No trips shared with you yet.").foregroundStyle(.secondary) }
                 ForEach(trips) { remote in NavigationLink { SharedJourneyPreview(remote: remote) } label: { FriendsTripRow(remote: remote) }.buttonStyle(.plain); Divider() }
                 if let error { Text(error).font(.caption).foregroundStyle(.red) }
             }.padding(24)
-        }.background(Color.canvas).navigationTitle("Friend").navigationBarTitleDisplayMode(.inline).navigationDestination(item: $chat) { TravelChatView(conversation: $0) }
+        }.background(Color.canvas).navigationTitle("Friend").navigationBarTitleDisplayMode(.inline).sheet(isPresented: $requesting) { TripRequestComposer(friends: [friend], chats: chats, initialFriend: friend.id) { chat = $0 } }.navigationDestination(item: $chat) { TravelChatView(conversation: $0) }
     }
 }
 
@@ -635,13 +669,15 @@ struct TravelChatView: View {
     @State private var sending = false
     @State private var shared: RemoteJourney?
     @State private var attaching = false
+    @State private var requesting = false
+    @State private var replying: TravelChatMessage?
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 17) {
                     Text(conversation.members.map(\.name).joined(separator: ", ")).font(.caption).foregroundStyle(.secondary)
                     ForEach(messages) { message in
-                        TravelMessageBubble(message: message, isOwn: message.sender.id == api.account?.id) { documentID in
+                        TravelMessageBubble(message: message, isOwn: message.sender.id == api.account?.id, answered: messages.contains { $0.replyTo == message.id && $0.documentID != nil }, reply: { replying = message }) { documentID in
                             Task { do { shared = try await api.document(documentID) } catch { self.error = error.localizedDescription } }
                         }.id(message.id)
                     }
@@ -650,7 +686,7 @@ struct TravelChatView: View {
             }.refreshable { await refresh() }
                 .onChange(of: messages.count) { if let last = messages.last { withAnimation(.smooth) { proxy.scrollTo(last.id, anchor: .bottom) } } }
         }.background(Color.canvas).navigationTitle(conversation.name).navigationBarTitleDisplayMode(.inline).toolbar(.hidden, for: .tabBar)
-            .toolbar { ToolbarItem(placement: .topBarTrailing) { Button { attaching = true } label: { Image(systemName: "paperclip") }.accessibilityLabel("Share a journey") } }
+            .toolbar { ToolbarItem(placement: .topBarTrailing) { Menu { Button("Share a trip or template", systemImage: "paperclip") { attaching = true }; Button("Ask about a trip", systemImage: "bubble.left.and.text.bubble.right") { requesting = true } } label: { Image(systemName: "plus.bubble") }.accessibilityLabel("Conversation actions") } }
             .safeAreaInset(edge: .bottom) {
                 HStack { TextField("A note to your friends…", text: $text, axis: .vertical).lineLimit(1...5); Button { Task { let draft = text; sending = true; defer { sending = false }; do { _ = try await api.send(conversation.id, text: draft, documentID: nil); text = ""; await refresh() } catch { self.error = error.localizedDescription } } } label: { Image(systemName: "arrow.up.circle.fill").font(.title) }.disabled(sending || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) }.padding(16).glassEffect(.regular, in: .rect(cornerRadius: 25)).padding(12)
             }
@@ -661,6 +697,8 @@ struct TravelChatView: View {
                 }
             }
             .sheet(item: $shared) { remote in NavigationStack { SharedJourneyPreview(remote: remote) } }
+            .sheet(isPresented: $requesting, onDismiss: { Task { await refresh() } }) { TripRequestComposer(friends: [], chats: [], conversation: conversation) }
+            .sheet(item: $replying, onDismiss: { Task { await refresh() } }) { request in AttachJourneyView(conversation: conversation, replying: request) }
             .sheet(isPresented: $attaching, onDismiss: { Task { await refresh() } }) { AttachJourneyView(conversation: conversation) }
     }
     private func refresh() async { do { messages = try await api.messages(conversation.id); error = nil } catch { self.error = error.localizedDescription } }
@@ -669,12 +707,23 @@ struct TravelChatView: View {
 private struct TravelMessageBubble: View {
     let message: TravelChatMessage
     let isOwn: Bool
+    var answered: Bool
+    var reply: () -> Void
     var open: (String) -> Void
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(message.sender.name).font(.caption.weight(.semibold)).foregroundStyle(Color.bronze)
+            if let intent = message.tripRequest {
+                Label("Trip request", systemImage: "bubble.left.and.text.bubble.right").font(.caption.weight(.semibold)).foregroundStyle(FlightDisplay.teal)
+                Text(intent.city).font(.title3.weight(.semibold))
+                Text(intent.monthLabel).font(.subheadline).foregroundStyle(.secondary)
+                if answered { Label("Answered with an itinerary", systemImage: "checkmark.circle").font(.caption).foregroundStyle(FlightDisplay.teal) }
+                else if isOwn { Text("Waiting for a trip or template").font(.caption).foregroundStyle(.secondary) }
+                if !isOwn { Button(answered ? "Share another trip or template" : "Reply with a trip or template", systemImage: "map") { reply() }.font(.subheadline.weight(.semibold)) }
+            }
+            if message.replyTo != nil { Label("In reply to a trip request", systemImage: "arrowshape.turn.up.left").font(.caption).foregroundStyle(FlightDisplay.teal) }
             if !message.text.isEmpty { Text(message.text).font(.body).textSelection(.enabled) }
-            if let id = message.documentID { Button { open(id) } label: { Label("Open shared journey", systemImage: "map").font(.subheadline) } }
+            if let id = message.documentID { Button { open(id) } label: { Label(message.documentIsTemplate == true ? "Open shared template" : "Open shared trip", systemImage: "map").font(.subheadline) } }
             Text(message.timestamp).font(.caption2).foregroundStyle(.secondary)
         }.padding(18).frame(maxWidth: .infinity, alignment: .leading)
             .cardSurface(cornerRadius: 22, emphasized: isOwn)
@@ -686,19 +735,24 @@ private struct AttachJourneyView: View {
     @Environment(TravelAPI.self) private var api
     @Environment(\.dismiss) private var dismiss
     let conversation: TravelConversation
+    var replying: TravelChatMessage? = nil
+    @State private var kind = "Trips"
     @State private var selected: UUID?
     @State private var message = ""
     @State private var error: String?
     @State private var sending = false
+    private var candidates: [JourneyDocument] { library.documents.filter { kind == "Templates" ? $0.isTemplate == true : $0.isTemplate != true }.sorted { $0.updatedAt > $1.updatedAt } }
     var body: some View {
         NavigationStack {
             Form {
+                if let request = replying?.tripRequest { Section { Text("For " + (replying?.sender.name ?? "your friend")).font(.headline); Text(request.city + " · " + request.monthLabel).foregroundStyle(.secondary) } }
+                Section { Picker("Share", selection: $kind) { Text("Trips").tag("Trips"); Text("Templates").tag("Templates") }.pickerStyle(.segmented).onChange(of: kind) { selected = nil } }
                 Section { TextField("Add a message", text: $message, axis: .vertical) }
-                Section("Journey to share") { ForEach(library.documents) { document in Button { selected = document.id } label: { HStack { Text(document.title); Spacer(); if selected == document.id { Image(systemName: "checkmark") } } } } }
+                Section("Choose an itinerary") { if candidates.isEmpty { Text(kind == "Templates" ? "Save one of your trips as a template first, or share a trip instead." : "Your trips will appear here once you create one.").foregroundStyle(.secondary) }; ForEach(candidates) { document in Button { selected = document.id } label: { HStack { Text(document.title); Spacer(); if selected == document.id { Image(systemName: "checkmark") } } } } }
                 Section { Text("Shares a read-only copy with everyone in this conversation. Photos and place notes are included; hotel confirmation numbers and booking notes are hidden.").font(.caption).foregroundStyle(.secondary) }
                 if let error { Text(error).foregroundStyle(.red) }
-            }.navigationTitle("Share in \(conversation.name)").navigationBarTitleDisplayMode(.inline)
-                .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }; ToolbarItem(placement: .confirmationAction) { Button("Send") { Task { guard let document = library.documents.first(where: { $0.id == selected }) else { return }; sending = true; defer { sending = false }; do { _ = try await api.upload(document); _ = try await api.send(conversation.id, text: message, documentID: document.id.uuidString); dismiss() } catch { self.error = error.localizedDescription } } }.disabled(selected == nil || sending) } }
+            }.interactiveDismissDisabled(sending).navigationTitle(replying == nil ? "Share in \(conversation.name)" : "Reply with an itinerary").navigationBarTitleDisplayMode(.inline)
+                .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() }.disabled(sending) }; ToolbarItem(placement: .confirmationAction) { Button("Send") { Task { guard let document = library.documents.first(where: { $0.id == selected }) else { return }; sending = true; defer { sending = false }; do { _ = try await api.upload(document); _ = try await api.send(conversation.id, text: message, documentID: document.id.uuidString, replyTo: replying?.id); dismiss() } catch { self.error = error.localizedDescription } } }.disabled(selected == nil || sending) } }
         }
     }
 }

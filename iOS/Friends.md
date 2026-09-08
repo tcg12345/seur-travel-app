@@ -6,7 +6,9 @@ Friends is a top-level tab immediately after Travel. The five visible destinatio
 
 Trips shows itineraries shared by accepted friends, plus private itineraries explicitly shared with the signed-in account through a conversation. Search by traveler, username, trip title or destination. Filter all, upcoming, traveling now, past or saved trips. Saving keeps an account-scoped shortcut on this device; it does not create a copy or bypass revoked access.
 
-Date-overlap hints compare the traveler’s local trip dates with a friend’s shared itinerary. They require matching destination names/countries and overlapping exact dates. Flexible dates never produce a match. These are planning hints, not live location tracking.
+“Your paths cross” quietly shows current/upcoming city-and-date overlaps above the shared feed. It compares local dated trips with currently accessible itineraries from accepted friends only. Templates and flexible dates are excluded. City matching folds case, whitespace and accents, normalizes countries to ISO codes, and rejects conflicting countries or distant coordinates. Without coordinates, matching known countries are required so identically named cities do not generate false alerts. Checkout/arrival days are included as possible same-day overlaps, not claims of an overnight stay.
+
+Equivalent city/date notices are deduplicated. Dismissals remain stable as today advances; changes to the overlapping dates can surface a fresh notice. Preferences and dismissals are scoped to the signed-in account on this device. Use the Friends + menu to disable notices or restore dismissed ones. The overlap section disappears when there is nothing to show. These are planning hints, not live location tracking or push notifications. No additional API is called to compute them.
 
 Opening a shared trip fetches its current authorized cloud version and presents day-by-day events, flights, stays, journal notes and photos. A private copy can be imported for personal editing. Pull to refresh to see the latest version the owner has published. If authorization fails, the plan content is cleared and access must be retried.
 
@@ -15,6 +17,14 @@ Opening a shared trip fetches its current authorized cloud version and presents 
 Add a traveler by their exact Seur username, accept or decline incoming invitations, cancel sent invitations and remove friends. Share your username through the system share sheet. Friend profiles show only their itineraries already shared with you and provide a private message action.
 
 Messages lists private and family/group conversations. Create a named group with accepted friends, discuss plans and attach itineraries. One-to-one actions reuse an existing conversation with the exact two members. Group member counts are not treated as a direct conversation. No contact-book upload, automatic invites, fabricated unread counts or public location discovery is added.
+
+## Trip requests
+
+Choose **Friends → + → Ask about a trip**, the same action on a friend’s profile, or **Conversation actions → Ask about a trip**. Pick the friend, destination and travel month, optionally choosing a stop from an existing trip. An optional note replaces the suggested question. Sending reuses the exact direct conversation or posts in the chosen existing group; nothing is sent until the Send request button is tapped.
+
+A typed request card shows the city/month, waiting/answered state and **Reply with a trip or template**. The reply sheet separates local Trips and Templates, displays whom/where it answers, and uses the existing document-sharing permissions. Recipients open the live authorized document and can use a shared template with their own dates. Conversation rows display real outstanding request counts for the recipient. One itinerary reply answers a group request; more replies remain possible.
+
+Optional `tripRequest`, `replyTo`, `documentIsTemplate` and `pendingRequests` fields preserve older message/conversation decoding. `travel_send_message` checks membership before inspecting request IDs, accepts only city/month intent fields, requires accepted friends for requests and attachments, and restricts replies to someone else’s request in the same conversation. It delegates attachment ownership and grants to `travel_dispatch` in the same transaction. The RPC is invoker/service-only, with RLS unchanged; the Edge Function supplies the authenticated actor. No public request feed or paid provider dependency is introduced.
 
 ## Sharing and control
 

@@ -464,6 +464,10 @@ export async function handler(req: Request): Promise<Response> {
         return json({ url: apiURL + "/s/" + value });
       }
     }
+    const messagePath = path.match(/^\/v1\/conversations\/([a-fA-F0-9-]{36})\/messages$/);
+    if (method === "POST" && messagePath) {
+      return json(await rpc("travel_send_message", { actor: uid, cid: messagePath[1], body }));
+    }
     const value = path === "/v1/feed" && method === "GET" ? await rpc("travel_social_feed", { actor: uid }) : await dispatch(uid, method, path, body);
     if (method === "POST" && match?.[2] === "revoke") { await platform("/rest/v1/travel_recaps?owner_id=eq." + uid + "&document_id=eq." + match[1], "DELETE"); }
     if (Array.isArray(value) && ["/v1/documents", "/v1/feed"].includes(path)) {
