@@ -375,6 +375,39 @@ final class AurumUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Open trip"].waitForExistence(timeout: 5))
         app.buttons["map-saved"].tap(); XCTAssertTrue(app.navigationBars["Saved places"].waitForExistence(timeout: 5))
     }
+    func testMapTripRecapPlaybackAndReturnToOverview() {
+        app.terminate(); app.launchArguments = ["--ui-testing", "--map-testing", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryL"]; app.launch()
+        app.tabBars.buttons["Map"].tap()
+        XCTAssertTrue(app.buttons["map-section-Trips"].waitForExistence(timeout: 8))
+        resizeMapPanel(expanded: true)
+        app.buttons["map-section-Trips"].tap()
+        let trip = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "map-trip-")).firstMatch
+        XCTAssertTrue(trip.waitForExistence(timeout: 5)); trip.tap()
+        RunLoop.current.run(until: Date().addingTimeInterval(0.8))
+        resizeMapPanel(expanded: true)
+        RunLoop.current.run(until: Date().addingTimeInterval(0.8))
+        app.buttons["map-trip-recap"].tap()
+        let play = app.buttons["map-recap-play"]
+        XCTAssertTrue(play.waitForExistence(timeout: 5), app.debugDescription)
+        XCTAssertFalse(app.buttons["recap-replay"].exists, "Recap should use the main map, not embed another map")
+        play.tap()
+        XCTAssertTrue(app.staticTexts["map-recap-current-stop"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["map-recap-current-stop"].label.contains("London"))
+        let finished = expectation(for: NSPredicate(format: "label CONTAINS %@", "Play route"), evaluatedWith: play)
+        wait(for: [finished], timeout: 8)
+        app.buttons["map-recap-memories"].tap()
+        reveal(app.buttons["recap-share"])
+        XCTAssertTrue(app.buttons["recap-share"].exists, app.debugDescription)
+        reveal(app.staticTexts["Day by day"])
+        XCTAssertTrue(app.staticTexts["Day by day"].exists)
+        let close = app.buttons["map-recap-close"]
+        for _ in 0..<5 { if close.isHittable { break }; app.swipeDown() }
+        close.tap()
+        XCTAssertTrue(app.buttons["map-trip-recap"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["map-recap-play"].exists)
+        app.buttons["map-section-Flights"].tap()
+        XCTAssertTrue(app.buttons["map-add-flight"].waitForExistence(timeout: 5))
+    }
     func testSheetDraggingPreservesMapCameraAndViewport() {
         app.terminate(); app.launchArguments = ["--ui-testing", "--map-testing", "--location-testing", "--city-testing"]; app.launch()
         app.tabBars.buttons["Map"].tap()

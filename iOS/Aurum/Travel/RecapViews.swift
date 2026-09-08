@@ -89,6 +89,7 @@ struct RecapMapView: View {
 
 struct TripRecapView: View {
     let document: JourneyDocument
+    var showsMap = true
     let logVisit: () -> Void
     @State private var sharing = false
     private var recap: TripRecap { .init(document: document) }
@@ -103,7 +104,7 @@ struct TripRecapView: View {
                 Button { sharing = true } label: { Image(systemName: "square.and.arrow.up").frame(width: 44, height: 44) }
                     .buttonStyle(.glass).accessibilityLabel("Share recap").accessibilityIdentifier("recap-share")
             }
-            RecapMapView(recap: recap)
+            if showsMap { RecapMapView(recap: recap) }
             RecapMetrics(recap: recap)
             HStack { Text("Day by day").font(.title2.weight(.semibold)); Spacer(); Button("Log a visit", systemImage: "plus", action: logVisit).font(.caption.weight(.semibold)) }
             if recap.days.isEmpty { Text("Log a visit in Journal to start your story. Dates and destinations from your plan will appear here automatically.").font(.subheadline).foregroundStyle(.secondary) }
@@ -151,7 +152,7 @@ struct TripRecapView: View {
                 Divider()
             }
         }.sheet(isPresented: $sharing) { RecapShareView(document: document) }
-        .accessibilityIdentifier("trip-recap")
+        .accessibilityElement(children: .contain).accessibilityIdentifier("trip-recap")
     }
     private func scoreLabel(_ score: Double) -> some View {
         Text(score.formatted(.number.precision(.fractionLength(1))) + "/10").font(.caption.weight(.semibold)).foregroundStyle(.teal)

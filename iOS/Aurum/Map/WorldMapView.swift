@@ -34,6 +34,13 @@ struct WorldMapView: View {
     private var exploreFiltersActive: Bool { (interest == .restaurants && diningFilters.active) || websiteOnly || savedOnly || exploreSort != .suggested }
     @State private var search = CityExploreModel()
     @State private var searchArea: ExploreCity?
+    @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.dynamicTypeSize) private var typeSize
+    @State private var recapVisible = false
+    @State private var recapPlaying = false
+    @State private var recapStep: Int?
+    @State private var recapRun = UUID()
+    @State private var logRecapVisit = false
     @State private var tripID: UUID?
     @State private var selectedFlightID: String?
     @State private var tracker = FlightTracker()
@@ -72,6 +79,7 @@ struct WorldMapView: View {
 
     private var selectedFlight: MapFlight? { flights.first { $0.id == selectedFlightID } }
     private var trip: JourneyDocument? { library.trips.first { $0.id == tripID } }
+    private var mapRecap: TripRecap? { mode == "Trips" && recapVisible ? trip.map { TripRecap(document: $0) } : nil }
     private var cities: [ExploreCity] { var seen = Set<String>(); return (store.savedExploreCities + store.recentExploreCities + ExploreCity.collection).filter { seen.insert($0.id).inserted } }
     private var places: [ExplorePlace] {
         var seen = Set<String>()
@@ -96,12 +104,13 @@ struct WorldMapView: View {
                     .accessibilityIdentifier("map-camera-probe").accessibilityLabel(cameraProbe).allowsHitTesting(false)
             }
             #endif
-            PersistentMapPanel(detent: $detent, contentID: selectedFlightID ?? (mode + (addedFlightNumber ?? "")), flightDetail: selectedFlightID != nil, header: { panelHeader }, content: { panelContent })
+            PersistentMapPanel(detent: $detent, contentID: selectedFlightID ?? (mode + (recapVisible ? "recap" : "") + (addedFlightNumber ?? "")), flightDetail: selectedFlightID != nil, header: { panelHeader }, content: { panelContent })
         }
         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { mapHeight = $0 }
         .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.bottom } action: { mapBottomInset = $0 }
         .toolbar(.hidden, for: .navigationBar)
         .onChange(of: store.selectedTab) { _, _ in
+            stopRecap()
             var transaction = Transaction(); transaction.disablesAnimations = true
             withTransaction(transaction) { detent = .height(260) }
         }
@@ -114,12 +123,19 @@ struct WorldMapView: View {
         .onChange(of: FlightNotifications.shared.openFlights, initial: true) {
             if FlightNotifications.shared.openFlights { mode = "Flights"; detent = .medium; FlightNotifications.shared.openFlights = false }
         }
-        .onChange(of: mode) { selection = nil; if mode != "Flights" { selectedFlightID = nil; tracker = FlightTracker() } }
+        .onChange(of: mode) { selection = nil; recapVisible = false; stopRecap(); if mode != "Flights" { selectedFlightID = nil; tracker = FlightTracker() } }
+        .onChange(of: tripID) { recapVisible = false; stopRecap() }
+        .onChange(of: trip?.updatedAt) { stopRecap() }
+        .onChange(of: reduceMotion) { stopRecap() }
+        .onChange(of: scenePhase) { _, phase in if phase != .active { stopRecap() } }
+        .onDisappear { stopRecap() }
+        .task(id: recapRun) { await playRecap() }
         .task(id: api.account?.id) { await api.loadSavedFlights() }
         .navigationDestination(isPresented: $showSaved) { SavedView().toolbar(.visible, for: .navigationBar) }
         .sheet(item: $adding) { ExploreAddToTripView(place: $0) }
         .sheet(isPresented: $editingFlight) { if let selectedFlight { FlightReservationEditor(documentID: selectedFlight.tripID, reservation: selectedFlight.flight) } }
         .sheet(isPresented: $newTrip) { TripCreationView() }
+        .sheet(isPresented: $logRecapVisit) { if let trip { RatedPlaceEditor(documentID: trip.id, rated: RatedPlace()) } }
         .sheet(isPresented: $showExploreFilters) {
             NavigationStack {
                 Form {
@@ -152,10 +168,22 @@ struct WorldMapView: View {
                 }
                 ForEach(places) { place in Marker(place.record.name, systemImage: place.record.category.symbol, coordinate: .init(latitude: place.record.latitude!, longitude: place.record.longitude!)).tint(Color.bronze).tag("place:" + place.id) }
             }
-            if mode == "Trips" {
+            if let recap = mapRecap {
+                ForEach(recap.legs.filter { recapStep == nil || $0.step <= recapStep! }) { leg in
+                    MapPolyline(RecapMapGeometry.polyline(leg)).stroke(leg.flight ? Color.teal : Color.bronze, style: StrokeStyle(lineWidth: 3, lineCap: .round, dash: leg.flight ? [7, 4] : []))
+                }
+                ForEach(Array(recap.stops.enumerated()), id: \.element.id) { index, stop in
+                    Annotation(stop.name, coordinate: .init(latitude: stop.latitude, longitude: stop.longitude)) {
+                        Text("\(index + 1)").font(.caption.bold()).foregroundStyle(.white).frame(width: 30, height: 30)
+                            .background(recapStep == index ? Color.teal : Color.bronze, in: Circle())
+                            .accessibilityLabel("Recap stop \(index + 1), \(stop.name)")
+                    }
+                }
+            }
+            if mode == "Trips" && mapRecap == nil {
                 ForEach(tripPlaces) { place in Marker(place.name, systemImage: place.category.symbol, coordinate: .init(latitude: place.latitude!, longitude: place.longitude!)).tint(Color.bronze).tag("tripplace:" + place.id) }
             }
-            if mode != "Explore" {
+            if mode != "Explore" && mapRecap == nil {
                 ForEach(routes) { value in
                     if let route = value.route {
                         MapPolyline(route).stroke(Color.bronze.opacity(selectedFlightID == nil ? 0.7 : 1), style: StrokeStyle(lineWidth: selectedFlightID == nil ? 2 : 3, lineCap: .round, dash: [8, 5]))
@@ -327,16 +355,81 @@ struct WorldMapView: View {
         VStack(alignment: .leading, spacing: 16) {
             if let trip {
                 HStack { Text(trip.title).font(.system(.title2, design: .serif)); Spacer(); Button("All trips") { tripID = nil; globe() } }
-                Text("\(trip.planCount) plans · \(trip.places.count) journal places · \(trip.flights.count) flights").font(.caption).foregroundStyle(.secondary)
-                NavigationLink { JourneyDetailView(id: trip.id).toolbar(.visible, for: .navigationBar) } label: { Label("Open trip", systemImage: "suitcase.rolling") }.buttonStyle(.glass)
-                if let selection, let place = tripPlaces.first(where: { "tripplace:" + $0.id == selection }) { Text(place.name).font(.headline); Text(place.address).font(.caption).foregroundStyle(.secondary) }
-                ForEach(flights.filter { $0.tripID == trip.id }) { flight in flightRow(flight) }
+                if let recap = mapRecap {
+                    recapControls(recap)
+                    TripRecapView(document: trip, showsMap: false) { stopRecap(); logRecapVisit = true }
+                } else {
+                    Text("\(trip.planCount) plans · \(trip.places.count) journal places · \(trip.flights.count) flights").font(.caption).foregroundStyle(.secondary)
+                    let actionsLayout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 12)) : AnyLayout(HStackLayout(spacing: 12))
+                    actionsLayout { tripActions(trip) }
+                    if let selection, let place = tripPlaces.first(where: { "tripplace:" + $0.id == selection }) { Text(place.name).font(.headline); Text(place.address).font(.caption).foregroundStyle(.secondary) }
+                    ForEach(flights.filter { $0.tripID == trip.id }) { flight in flightRow(flight) }
+                }
             } else {
                 ForEach(library.trips) { document in Button { tripID = document.id; focus(document); resizePanel(.medium) } label: { HStack { Image(systemName: "suitcase.rolling").font(.title2); VStack(alignment: .leading, spacing: 6) { Text(document.title).font(.system(.headline, design: .serif)); Text(document.routeLabel).font(.caption).foregroundStyle(.secondary) }; Spacer() }.padding(17).cardSurface(cornerRadius: 22) }.buttonStyle(.plain).accessibilityIdentifier("map-trip-" + document.id.uuidString) }
                 if library.trips.isEmpty { HStack { Label("No trips yet", systemImage: "suitcase.rolling").foregroundStyle(.secondary); Spacer(); Button { newTrip = true } label: { Label("Create trip", systemImage: "plus") }.buttonStyle(.glassProminent) }.font(.subheadline).padding(.vertical, 8) }
             }
         }
     }
+    @ViewBuilder private func tripActions(_ trip: JourneyDocument) -> some View {
+        NavigationLink { JourneyDetailView(id: trip.id).toolbar(.visible, for: .navigationBar) } label: { Label("Open trip", systemImage: "suitcase.rolling") }.buttonStyle(.glass)
+        Button {
+            selection = nil; recapVisible = true
+            fitRecap(TripRecap(document: trip)); resizePanel(.medium)
+        } label: { Label(TripRecap(document: trip).hasEnded() ? "View recap" : "Preview recap", systemImage: "play.rectangle") }
+            .buttonStyle(.glass).accessibilityIdentifier("map-trip-recap")
+    }
+    private func recapControls(_ recap: TripRecap) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                if !reduceMotion && !recap.stops.isEmpty {
+                    Button(recapPlaying ? "Stop" : "Play route", systemImage: recapPlaying ? "stop.fill" : "play.fill") {
+                        if recapPlaying { stopRecap() }
+                        else { recapPlaying = true; recapRun = UUID(); resizePanel(.height(260)) }
+                    }.font(.subheadline.weight(.semibold)).accessibilityIdentifier("map-recap-play")
+                }
+                Spacer()
+                Button("Trip overview") { stopRecap(); recapVisible = false; focus(recap.document) }
+                    .font(.subheadline).accessibilityIdentifier("map-recap-close")
+            }
+            if let step = recapStep, recap.stops.indices.contains(step) {
+                Text("Stop \(step + 1) of \(recap.stops.count) · " + recap.stops[step].name)
+                    .font(.caption).foregroundStyle(Color.bronze).accessibilityIdentifier("map-recap-current-stop")
+            } else {
+                Text(recap.mapPoints.isEmpty ? "Add destination locations to see the route. Your journal is below." : reduceMotion ? "Full route shown with Reduce Motion enabled." : "Play the route above. Scroll for photos and memories.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            Button("Photos & memories", systemImage: "photo.on.rectangle") {
+                stopRecap(); resizePanel(.large)
+            }.font(.caption.weight(.medium)).accessibilityIdentifier("map-recap-memories")
+        }
+    }
+    private func fitRecap(_ recap: TripRecap) {
+        guard !recap.mapPoints.isEmpty else { return }
+        move(.region(RecapMapGeometry.region(recap.mapPoints)))
+    }
+    private func stopRecap() {
+        recapPlaying = false; recapStep = nil; recapRun = UUID()
+        if let recap = mapRecap { fitRecap(recap) }
+    }
+    @MainActor private func playRecap() async {
+        guard recapPlaying, !reduceMotion, scenePhase == .active, store.selectedTab == 1, let recap = mapRecap else { return }
+        do {
+            // Let the panel settle before animating the existing map camera.
+            try await Task.sleep(for: .milliseconds(400))
+            for (index, stop) in recap.stops.enumerated() {
+                try Task.checkCancellation()
+                recapStep = index
+                withAnimation(.smooth(duration: 1.2)) {
+                    camera = .camera(MapCamera(centerCoordinate: .init(latitude: stop.latitude, longitude: stop.longitude), distance: 500_000, heading: 0, pitch: 25))
+                }
+                try await Task.sleep(for: .seconds(3))
+            }
+            try Task.checkCancellation()
+            recapPlaying = false; recapStep = nil; fitRecap(recap)
+        } catch { /* A new selection, Stop, or leaving Map cancels this playback. */ }
+    }
+
     private var flightsPanel: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(alignment: .center) {
