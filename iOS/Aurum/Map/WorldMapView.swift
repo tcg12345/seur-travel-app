@@ -17,7 +17,6 @@ struct WorldMapView: View {
     @State private var mode = "Explore"
     @State private var detent: PresentationDetent = .height(260)
     @State private var showSaved = false
-    @State private var satellite = true
     @State private var selection: String?
     @State private var cityQuery = ""
     @State private var placeQuery = ""
@@ -41,7 +40,6 @@ struct WorldMapView: View {
     @State private var adding: ExplorePlace?
     @State private var editingFlight = false
     @State private var newTrip = false
-    @State private var flightInfo = false
     @State private var addingFlight = false
     @State private var addedFlightNumber: String?
     init(request: CityMapRequest? = nil) {
@@ -138,7 +136,6 @@ struct WorldMapView: View {
             }.presentationDetents([.large])
         }
         .onChange(of: diningFilters) { if let searchArea, interest == .restaurants { Task { await browse(searchArea) } } }
-        .sheet(isPresented: $flightInfo) { FlightDataInfoView() }
         .sheet(isPresented: $addingFlight) { FlightAddView { flight in
             mode = "Flights"; selectedFlightID = nil; tracker = FlightTracker()
             addedFlightNumber = flight.flightNumber.uppercased()
@@ -177,7 +174,7 @@ struct WorldMapView: View {
                     }
                 }
             }
-        }.mapStyle(satellite ? .hybrid(elevation: .realistic, pointsOfInterest: .excludingAll) : .standard(elevation: .realistic, pointsOfInterest: .excludingAll))
+        }.mapStyle(.hybrid(elevation: .realistic, pointsOfInterest: .excludingAll))
             .safeAreaPadding(.bottom, mapBottomPadding)
             .onMapCameraChange(frequency: .onEnd) { context in
                 center = context.region.center
@@ -191,15 +188,9 @@ struct WorldMapView: View {
     }
     private var topControls: some View {
         HStack(spacing: 10) {
-            HStack(spacing: 8) { Image(systemName: "globe.europe.africa"); Text("Your world").font(.system(.headline, design: .serif)) }.padding(.horizontal, 17).padding(.vertical, 13).glassEffect(.regular, in: .capsule)
             Spacer()
             Button { store.searchPresented = true } label: { Image(systemName: "magnifyingglass").frame(width: 44, height: 44) }.buttonStyle(.glass).accessibilityLabel("Search").accessibilityIdentifier("global-search")
             Button { showSaved = true } label: { Image(systemName: "bookmark").frame(width: 44, height: 44) }.buttonStyle(.glass).accessibilityLabel("Saved places and collections").accessibilityIdentifier("map-saved")
-            Menu {
-                Button(satellite ? "Standard map" : "Satellite globe", systemImage: "map") { satellite.toggle() }
-                Button("Show the globe", systemImage: "globe") { globe() }
-                Button("Flight information", systemImage: "info.circle") { flightInfo = true }
-            } label: { Image(systemName: "square.3.layers.3d").frame(width: 44, height: 44) }.buttonStyle(.glass).accessibilityLabel("Map display options")
         }
     }
     private var panelHeader: some View {
