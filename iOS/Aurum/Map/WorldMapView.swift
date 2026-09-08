@@ -65,7 +65,7 @@ struct WorldMapView: View {
     }
     private var flights: [MapFlight] {
         var values = api.savedFlights.map { MapFlight(tripID: nil, tripTitle: "My flights", flight: $0) }
-        for trip in library.documents { for flight in trip.flights { values.append(MapFlight(tripID: trip.id, tripTitle: trip.title, flight: flight)) } }
+        for trip in library.trips { for flight in trip.flights { values.append(MapFlight(tripID: trip.id, tripTitle: trip.title, flight: flight)) } }
         return values.sorted { a, b in
             if a.flight.departureDay == b.flight.departureDay { return a.flight.departureTime < b.flight.departureTime }
             return a.flight.departureDay > b.flight.departureDay
@@ -73,13 +73,13 @@ struct WorldMapView: View {
     }
 
     private var selectedFlight: MapFlight? { flights.first { $0.id == selectedFlightID } }
-    private var trip: JourneyDocument? { library.documents.first { $0.id == tripID } }
+    private var trip: JourneyDocument? { library.trips.first { $0.id == tripID } }
     private var cities: [ExploreCity] { var seen = Set<String>(); return (store.savedExploreCities + store.recentExploreCities + ExploreCity.collection).filter { seen.insert($0.id).inserted } }
     private var places: [ExplorePlace] {
         var seen = Set<String>()
         return (searchArea == nil ? store.savedDiscoveries : visiblePlaces).filter { $0.record.hasCoordinate && seen.insert($0.id).inserted }
     }
-    private var tripPlaces: [PlaceRecord] { var seen = Set<String>(); return (trip.map { [$0] } ?? library.documents).flatMap(\.mapPlaces).filter { $0.hasCoordinate && seen.insert($0.id).inserted } }
+    private var tripPlaces: [PlaceRecord] { var seen = Set<String>(); return (trip.map { [$0] } ?? library.trips).flatMap(\.mapPlaces).filter { $0.hasCoordinate && seen.insert($0.id).inserted } }
     private var routes: [MapFlight] { if let selectedFlight { return [selectedFlight] }; if mode == "Trips", let tripID { return flights.filter { $0.tripID == tripID } }; return flights }
     private var mapBottomPadding: CGFloat {
         // Sheet movement must never change MapKit's viewport: changing its safe
@@ -343,8 +343,8 @@ struct WorldMapView: View {
                 if let selection, let place = tripPlaces.first(where: { "tripplace:" + $0.id == selection }) { Text(place.name).font(.headline); Text(place.address).font(.caption).foregroundStyle(.secondary) }
                 ForEach(flights.filter { $0.tripID == trip.id }) { flight in flightRow(flight) }
             } else {
-                ForEach(library.documents) { document in Button { tripID = document.id; focus(document); resizePanel(.medium) } label: { HStack { Image(systemName: "suitcase.rolling").font(.title2); VStack(alignment: .leading, spacing: 6) { Text(document.title).font(.system(.headline, design: .serif)); Text(document.routeLabel).font(.caption).foregroundStyle(.secondary) }; Spacer(); Image(systemName: "arrow.up.right") }.padding(17).cardSurface(cornerRadius: 22) }.buttonStyle(.plain).accessibilityIdentifier("map-trip-" + document.id.uuidString) }
-                if library.documents.isEmpty { HStack { Label("No trips yet", systemImage: "suitcase.rolling").foregroundStyle(.secondary); Spacer(); Button { newTrip = true } label: { Label("Create trip", systemImage: "plus") }.buttonStyle(.glassProminent) }.font(.subheadline).padding(.vertical, 8) }
+                ForEach(library.trips) { document in Button { tripID = document.id; focus(document); resizePanel(.medium) } label: { HStack { Image(systemName: "suitcase.rolling").font(.title2); VStack(alignment: .leading, spacing: 6) { Text(document.title).font(.system(.headline, design: .serif)); Text(document.routeLabel).font(.caption).foregroundStyle(.secondary) }; Spacer(); Image(systemName: "arrow.up.right") }.padding(17).cardSurface(cornerRadius: 22) }.buttonStyle(.plain).accessibilityIdentifier("map-trip-" + document.id.uuidString) }
+                if library.trips.isEmpty { HStack { Label("No trips yet", systemImage: "suitcase.rolling").foregroundStyle(.secondary); Spacer(); Button { newTrip = true } label: { Label("Create trip", systemImage: "plus") }.buttonStyle(.glassProminent) }.font(.subheadline).padding(.vertical, 8) }
             }
         }
     }

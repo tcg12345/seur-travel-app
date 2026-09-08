@@ -229,7 +229,7 @@ struct ConciergeView: View {
         VStack(alignment: .leading, spacing: 10) {
             Menu {
                 Button("General travel advice") { conversation.selectedTripID = nil }
-                ForEach(library.documents) { trip in Button(trip.title) { conversation.selectedTripID = trip.id } }
+                ForEach(library.trips) { trip in Button(trip.title) { conversation.selectedTripID = trip.id } }
                 Divider()
                 Toggle("Use travel preferences", isOn: Binding(get: { conversation.usePreferences }, set: { conversation.usePreferences = $0 }))
                 Toggle("Include saved places", isOn: Binding(get: { conversation.useSavedPlaces }, set: { conversation.useSavedPlaces = $0 }))
@@ -320,7 +320,7 @@ private struct ConciergePlanReview: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     Text(itinerary.title).font(.title2.weight(.semibold))
-                    Picker("Add to", selection: $target) { Text("Create a new trip").tag(UUID?.none); ForEach(library.documents) { Text($0.title).tag(Optional($0.id)) } }.pickerStyle(.menu)
+                    Picker("Add to", selection: $target) { Text("Create a new trip").tag(UUID?.none); ForEach(library.trips) { Text($0.title).tag(Optional($0.id)) } }.pickerStyle(.menu)
                     if target == nil { Toggle("Choose exact dates", isOn: $exactDates); if exactDates { DatePicker("First day", selection: $start, displayedComponents: .date) } }
                     Text("Suggested local times, not reservations. Existing plans stay in place; check for overlaps before adding. You can edit every activity afterward.").font(.caption).foregroundStyle(.secondary)
                     ForEach(itinerary.days, id: \.number) { day in

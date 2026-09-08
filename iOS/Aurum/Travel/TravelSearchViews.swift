@@ -117,10 +117,10 @@ struct ItineraryIntoTripView: View {
         NavigationStack {
             List {
                 Section { Text("Restaurants and attractions become places to rate. Other events, hotel bookings and flights are skipped. Imported places are unrated and aren’t marked visited.").font(.subheadline).foregroundStyle(.secondary) }
-                ForEach(library.documents.filter { $0.id != tripID && !$0.plannedPlacesToRate.isEmpty }) { itinerary in
+                ForEach(library.trips.filter { $0.id != tripID && !$0.plannedPlacesToRate.isEmpty }) { itinerary in
                     Button { guard var trip = library.documents.first(where: { $0.id == tripID }) else { return }; trip.addPlannedPlacesToJournal(from: itinerary); if library.save(trip) { dismiss() } else { error = library.error } } label: { VStack(alignment: .leading, spacing: 5) { Text(itinerary.title); Text(itinerary.routeLabel).font(.caption).foregroundStyle(.secondary) } }
                 }
-                if library.documents.allSatisfy({ $0.id == tripID || $0.plannedPlacesToRate.isEmpty }) { Text("No other trips have planned restaurants or attractions yet.").foregroundStyle(.secondary) }
+                if library.trips.allSatisfy({ $0.id == tripID || $0.plannedPlacesToRate.isEmpty }) { Text("No other trips have planned restaurants or attractions yet.").foregroundStyle(.secondary) }
                 if let error { Text(error).foregroundStyle(.red) }
             }.navigationTitle("Import planned places").toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
         }
@@ -133,7 +133,7 @@ struct RatedRestaurantImportView: View {
     let tripID: UUID
     private var candidates: [RatedPlace] {
         var seen = Set<String>()
-        var places = library.documents.filter { $0.id != tripID }.flatMap(\.places).filter { $0.place.category == .restaurant && $0.overall > 0 }
+        var places = library.trips.filter { $0.id != tripID }.flatMap(\.places).filter { $0.place.category == .restaurant && $0.overall > 0 }
         for hotel in store.hotels { for venue in hotel.venues {
             let key = RestaurantPlace(hotel: hotel, venue: venue).id
             if let visit = store.restaurantVisits[key], visit.rating > 0 {

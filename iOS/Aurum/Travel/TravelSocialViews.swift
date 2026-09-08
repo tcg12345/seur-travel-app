@@ -716,6 +716,7 @@ struct SharedJourneyPreview: View {
             LazyVStack(alignment: .leading, spacing: 24) {
                 if let current = loaded {
                     HStack { FriendsAvatar(name: current.owner.name, size: 34); Text("Shared by " + current.owner.name).font(.subheadline); Spacer() }
+                    if current.document.isTemplate == true { NavigationLink("Use this template") { TemplateDetailView(entry: TemplateEntry(document: current.document, remote: true)) } }
                     Text(current.document.title).font(.system(.largeTitle, design: .serif)).accessibilityIdentifier("shared-itinerary-title")
                     VStack(alignment: .leading, spacing: 8) {
                         Label(current.document.routeLabel, systemImage: "mappin.and.ellipse")
@@ -723,7 +724,7 @@ struct SharedJourneyPreview: View {
                     }.font(.subheadline).foregroundStyle(.secondary)
                     HStack { Label("Shared itinerary", systemImage: "person.2").foregroundStyle(FlightDisplay.blue); Spacer(); Text("\(current.document.planCount) plans").foregroundStyle(.secondary) }.font(.caption)
                     Text("View the owner’s latest shared plan here. Save a private copy to adapt it for your own trip.").font(.caption).foregroundStyle(.secondary)
-                    Button { do { _ = try library.importData(JSONEncoder().encode(JourneyArchive(document: current.document))); imported = true } catch { self.error = error.localizedDescription } } label: { Label(imported ? "Private copy saved" : "Save a private copy", systemImage: imported ? "checkmark" : "square.and.arrow.down").font(.subheadline) }.buttonStyle(.glass).disabled(imported || loading).accessibilityIdentifier("shared-itinerary-copy")
+                    if current.document.isTemplate != true { Button { do { _ = try library.importData(JSONEncoder().encode(JourneyArchive(document: current.document))); imported = true } catch { self.error = error.localizedDescription } } label: { Label(imported ? "Private copy saved" : "Save a private copy", systemImage: imported ? "checkmark" : "square.and.arrow.down").font(.subheadline) }.buttonStyle(.glass).disabled(imported || loading).accessibilityIdentifier("shared-itinerary-copy") }
                     if !current.document.description.isEmpty { Text(current.document.description).font(.subheadline).foregroundStyle(.secondary) }
                     Divider()
                     SharedItineraryContent(document: current.document)
@@ -811,6 +812,7 @@ struct JourneyShareView: View {
     @Environment(TravelAPI.self) private var api
     @Environment(\.dismiss) private var dismiss
     let documentID: UUID
+    @State private var savingTemplate = false
     @State private var loading = false
     @State private var message: String?
     @State private var link: String?
@@ -824,6 +826,7 @@ struct JourneyShareView: View {
         NavigationStack {
             Form {
                 if let document {
+                    if document.isTemplate != true { Section { Button("Save as template", systemImage: "doc.on.doc") { savingTemplate = true }.accessibilityIdentifier("trip-save-template") } }
                     Section { Text(document.title).font(.system(.title2, design: .serif)); Text("Your journal, your audience.").foregroundStyle(.secondary) }
                     Section {
                         ForEach(JourneyExportFormat.allCases) { format in Button { do { export = ExportedJourney(url: try JourneyExporter.export(document, format: format)) } catch { message = error.localizedDescription } } label: { Label("Share \(format.rawValue.uppercased())", systemImage: "square.and.arrow.up") } }
@@ -855,7 +858,8 @@ struct JourneyShareView: View {
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
                 .task { await refresh() }
                 .fullScreenCover(isPresented: $account, onDismiss: { Task { await refresh() } }) { TravelAccountView() }
-                .sheet(item: $export) { ActivityShareSheet(items: [$0.url]) }
+                .sheet(isPresented: $savingTemplate) { if let document { SaveTemplateSheet(document: document) } }
+            .sheet(item: $export) { ActivityShareSheet(items: [$0.url]) }
         }
     }
     private func saveLocal(_ document: JourneyDocument) throws {

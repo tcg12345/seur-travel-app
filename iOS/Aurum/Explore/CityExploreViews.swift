@@ -91,6 +91,7 @@ struct CityGuideView: View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 22) {
                 cityHeader
+                if query.isEmpty && !savedOnly { TemplateDiscoveryRow(city: city.name) }
                 searchControls
                 if !collection.isEmpty && !diningFilters.active && query.isEmpty && [.highlights, .restaurants].contains(interest) && !savedOnly { diningCollection }
                 if model.loading && (!savedOnly || (interest == .restaurants && diningFilters.active)) {
@@ -369,7 +370,7 @@ struct ExploreAddToTripView: View {
         var id: String { switch self { case .event(let id, _): "event-\(id)"; case .hotel(let id, _): "hotel-\(id)"; case .journal(let id, _): "journal-\(id)"; case .destination(let id): "destination-\(id)"; case .create: "create" } }
     }
     private var trips: [JourneyDocument] {
-        library.documents.filter { query.isEmpty || ($0.title + " " + $0.routeLabel).localizedCaseInsensitiveContains(query) }.sorted {
+        library.trips.filter { query.isEmpty || ($0.title + " " + $0.routeLabel).localizedCaseInsensitiveContains(query) }.sorted {
             let a = $0.routeLabel.localizedCaseInsensitiveContains(place.city.name), b = $1.routeLabel.localizedCaseInsensitiveContains(place.city.name)
             return a == b ? $0.updatedAt > $1.updatedAt : a
         }
@@ -388,7 +389,7 @@ struct ExploreAddToTripView: View {
                             HStack(spacing: 15) { Image(systemName: "suitcase.rolling").font(.title2.weight(.light)).foregroundStyle(Color.bronze); VStack(alignment: .leading, spacing: 7) { Text(trip.title).font(.system(.headline, design: .serif)).foregroundStyle(.primary); Text(trip.routeLabel.isEmpty ? "Destination to come" : trip.routeLabel).font(.caption).foregroundStyle(.secondary); if let start = trip.startDate { Text(TravelDay.label(start) + (trip.endDate.map { " – " + TravelDay.label($0) } ?? "")).font(.caption2).foregroundStyle(Color.bronze) } }; Spacer(); Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary) }.padding(19).cardSurface(cornerRadius: 23)
                         }.buttonStyle(PressStyle()).disabled(locating).accessibilityIdentifier("explore-trip-" + trip.id.uuidString)
                     }
-                    if trips.isEmpty { Text(library.documents.isEmpty ? "Create your first trip, then choose when you’ll visit." : "No trips match that search.").font(.subheadline).foregroundStyle(.secondary) }
+                    if trips.isEmpty { Text(library.trips.isEmpty ? "Create your first trip, then choose when you’ll visit." : "No trips match that search.").font(.subheadline).foregroundStyle(.secondary) }
                     Button { editor = .create } label: { Label("Create a new trip", systemImage: "plus").frame(maxWidth: .infinity).padding(12) }.buttonStyle(.glass)
                     if let error { Text(error).foregroundStyle(.red).font(.subheadline) }
                 }.padding(24)

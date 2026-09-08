@@ -204,6 +204,8 @@ struct JourneyDocument: Codable, Hashable, Identifiable {
     var updatedAt: Double = Date.now.timeIntervalSince1970
     var importedFrom: String?
     var routePlan: JourneyRoutePlan?
+    var isTemplate: Bool?
+    var templateMeta: TemplateMeta?
     /// Older trips stored a destination and dates without a route. Reuse those choices.
     @discardableResult mutating func preparePlanningRoute() -> Bool {
         guard stops.isEmpty, !destination.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
@@ -277,6 +279,7 @@ struct JourneyDocument: Codable, Hashable, Identifiable {
         return trip
     }
     func validationError() -> String? {
+        if let meta = templateMeta, meta.tagline.count > 250 || meta.tags.count > 8 || meta.tags.contains(where: { $0.count > 30 }) || meta.suggestedSeason.count > 120 { return "Shorten the template description or tags." }
         if routePlan?.valid == false { return "Check the saved route planning choices." }
         if title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return "Give your journey a title." }
         if title.count > 200 || description.count > 20000 { return "Shorten the title or description." }
@@ -333,6 +336,7 @@ struct JourneyArchive: Codable { var version = 1; var document: JourneyDocument 
 struct JourneyLibraryArchive: Codable { var version = 1; var documents: [JourneyDocument] }
 
 @MainActor @Observable final class JourneyLibrary {
+    var trips: [JourneyDocument] { documents.filter { $0.isTemplate != true } }
     private(set) var documents: [JourneyDocument] = []
     var error: String?
     private let url: URL

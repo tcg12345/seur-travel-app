@@ -74,7 +74,7 @@ struct WishlistContent: View {
                 if !info.notes.isEmpty { Text(info.notes).font(.subheadline).foregroundStyle(.secondary).lineLimit(2) }
                 HStack(spacing: 10) {
                     if !info.collection.isEmpty { Label(info.collection, systemImage: "folder").lineLimit(1) }
-                    if library.documents.contains(where: { entry.isPlanned(in: $0) }) { Label("In your plans", systemImage: "checkmark.circle") }
+                    if library.trips.contains(where: { entry.isPlanned(in: $0) }) { Label("In your plans", systemImage: "checkmark.circle") }
                 }.font(.caption2).foregroundStyle(Color.bronze)
             }
             Spacer(minLength: 0)
@@ -108,7 +108,7 @@ struct WishlistDetailView: View {
     }
     private func content(_ entry: WishlistEntry) -> some View {
         let info = store.wishlist.info(entry.id)
-        let trips = library.documents.filter { entry.isPlanned(in: $0) }
+        let trips = library.trips.filter { entry.isPlanned(in: $0) }
         return ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 VStack(alignment: .leading, spacing: 12) {
@@ -239,7 +239,7 @@ struct WishlistPlanView: View {
             List {
                 Section { Text(entry.title).font(.headline); Text("Choose a trip, then review the dates and details. Your wishlist idea stays saved.").font(.subheadline).foregroundStyle(.secondary) }
                 Section("Your trips") {
-                    ForEach(library.documents.sorted { $0.updatedAt > $1.updatedAt }) { trip in
+                    ForEach(library.trips.sorted { $0.updatedAt > $1.updatedAt }) { trip in
                         Button { choose(trip.id) } label: {
                             VStack(alignment: .leading, spacing: 5) {
                                 Text(trip.title).foregroundStyle(.primary)
@@ -247,7 +247,7 @@ struct WishlistPlanView: View {
                             }.padding(.vertical, 5)
                         }.accessibilityIdentifier("wishlist-trip-" + trip.id.uuidString)
                     }
-                    if library.documents.isEmpty { Text("No trips yet. Create one to give this idea a place in your plans.").foregroundStyle(.secondary) }
+                    if library.trips.isEmpty { Text("No trips yet. Create one to give this idea a place in your plans.").foregroundStyle(.secondary) }
                     Button("Create a new trip", systemImage: "plus") { route = .create }.accessibilityIdentifier("wishlist-new-trip")
                 }
                 if let error { Text(error).foregroundStyle(.red) }
@@ -256,7 +256,7 @@ struct WishlistPlanView: View {
         }
         .sheet(item: $route, onDismiss: {
             if saved { store.showMessage("Saved to your trip"); dismiss() }
-            else if let id = pending { pending = nil; if library.documents.first(where: { $0.id == id })?.stops.isEmpty == false { choose(id) } }
+            else if let id = pending { pending = nil; if library.trips.first(where: { $0.id == id })?.stops.isEmpty == false { choose(id) } }
         }) { value in
             switch value {
             case .create: TripCreationView(initialDestination: entry.place.city, onCreated: { pending = $0 })
@@ -267,7 +267,7 @@ struct WishlistPlanView: View {
         }
     }
     private func choose(_ id: UUID) {
-        guard var trip = library.documents.first(where: { $0.id == id }) else { error = "That trip is no longer available."; return }
+        guard var trip = library.trips.first(where: { $0.id == id }) else { error = "That trip is no longer available."; return }
         saved = false
         if trip.preparePlanningRoute(), !library.save(trip) { error = library.error; return }
         if entry.kind == .stays {

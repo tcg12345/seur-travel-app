@@ -13,14 +13,14 @@ struct TravelHubView: View {
     @State private var section = "Trips"
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private var documents: [JourneyDocument] {
-        library.documents.filter { (query.isEmpty || ($0.title + " " + $0.routeLabel).localizedCaseInsensitiveContains(query)) && (filter == "All" || $0.visibility.title == filter) }.sorted { $0.updatedAt > $1.updatedAt }
+        library.documents.filter { $0.isTemplate != true && (query.isEmpty || ($0.title + " " + $0.routeLabel).localizedCaseInsensitiveContains(query)) && (filter == "All" || $0.visibility.title == filter) }.sorted { $0.updatedAt > $1.updatedAt }
     }
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 if section == "Trips" && query.isEmpty { TodayHubView() }
                 HStack(spacing: 28) {
-                    ForEach(["Trips", "Wishlist"], id: \.self) { title in
+                    ForEach(["Trips", "Wishlist", "Templates"], id: \.self) { title in
                         Button { withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) { section = title; query = "" } } label: {
                             VStack(spacing: 10) {
                                 Text(title).font(.headline).foregroundStyle(section == title ? Color.bronze : .secondary)
@@ -30,9 +30,10 @@ struct TravelHubView: View {
                     }
                     Spacer()
                 }
-                if section == "Wishlist" { WishlistContent(query: query) }
+                if section == "Templates" { TemplateLibraryView(search: query) }
+                else if section == "Wishlist" { WishlistContent(query: query) }
                 else { Group {
-                    if !library.documents.isEmpty { HStack {
+                    if !library.trips.isEmpty { HStack {
                         Menu { Picker("Show", selection: $filter) { ForEach(["All", "Private", "Friends", "Public"], id: \.self) { Text($0) } } } label: { Label(filter == "All" ? "All trips" : filter, systemImage: "line.3.horizontal.decrease") }.font(.subheadline)
                         Spacer()
                         Button { withAnimation(.smooth) { grid.toggle() } } label: { Image(systemName: grid ? "list.bullet" : "square.grid.2x2").frame(width: 38, height: 38) }.buttonStyle(.glass).accessibilityLabel(grid ? "List view" : "Grid view")
@@ -47,6 +48,7 @@ struct TravelHubView: View {
                                 Button { newJourney = true } label: { Label("Create trip", systemImage: "plus").padding(.vertical, 10) }.buttonStyle(.glassProminent).accessibilityIdentifier("travel-create")
                             }
                         }.frame(maxWidth: .infinity).padding(.vertical, 30).padding(.horizontal, 15).cardSurface(cornerRadius: 28)
+                        if query.isEmpty && filter == "All" { TemplateDiscoveryRow() }
                     } else {
                         LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 14), count: grid ? 2 : 1), spacing: 16) {
                             ForEach(documents) { document in
@@ -281,6 +283,7 @@ struct JourneyDetailView: View {
     }
     private func header(_ d: JourneyDocument) -> some View {
         VStack(alignment: .leading, spacing: 10) {
+            if let source = d.templateMeta?.sourceTitle, d.importedFrom != nil { Text("Based on " + source + (d.templateMeta?.authorHandle.isEmpty == false ? " · @" + d.templateMeta!.authorHandle : "")).font(.caption).foregroundStyle(.secondary) }
             Editorial(d.title, size: 32).accessibilityIdentifier("journey-title")
             Label(d.routeLabel.isEmpty ? "Add your destination" : d.routeLabel, systemImage: "mappin.and.ellipse").font(.subheadline).foregroundStyle(.secondary)
             if let start = d.startDate { Text(TravelDay.label(start) + (d.endDate.map { " – " + TravelDay.label($0) } ?? "")).font(.caption).foregroundStyle(Color.bronze) }

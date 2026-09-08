@@ -12,6 +12,22 @@ final class AurumUITests: XCTestCase {
         app.tabBars.buttons["Map"].firstMatch.tap()
         if app.buttons["map-saved"].waitForExistence(timeout: 2) { app.buttons["map-saved"].tap() }
     }
+    func testTemplateDiscoveryDateCloneAndSaveOwnTemplate() {
+        app.terminate(); app.launchArguments = ["--ui-testing"]; app.launch()
+        app.tabBars.buttons["Travel"].tap()
+        app.buttons["travel-section-Templates"].tap()
+        let riviera = app.buttons.containing(.staticText, identifier: "The Riviera, slowly").firstMatch
+        reveal(riviera); XCTAssertTrue(riviera.exists); riviera.tap()
+        let use = app.buttons["template-use"]; XCTAssertTrue(use.waitForExistence(timeout: 5)); use.tap()
+        XCTAssertTrue(app.datePickers["template-departure"].exists)
+        app.buttons["template-create-trip"].tap()
+        XCTAssertTrue(app.staticTexts["journey-title"].waitForExistence(timeout: 6))
+        XCTAssertEqual(app.staticTexts["journey-title"].label, "The Riviera, slowly")
+        app.buttons["Share journey"].tap()
+        app.buttons["trip-save-template"].tap()
+        app.buttons["template-save"].tap()
+        XCTAssertTrue(app.buttons["trip-save-template"].waitForExistence(timeout: 5))
+    }
     func testTodayAutomaticTimelineDayNavigationAndConfirmation() {
         app.terminate(); app.launchArguments = ["--ui-testing", "--today-testing"]; app.launch()
         app.tabBars.buttons["Travel"].tap()

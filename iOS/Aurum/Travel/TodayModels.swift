@@ -48,7 +48,7 @@ enum TodayPlanner {
         return Context(day: day, zone: zone, stop: stop, agendaDays: document.days.filter { $0.date == day })
     }
     static func isActive(_ document: JourneyDocument, now: Date, fallback: TimeZone = .current) -> Bool {
-        guard document.dateMode == .dates, let start = document.startDate, let end = document.endDate,
+        guard document.isTemplate != true, document.dateMode == .dates, let start = document.startDate, let end = document.endDate,
               TravelDay.date(start) != nil, TravelDay.date(end) != nil else { return false }
         let day = context(document, now: now, fallback: fallback).day
         return start <= day && day <= end

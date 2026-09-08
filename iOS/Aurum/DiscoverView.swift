@@ -10,7 +10,7 @@ struct DiscoverView: View {
     @State private var showProfile = false
     @State private var createTrip = false
 
-    private var latestTrip: JourneyDocument? { library.documents.max { $0.updatedAt < $1.updatedAt } }
+    private var latestTrip: JourneyDocument? { library.documents.filter { $0.isTemplate != true }.max { $0.updatedAt < $1.updatedAt } }
 
     var body: some View {
         ScrollView {
@@ -18,6 +18,7 @@ struct DiscoverView: View {
                 startingPoint
                 browseShortcuts
                 planningShortcut
+                TemplateDiscoveryRow()
                 inspiration
                 conciergeShortcut
             }.padding(.horizontal, 22).padding(.top, 14).padding(.bottom, 32)

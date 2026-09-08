@@ -36,6 +36,7 @@ import {
   historyEnabled,
   nearbyFlightAirport,
 } from "./flights.ts";
+import { sanitizedTemplate, templateSummary } from "./templates.ts";
 import { concierge } from "./concierge.ts";
 import { notificationWorker, pushConfigured, watches } from "./notifications.ts";
 import { sharedLines, sharePDF } from "./shared.ts";
@@ -173,6 +174,15 @@ export async function handler(req: Request): Promise<Response> {
           "Content-Disposition": 'inline; filename="Seur-journey.pdf"',
         },
       });
+    }
+    const templateMatch = path.match(/^\/v1\/templates(?:\/([a-fA-F0-9-]{36}))?$/);
+    if (templateMatch && method === "GET") {
+      await limit("template-read:" + network, 90);
+      const city = q.get("city") ?? "", tags = (q.get("tags") ?? "").split(",").map(t => t.trim().toLowerCase()).filter(Boolean);
+      requireValue(city.length <= 100 && tags.length <= 8 && tags.every(t => /^[a-z0-9 -]{1,30}$/.test(t)), "Invalid template filters.");
+      const values = await rpc("travel_templates", { city, tags, target: templateMatch[1] ?? null });
+      if (templateMatch[1]) { requireValue(values.length > 0, "This template is no longer public.", 404); return json(values[0]); }
+      return json(values.map(templateSummary));
     }
     if (path === "/v1/status" && method === "GET") {
       return json({
@@ -367,6 +377,12 @@ export async function handler(req: Request): Promise<Response> {
           : await recommend(body.city, body.interests, body.candidates),
       );
     }
+    const templateUse = path.match(/^\/v1\/templates\/([a-fA-F0-9-]{36})\/uses$/);
+    if (templateUse && method === "POST") {
+      requireValue(uuid(body.cloneID), "Invalid new trip identifier.");
+      await limit("template-clone:" + uid, 30, 3600);
+      return json(await rpc("travel_template_used", { actor: uid, template: templateUse[1], clone: body.cloneID }));
+    }
     const match = path.match(
       /^\/v1\/documents\/([a-fA-F0-9-]{36})(?:\/(link|revoke))?$/,
     );
@@ -374,6 +390,7 @@ export async function handler(req: Request): Promise<Response> {
       requireValue(uuid(match[1]), "Invalid journey identifier.");
       if (method === "PUT" && !match[2]) {
         validateDocument(body);
+        if (body.isTemplate === true) { const owner = await rpc("travel_user", { x: uid }); body = sanitizedTemplate(body, owner.handle); }
         requireValue(
           body.id.toLowerCase() === match[1].toLowerCase(),
           "Document ID does not match path.",

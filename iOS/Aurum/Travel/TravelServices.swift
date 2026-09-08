@@ -213,6 +213,9 @@ private struct EmptyReply: Codable { var ok: Bool }
     func friends() async throws -> [TravelFriend] { try await request("/v1/friends") }
     func requestFriend(_ handle: String) async throws { let _: EmptyReply = try await request("/v1/friends", method: "POST", body: ["handle": handle]) }
     func respondFriend(_ id: String, accept: Bool) async throws { let _: EmptyReply = try await request("/v1/friends/\(id)", method: accept ? "PUT" : "DELETE", body: [:]) }
+    func templates(city: String = "", tags: String = "") async throws -> [RemoteJourney] { try await request("/v1/templates", query: ["city": city, "tags": tags]) }
+    func template(_ id: UUID) async throws -> RemoteJourney { try await request("/v1/templates/\(id.uuidString)") }
+    func recordTemplateUse(_ id: UUID, clone: UUID) async throws { let _: EmptyReply = try await request("/v1/templates/\(id.uuidString)/uses", method: "POST", body: ["cloneID": clone.uuidString]) }
     func documents(feed: Bool = false) async throws -> [RemoteJourney] { try await request(feed ? "/v1/feed" : "/v1/documents") }
     func document(_ id: String) async throws -> RemoteJourney { try await request("/v1/documents/\(id)") }
     func upload(_ document: JourneyDocument) async throws -> RemoteJourney { try await request("/v1/documents/\(document.id.uuidString)", method: "PUT", encodable: document) }

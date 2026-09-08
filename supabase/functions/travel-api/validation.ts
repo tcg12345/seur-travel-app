@@ -130,6 +130,16 @@ export function validateDocument(d: any) {
     ["private", "friends", "public"].includes(d.visibility),
     "Invalid audience.",
   );
+  requireValue(d.isTemplate == null || typeof d.isTemplate === "boolean", "Invalid template flag.");
+  if (d.templateMeta != null) {
+    const m = d.templateMeta;
+    requireValue(object(m), "Invalid template metadata.");
+    text(m.tagline ?? "", "template tagline", 250, true);
+    text(m.suggestedSeason ?? "", "suggested season", 120, true);
+    text(m.authorHandle ?? "", "template author", 32, true);
+    requireValue(Array.isArray(m.tags) && m.tags.length <= 8 && m.tags.every((t: any) => typeof t === "string" && /^[a-z0-9 -]{1,30}$/.test(t)), "Use up to eight short style tags.");
+    requireValue(m.cloneCount == null || Number.isSafeInteger(m.cloneCount) && m.cloneCount >= 0, "Invalid template count.");
+  }
   text(d.title, "title", 200);
   text(d.description ?? "", "description", 20000, true);
   text(d.destination ?? "", "destination", 1000, true);

@@ -1119,3 +1119,75 @@ import MapKit
         XCTAssertNil(TodayFlightStatusStore.match(feed, flight: wrongRoute))
     }
 }
+
+@MainActor final class TripTemplateTests: XCTestCase {
+    func testTemplateRemovesPersonalDetailsWithoutChangingSource() throws {
+        var trip = TodayFixtures.trip
+        trip.description = "Private journey note"
+        trip.events[0].attendees = "Private guests"; trip.events[0].description = "Private event note"
+        trip.events[0].links = ["https://example.com/private-booking"]
+        trip.events[0].cost = TravelMoney(amount: 250, currency: "EUR")
+        trip.hotels[0].notes = "Private room instructions"
+        trip.flights = FlightMapFixtures.trip.flights
+        trip.places = [RatedPlace(place: trip.events[0].place, overall: 4.5, notes: "Private journal", photos: [JournalPhoto(jpeg: Data([1,2,3]))])]
+        let template = try trip.templated(meta: TemplateMeta(tagline: "A lovely weekend", tags: ["food"]))
+        XCTAssertTrue(template.isTemplate == true); XCTAssertEqual(template.dateMode, .nights)
+        XCTAssertNil(template.startDate); XCTAssertNil(template.endDate); XCTAssertEqual(template.stops[0].arrival, "2000-01-01")
+        XCTAssertEqual(template.hotels[0].confirmation, ""); XCTAssertEqual(template.hotels[0].notes, "")
+        XCTAssertNil(template.events[0].attendees); XCTAssertNil(template.events[0].cost); XCTAssertTrue(template.events[0].links.isEmpty)
+        XCTAssertTrue(template.places.isEmpty); XCTAssertTrue(template.flights.isEmpty)
+        XCTAssertFalse(String(decoding: try JSONEncoder().encode(template), as: UTF8.self).contains("Private"))
+        XCTAssertEqual(trip.hotels[0].confirmation, "SEUR-DEMO-123")
+        XCTAssertEqual(trip.places[0].photos.count, 1)
+        let withRatings = try trip.templated(meta: TemplateMeta(), includeCosts: true, includeRatings: true)
+        XCTAssertEqual(withRatings.places[0].overall, 4.5); XCTAssertTrue(withRatings.places[0].photos.isEmpty)
+        XCTAssertEqual(withRatings.places[0].notes, ""); XCTAssertNotNil(withRatings.events[0].cost)
+    }
+    func testAllTenSeedsCloneAcrossLeapDayWithHotelsAndStableEventReferences() throws {
+        XCTAssertEqual(TemplateCatalog.bundled.count, 10)
+        for template in TemplateCatalog.bundled {
+            XCTAssertNil(template.validationError(), template.title)
+            let trip = try template.usingTemplate(departure: "2028-02-28")
+            XCTAssertNil(trip.validationError(), template.title)
+            XCTAssertEqual(trip.startDate, "2028-02-28"); XCTAssertEqual(trip.endDate, TravelDay.adding(template.nights, to: "2028-02-28"))
+            XCTAssertEqual(trip.visibility, .private); XCTAssertFalse(trip.isTemplate == true)
+            XCTAssertNotEqual(trip.id, template.id); XCTAssertEqual(trip.importedFrom, template.id.uuidString)
+            XCTAssertEqual(trip.events.map(\.stopID), template.events.map(\.stopID)); XCTAssertEqual(trip.events.map(\.day), template.events.map(\.day))
+            XCTAssertEqual(trip.templateMeta?.sourceTitle, template.title)
+            for hotel in trip.hotels {
+                XCTAssertTrue(trip.stops.contains { $0.arrival == hotel.checkIn && $0.departure == hotel.checkOut })
+                XCTAssertTrue(hotel.confirmation.isEmpty)
+            }
+        }
+    }
+    func testGapDatesNormalizeAndPartialHotelStayKeepsItsNightOffsets() throws {
+        var trip = TodayFixtures.trip
+        trip.hotels[0].checkIn = "2026-09-07"; trip.hotels[0].checkOut = "2026-09-08"
+        let stop = JourneyStop(name: "Lyon", arrival: "2026-09-12", nights: 2)
+        trip.stops.append(stop); trip.endDate = stop.departure
+        let template = try trip.templated(meta: TemplateMeta())
+        XCTAssertEqual(template.stops[1].arrival, "2000-01-04")
+        let clone = try template.usingTemplate(departure: "2027-12-30")
+        XCTAssertEqual(clone.stops[1].arrival, "2028-01-02")
+        XCTAssertEqual(clone.hotels[0].checkIn, "2027-12-31")
+        XCTAssertEqual(clone.hotels[0].checkOut, "2028-01-01")
+    }
+    func testUnmatchedHotelRequiresCorrectionAndBadDateCannotClone() throws {
+        var trip = TodayFixtures.trip; trip.hotels[0].checkIn = "2026-10-01"; trip.hotels[0].checkOut = "2026-10-03"
+        XCTAssertThrowsError(try trip.templated(meta: TemplateMeta()))
+        XCTAssertThrowsError(try TemplateCatalog.bundled[0].usingTemplate(departure: "2026-02-30"))
+    }
+    func testTemplatesRemainSeparateFromActiveTripsAndPersistOffline() throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString+".json")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let library = JourneyLibrary(url: url)
+        let template = try TodayFixtures.trip.templated(meta: TemplateMeta())
+        XCTAssertTrue(library.save(template))
+        XCTAssertTrue(library.trips.isEmpty)
+        let restored = JourneyLibrary(url: url).documents[0]
+        XCTAssertTrue(restored.isTemplate == true)
+        XCTAssertFalse(TodayPlanner.isActive(restored, now: TodayClock.now()))
+        XCTAssertTrue(TemplateCatalog.matches(TemplateCatalog.bundled[0], city: "Antibes", tag: "beach"))
+        XCTAssertFalse(TemplateCatalog.matches(TemplateCatalog.bundled[0], city: "Paris", tag: "art"))
+    }
+}

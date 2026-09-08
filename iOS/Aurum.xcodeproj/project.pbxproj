@@ -7,6 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		A1A62CA14D89011881E553CF /* TripTemplates.json in Resources */ = {isa = PBXBuildFile; fileRef = 1F80DB39E010B5FAF788E595 /* TripTemplates.json */; };
+		13212C1DAC8784BC6E6EFA48 /* TemplateViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = C44E11619D8889BE6BB72E5B /* TemplateViews.swift */; };
+		0695E4FD81EFAE4050FA15E6 /* TripTemplates.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76404B64202EEB047BBB7AB9 /* TripTemplates.swift */; };
 		9EE0AEEA75080A55B3732709 /* TodayFlightStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCD464B0936A90046A12E912 /* TodayFlightStatus.swift */; };
 		D61F06E2102E4ECCD90C17CE /* TodayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05D0C395918BA1B3C633DE8F /* TodayView.swift */; };
 		6B1EE5C8B2A2572962E49792 /* TodayModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = AFA4495E18F0E589DA6F2B0E /* TodayModels.swift */; };
@@ -73,6 +76,9 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		1F80DB39E010B5FAF788E595 /* TripTemplates.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = Resources/TripTemplates.json; sourceTree = "<group>"; };
+		C44E11619D8889BE6BB72E5B /* TemplateViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Travel/TemplateViews.swift; sourceTree = "<group>"; };
+		76404B64202EEB047BBB7AB9 /* TripTemplates.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Travel/TripTemplates.swift; sourceTree = "<group>"; };
 		FCD464B0936A90046A12E912 /* TodayFlightStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Travel/TodayFlightStatus.swift; sourceTree = "<group>"; };
 		05D0C395918BA1B3C633DE8F /* TodayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Travel/TodayView.swift; sourceTree = "<group>"; };
 		AFA4495E18F0E589DA6F2B0E /* TodayModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Travel/TodayModels.swift; sourceTree = "<group>"; };
@@ -174,6 +180,9 @@
 				35EF526550BED1EC047737E1 /* Travel/TravelServices.swift */,
 				19252540FA5E304E7378258A /* Travel/TravelSocialViews.swift */,
 				836A3CFEC5E2BE5AF3AB29DC /* Travel/TravelViews.swift */,
+				1F80DB39E010B5FAF788E595 /* TripTemplates.json */,
+				C44E11619D8889BE6BB72E5B /* TemplateViews.swift */,
+				76404B64202EEB047BBB7AB9 /* TripTemplates.swift */,
 				FCD464B0936A90046A12E912 /* TodayFlightStatus.swift */,
 				05D0C395918BA1B3C633DE8F /* TodayView.swift */,
 				AFA4495E18F0E589DA6F2B0E /* TodayModels.swift */,
@@ -322,6 +331,7 @@
 			files = (
 				289B9CFAF7CB01D447B414AD /* Assets.xcassets in Resources */,
 				F95A3C1621A7EB44D12A6AE3 /* Resources/hotels.json in Resources */,
+				A1A62CA14D89011881E553CF /* TripTemplates.json in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -367,6 +377,8 @@
 				B9EB3F10090B13AF70D9B66B /* Travel/TravelServices.swift in Sources */,
 				F143A7B751A70AAA3AAE8C26 /* Travel/TravelSocialViews.swift in Sources */,
 				C8A40D988C9FC3F7F1EA24DF /* Travel/TravelViews.swift in Sources */,
+				13212C1DAC8784BC6E6EFA48 /* TemplateViews.swift in Sources */,
+				0695E4FD81EFAE4050FA15E6 /* TripTemplates.swift in Sources */,
 				9EE0AEEA75080A55B3732709 /* TodayFlightStatus.swift in Sources */,
 				D61F06E2102E4ECCD90C17CE /* TodayView.swift in Sources */,
 				6B1EE5C8B2A2572962E49792 /* TodayModels.swift in Sources */,
