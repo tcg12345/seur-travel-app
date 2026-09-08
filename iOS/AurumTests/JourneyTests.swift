@@ -813,6 +813,26 @@ import MapKit
         loaded.toggleRestaurantSave(oldBookmark); XCTAssertTrue(loaded.isDiscoverySaved(restaurant))
         XCTAssertEqual(loaded.savedDiscoveries.filter { $0.id == restaurant.id }.count, 1)
     }
+    func testGuideResultsSeedSeparateSearchWithoutExtraRequests() async {
+        var calls = 0
+        let model = CityExploreModel { [self] _, interest, _, _ in
+            calls += 1
+            return [sample("fresh", category: interest.category)]
+        }
+        model.seed(city: lisbon, sections: [
+            ExploreSection(interest: .restaurants, places: [sample("cached", category: .restaurant)]),
+            ExploreSection(interest: .museums, places: [], error: "Offline")
+        ])
+        await model.load(city: lisbon, interest: .restaurants, term: "", wider: false)
+        XCTAssertEqual(calls, 0)
+        XCTAssertEqual(model.places.first?.record.name, sample("cached").record.name)
+        await model.load(city: lisbon, interest: .restaurants, term: "Italian", wider: false)
+        XCTAssertEqual(calls, 1, "Changed filters must perform their own search")
+        await model.load(city: lisbon, interest: .museums, term: "", wider: false)
+        XCTAssertEqual(calls, 2, "A failed preview must not prevent retrying")
+        await model.load(city: lisbon, interest: .restaurants, term: "", wider: true)
+        XCTAssertEqual(calls, 3, "A wider area must not reuse the city-center preview")
+    }
     func testPartialSearchFailuresAndCache() async {
         var calls = 0
         let model = CityExploreModel { [self] _, interest, _, _ in

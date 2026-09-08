@@ -724,6 +724,60 @@ final class AurumUITests: XCTestCase {
         XCTAssertEqual(app.textViews["visit-note"].value as? String, "Ask for a quiet table.")
         app.buttons["Cancel"].tap()
     }
+    func testCityDirectoryAndSeparateCategorySearch() {
+        app.terminate()
+        app.launchArguments = ["--ui-testing", "--location-testing", "--city-testing", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryL"]
+        app.launch()
+        app.buttons["explore-cities"].tap()
+        XCTAssertTrue(app.textFields["explore-city-query"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts["Choose a city"].exists)
+        XCTAssertFalse(app.staticTexts["Featured destinations"].exists)
+        app.buttons["explore-city-region"].tap()
+        app.buttons["Oceania"].tap()
+        let sydney = app.buttons["explore-city-Sydney"]
+        XCTAssertTrue(sydney.waitForExistence(timeout: 5)); sydney.tap()
+        XCTAssertTrue(app.buttons["city-open-search"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.textFields["city-place-query"].exists)
+
+        // A category pushes its own results screen, with restaurant filters.
+        chooseCityInterest("restaurants")
+        XCTAssertTrue(app.navigationBars["Restaurants"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.textFields["city-place-query"].exists)
+        XCTAssertFalse(app.buttons["city-open-search"].exists)
+        app.buttons["city-filters"].tap()
+        XCTAssertTrue(app.navigationBars["Filters"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Cuisine"].exists || app.buttons["Any cuisine"].exists)
+        app.buttons["Done"].tap()
+        let result = firstCityResult()
+        XCTAssertTrue(result.waitForExistence(timeout: 5)); result.tap()
+        XCTAssertTrue(app.buttons["explore-place-save"].waitForExistence(timeout: 5))
+        app.buttons["explore-place-save"].tap()
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        app.buttons["city-saved-places"].tap()
+        XCTAssertTrue(app.navigationBars["Saved places"].waitForExistence(timeout: 5))
+        XCTAssertTrue(firstCityResult().exists)
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        XCTAssertTrue(app.buttons["city-open-search"].waitForExistence(timeout: 5))
+
+        // General search also gets a separate page; going back preserves the guide.
+        app.buttons["city-open-search"].tap()
+        let query = app.textFields["city-place-query"]
+        XCTAssertTrue(query.waitForExistence(timeout: 5)); query.tap(); query.typeText("gardens")
+        XCTAssertEqual(query.value as? String, "gardens")
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        XCTAssertTrue(app.buttons["city-open-search"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.textFields["city-place-query"].exists)
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        XCTAssertTrue(app.buttons["explore-city-Sydney"].waitForExistence(timeout: 5))
+
+        // Worldwide autocomplete still handles destinations beyond the visible region.
+        let city = app.textFields["explore-city-query"]
+        city.tap(); city.typeText("Lis")
+        let suggestion = app.buttons["explore-city-query-suggestion-0"]
+        XCTAssertTrue(suggestion.waitForExistence(timeout: 5)); suggestion.tap()
+        XCTAssertTrue(app.buttons["city-open-search"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Lisbon"].exists)
+    }
     private func openCityExplorer(fixtures: Bool, createTrip: Bool = false) {
         app.terminate(); app.launchArguments = ["--ui-testing"] + (fixtures ? ["--location-testing", "--city-testing"] : ["--live-apple-places"]); app.launch()
         if createTrip {
