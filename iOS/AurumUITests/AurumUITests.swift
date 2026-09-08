@@ -15,7 +15,10 @@ final class AurumUITests: XCTestCase {
     func testTemplateDiscoveryDateCloneAndSaveOwnTemplate() {
         app.terminate(); app.launchArguments = ["--ui-testing"]; app.launch()
         app.tabBars.buttons["Travel"].tap()
-        app.buttons["travel-section-Templates"].tap()
+        XCTAssertFalse(app.buttons["travel-section-Templates"].exists)
+        XCTAssertTrue(app.buttons["travel-section-Wishlist"].exists)
+        app.buttons["travel-new-trip"].tap()
+        app.buttons["travel-use-template"].tap()
         let riviera = app.buttons.containing(.staticText, identifier: "The Riviera, slowly").firstMatch
         reveal(riviera); XCTAssertTrue(riviera.exists); riviera.tap()
         let use = app.buttons["template-use"]; XCTAssertTrue(use.waitForExistence(timeout: 5)); use.tap()
@@ -1101,6 +1104,7 @@ final class AurumUITests: XCTestCase {
         XCTAssertTrue(travel.waitForExistence(timeout: 5)); travel.tap()
         let create = app.buttons["travel-new-trip"]
         XCTAssertTrue(create.waitForExistence(timeout: 5)); create.tap()
+        app.buttons["travel-create-blank"].tap()
         XCTAssertTrue(app.textFields["trip-destination"].waitForExistence(timeout: 5))
         app.textFields["trip-destination"].tap(); app.textFields["trip-destination"].typeText("Paris")
         app.buttons["journey-save"].tap(); app.staticTexts["Trip to Paris"].tap()
@@ -1496,6 +1500,7 @@ final class AurumUITests: XCTestCase {
     func testSimpleTripCreationBuildsRouteAutomatically() {
         app.terminate(); app.launchArguments = ["--ui-testing", "--location-testing"]; app.launch()
         app.tabBars.buttons["Travel"].tap(); app.buttons["travel-new-trip"].tap()
+        app.buttons["travel-create-blank"].tap()
         let create = app.buttons["journey-save"]
         XCTAssertFalse(create.isEnabled)
         XCTAssertFalse(app.textFields["journey-name"].exists)

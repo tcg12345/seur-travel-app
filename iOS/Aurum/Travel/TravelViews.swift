@@ -8,6 +8,7 @@ struct TravelHubView: View {
     @State private var query = ""
     @State private var grid = false
     @State private var newJourney = false
+    @State private var browsingTemplates = false
     @State private var account = false
     @State private var filter = "All"
     @State private var section = "Trips"
@@ -20,7 +21,7 @@ struct TravelHubView: View {
             VStack(alignment: .leading, spacing: 18) {
                 if section == "Trips" && query.isEmpty { TodayHubView() }
                 HStack(spacing: 28) {
-                    ForEach(["Trips", "Wishlist", "Templates"], id: \.self) { title in
+                    ForEach(["Trips", "Wishlist"], id: \.self) { title in
                         Button { withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) { section = title; query = "" } } label: {
                             VStack(spacing: 10) {
                                 Text(title).font(.headline).foregroundStyle(section == title ? Color.bronze : .secondary)
@@ -30,8 +31,7 @@ struct TravelHubView: View {
                     }
                     Spacer()
                 }
-                if section == "Templates" { TemplateLibraryView(search: query) }
-                else if section == "Wishlist" { WishlistContent(query: query) }
+                if section == "Wishlist" { WishlistContent(query: query) }
                 else { Group {
                     if query.isEmpty { TravelStatsPreview(compact: true) }
                     if !library.trips.isEmpty { HStack {
@@ -49,7 +49,6 @@ struct TravelHubView: View {
                                 Button { newJourney = true } label: { Label("Create trip", systemImage: "plus").padding(.vertical, 10) }.buttonStyle(.glassProminent).accessibilityIdentifier("travel-create")
                             }
                         }.frame(maxWidth: .infinity).padding(.vertical, 30).padding(.horizontal, 15).cardSurface(cornerRadius: 28)
-                        if query.isEmpty && filter == "All" { TemplateDiscoveryRow() }
                     } else {
                         LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 14), count: grid ? 2 : 1), spacing: 16) {
                             ForEach(documents) { document in
@@ -67,11 +66,18 @@ struct TravelHubView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) { Button { account = true } label: { if api.isSignedIn { Image(systemName: "person.crop.circle") } else { Text("Sign in").font(.subheadline.weight(.medium)) } }.accessibilityLabel("Travel account") }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button { newJourney = true } label: { Image(systemName: "plus") }
+                    Menu {
+                        Button("Create a trip", systemImage: "plus") { newJourney = true }
+                            .accessibilityIdentifier("travel-create-blank")
+                        Button("Use a template", systemImage: "doc.on.doc") {
+                            section = "Trips"; query = ""; browsingTemplates = true
+                        }.accessibilityIdentifier("travel-use-template")
+                    } label: { Image(systemName: "plus") }
                         .accessibilityLabel("New trip").accessibilityIdentifier("travel-new-trip")
                 }
             }
             .sheet(isPresented: $newJourney) { TripCreationView(onCreated: { _ in section = "Trips"; query = "" }) }
+            .navigationDestination(isPresented: $browsingTemplates) { TemplateBrowseView() }
             .navigationDestination(isPresented: $account) { TravelAccountPage() }
             .alert("Travel", isPresented: Binding(get: { library.error != nil }, set: { if !$0 { library.error = nil } })) { Button("OK") { library.error = nil } } message: { Text(library.error ?? "") }
     }

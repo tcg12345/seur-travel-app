@@ -1,6 +1,6 @@
 # Travel wishlist
 
-Travel has Trips, Wishlist and Templates sections. The navigation-bar plus always creates a trip. Wishlist’s **Add idea** action creates an undated personal idea.
+Travel has Trips and Wishlist sections. The navigation-bar plus offers **Create a trip** and **Use a template**; templates open in a separate browser. Wishlist’s **Add idea** action creates an undated personal idea.
 
 ## Saving and organizing
 
