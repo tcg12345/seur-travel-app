@@ -253,6 +253,11 @@ struct HotelReservationEditor: View {
                 Section("Your stay") {
                     DayField(title: "Check-in", value: $reservation.checkIn)
                     DayField(title: "Check-out", value: $reservation.checkOut)
+                    Toggle("Set planned checkout time", isOn: Binding(get: { reservation.checkOutTime != nil }, set: { reservation.checkOutTime = $0 ? "11:00" : nil }))
+                    if reservation.checkOutTime != nil {
+                        DatePicker("Leave hotel at", selection: Binding(get: { TodayPlanner.date("2000-01-01", minute: JourneyConflicts.minute(reservation.checkOutTime) ?? 660, zone: .current) ?? .now }, set: { reservation.checkOutTime = TodayPlanner.clock($0, zone: .current) }), displayedComponents: .hourAndMinute)
+                        Text("Your planned departure from the hotel, in local time. Used to check your flight timing.").font(.caption).foregroundStyle(.secondary)
+                    }
                     Stepper("\(reservation.guests) \(reservation.guests == 1 ? "guest" : "guests")", value: $reservation.guests, in: 1...99)
                     Stepper("\(reservation.rooms) \(reservation.rooms == 1 ? "room" : "rooms")", value: $reservation.rooms, in: 1...50)
                 }

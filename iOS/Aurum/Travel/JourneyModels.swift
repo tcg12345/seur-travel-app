@@ -155,6 +155,7 @@ struct HotelReservation: Codable, Hashable, Identifiable {
     var cost: TravelMoney?
     var notes = ""
     var overview = ""
+    var checkOutTime: String?
 }
 struct FlightReservation: Codable, Hashable, Identifiable {
     var id = UUID()
@@ -304,6 +305,7 @@ struct JourneyDocument: Codable, Hashable, Identifiable {
             if e.links.contains(where: { validatedURL($0) == nil }) { return "Event links must start with https:// or http://." }
         }
         for h in hotels {
+            if let time = h.checkOutTime, JourneyConflicts.minute(time) == nil { return "Use a valid hotel checkout time." }
             if h.place.name.isEmpty || TravelDay.date(h.checkIn) == nil || TravelDay.date(h.checkOut) == nil || h.checkOut <= h.checkIn || !(1...99).contains(h.guests) || !(1...50).contains(h.rooms) { return "Check hotel names, dates, guests and rooms." }
         }
         for f in flights {

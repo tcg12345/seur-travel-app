@@ -178,3 +178,11 @@ Deno.test("Route planning metadata and transfer blocks retain the journey contra
   assert.deepEqual(restored.routePlan, d.routePlan);
   assert.equal(restored.events[0].routeLegID, d.events[0].routeLegID);
 });
+
+Deno.test("planned hotel checkout time is optional and validates clock bounds", () => {
+  const d: any = fixture();
+  d.hotels = [{id:crypto.randomUUID(),place:{id:"hotel",name:"Paris hotel",category:"hotel"},checkIn:"2026-10-01",checkOut:"2026-10-03",guests:2,rooms:1}];
+  validateDocument(d);
+  for (const value of ["00:00","09:30","9:30","23:59",null]) { d.hotels[0].checkOutTime=value; validateDocument(d); }
+  for (const value of ["24:00","12:60","noon",930,""]) { d.hotels[0].checkOutTime=value; assert.throws(() => validateDocument(d),Problem); }
+});

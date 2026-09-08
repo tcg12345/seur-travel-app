@@ -305,14 +305,15 @@ struct JourneyDetailView: View {
     }
     private func metric(_ value: String, _ caption: String) -> some View { VStack(spacing: 6) { Text(value).font(.system(.title2, design: .serif)); Text(caption).font(.caption2).foregroundStyle(.secondary) }.frame(maxWidth: .infinity) }
     private func itinerary(_ d: JourneyDocument) -> some View {
-        VStack(alignment: .leading, spacing: 24) {
+        let conflicts = JourneyConflicts.detect(d)
+        return VStack(alignment: .leading, spacing: 24) {
             if d.stops.isEmpty {
                 VStack(alignment: .leading, spacing: 12) {
                     SectionHeading(title: "Give your plans a place", subtitle: "Add route stops to organise events by day. You can already save bookings and log visits.")
                     Button("Add destinations", systemImage: "mappin.and.ellipse") { editInfo = true }.buttonStyle(.glass).accessibilityIdentifier("trip-add-route")
                 }.padding(20).cardSurface(cornerRadius: 24)
             }
-            if mode != "Map" && (!d.hotels.isEmpty || !d.flights.isEmpty) { bookingSection(d) }
+            if mode != "Map" && (!d.hotels.isEmpty || !d.flights.isEmpty) { bookingSection(d, conflicts: conflicts) }
             if mode == "Map" { JourneyMapView(places: d.mapPlaces).frame(height: 380).clipShape(.rect(cornerRadius: 26)) }
             else {
                 if mode == "Calendar" {
@@ -343,11 +344,14 @@ struct JourneyDetailView: View {
                                     Button("Log or rate visit", systemImage: "star.bubble") { rated = d.places.first(where: { $0.place.id == item.place.id && $0.place.source == item.place.source }) ?? RatedPlace(place: item.place) }
                                 }
                             }
+                            ForEach(conflicts.filter { $0.eventIDs.contains(item.id) }) { warning in
+                                conflictWarning(warning) { event = item }
+                            }
                         }
                     }
                 }
             }
-            if mode == "Map" || (d.hotels.isEmpty && d.flights.isEmpty) { bookingSection(d) }
+            if mode == "Map" || (d.hotels.isEmpty && d.flights.isEmpty) { bookingSection(d, conflicts: conflicts) }
             VStack(alignment: .leading, spacing: 14) {
                 SectionHeading(title: "Budget")
                 priceRows(d.eventTotals, label: "Events")
@@ -357,13 +361,27 @@ struct JourneyDetailView: View {
             }.padding(21).cardSurface(cornerRadius: 25)
         }
     }
-    private func bookingSection(_ d: JourneyDocument) -> some View {
+    private func bookingSection(_ d: JourneyDocument, conflicts: [JourneyConflicts.Warning]) -> some View {
         VStack(alignment: .leading, spacing: 14) {
             SectionHeading(title: "Bookings")
-            ForEach(d.hotels) { item in Button { hotel = item } label: { bookingRow(item.place.name, subtitle: "\(TravelDay.label(item.checkIn)) – \(TravelDay.label(item.checkOut)) · \(item.rooms) rooms", symbol: "bed.double", cost: item.cost) }.buttonStyle(PressStyle()).contextMenu { Button("Log or rate stay", systemImage: "star.bubble") { rated = d.places.first(where: { $0.place.id == item.place.id && $0.place.source == item.place.source }) ?? RatedPlace(place: item.place) } } }
+            ForEach(d.hotels) { item in Button { hotel = item } label: { bookingRow(item.place.name, subtitle: "\(TravelDay.label(item.checkIn)) – \(TravelDay.label(item.checkOut)) · \(item.rooms) rooms", symbol: "bed.double", cost: item.cost) }.buttonStyle(PressStyle()).contextMenu { Button("Log or rate stay", systemImage: "star.bubble") { rated = d.places.first(where: { $0.place.id == item.place.id && $0.place.source == item.place.source }) ?? RatedPlace(place: item.place) } }
+                if mode != "Map" { ForEach(conflicts.filter { $0.hotelID == item.id }) { warning in conflictWarning(warning) { hotel = item } } }
+            }
             ForEach(d.flights) { item in Button { flight = item } label: { bookingRow("\(item.departureAirport) → \(item.arrivalAirport)", subtitle: "\(item.airline) \(item.flightNumber) · \(item.departureDay)", symbol: "airplane", cost: item.cost) }.buttonStyle(PressStyle()) }
             if d.hotels.isEmpty && d.flights.isEmpty { Text("Attach a hotel or flight using Add to plan.").font(.subheadline).foregroundStyle(.secondary) }
         }
+    }
+    private func conflictWarning(_ warning: JourneyConflicts.Warning, edit: @escaping () -> Void) -> some View {
+        Button(action: edit) {
+            HStack(alignment: .top, spacing: 9) {
+                Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Color.bronze).padding(.top, 2)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(warning.title).font(.caption.weight(.semibold)).foregroundStyle(Color.bronze)
+                    Text(warning.detail).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    Text("Review timing").font(.caption.weight(.medium)).foregroundStyle(Color.bronze)
+                }.frame(maxWidth: .infinity, alignment: .leading)
+            }.padding(.horizontal, 4).padding(.bottom, 4)
+        }.buttonStyle(.plain).accessibilityIdentifier("agenda-conflict-" + warning.id)
     }
     private func priceRows(_ totals: [String: Decimal], label: String) -> some View {
         VStack(alignment: .leading, spacing: 8) { Text(label).font(.subheadline.weight(.medium)); if totals.isEmpty { Text("No prices added").font(.caption).foregroundStyle(.secondary) }; ForEach(totals.keys.sorted(), id: \.self) { currency in HStack { Text(currency).foregroundStyle(.secondary); Spacer(); Text(TravelMoney(amount: totals[currency]!, currency: currency).formatted) }.font(.subheadline) } }

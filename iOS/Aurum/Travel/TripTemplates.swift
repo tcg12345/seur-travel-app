@@ -30,7 +30,7 @@ extension JourneyDocument {
             if !includeCosts { event.cost = nil }; return event
         }
         template.hotels = hotels.map { hotel in
-            var hotel = hotel; hotel.confirmation = ""; hotel.notes = ""; hotel.overview = ""; hotel.roomType = ""
+            var hotel = hotel; hotel.checkOutTime = nil; hotel.confirmation = ""; hotel.notes = ""; hotel.overview = ""; hotel.roomType = ""
             hotel.guests = 2; hotel.rooms = 1; hotel.place.overview = ""
             if !includeCosts { hotel.cost = nil }; return hotel
         }

@@ -1365,3 +1365,108 @@ import MapKit
         XCTAssertFalse(TemplateCatalog.matches(TemplateCatalog.bundled[0], city: "Paris", tag: "art"))
     }
 }
+
+@MainActor final class JourneyConflictTests: XCTestCase {
+    private func trip() -> JourneyDocument {
+        JourneyDocument(title: "Paris", startDate: "2026-09-10", endDate: "2026-09-14", stops: [.init(name: "Paris", country: "France", arrival: "2026-09-10", nights: 4, latitude: 48.85, longitude: 2.35, timeZone: "Europe/Paris")])
+    }
+    private func event(_ d: JourneyDocument, _ minute: Int, duration: Int? = nil, day: Int = 0) -> JourneyEvent {
+        .init(stopID: d.stops[0].id, day: day, minute: minute, place: .init(name: "Dinner"), durationMinutes: duration)
+    }
+    private func arrival() -> FlightReservation {
+        .init(flightNumber: "AF1", departureAirport: "JFK", arrivalAirport: "CDG", departureDay: "2026-09-10", arrivalDay: "2026-09-10", departureTime: "09:00", arrivalTime: "20:00", departureLatitude: 40.64, departureLongitude: -73.78, arrivalLatitude: 49.0, arrivalLongitude: 2.55, departureZone: "America/New_York", arrivalZone: "Europe/Paris")
+    }
+    private func departure(_ day: String = "2026-09-14", time: String = "10:00") -> FlightReservation {
+        .init(flightNumber: "AF2", departureAirport: "CDG", arrivalAirport: "JFK", departureDay: day, arrivalDay: day, departureTime: time, arrivalTime: "12:00", departureLatitude: 49.0, departureLongitude: 2.55, arrivalLatitude: 40.64, arrivalLongitude: -73.78, departureZone: "Europe/Paris", arrivalZone: "America/New_York")
+    }
+    private func hotel() -> HotelReservation {
+        .init(place: .init(name: "Paris hotel", category: .hotel, city: "Paris"), checkIn: "2026-09-10", checkOut: "2026-09-14")
+    }
+    func testOverlapUsesKnownDurationsAndAllowsBackToBackPlans() {
+        var d = trip(); d.events = [event(d,600,duration:60),event(d,630)]
+        XCTAssertEqual(JourneyConflicts.detect(d).filter { $0.kind == .overlappingEvents }.count,1)
+        d.events[1].minute=660; XCTAssertTrue(JourneyConflicts.detect(d).isEmpty)
+        d.events[0].durationMinutes=nil; d.events[1].minute=610; XCTAssertTrue(JourneyConflicts.detect(d).isEmpty)
+        d.events[1].minute=600; XCTAssertEqual(JourneyConflicts.detect(d).count,1)
+        d.events[0].allDay=true; XCTAssertTrue(JourneyConflicts.detect(d).isEmpty)
+    }
+    func testOvernightOverlapAndResolutionAfterEdit() {
+        var d = trip(); d.events=[event(d,1410,duration:90),event(d,30,day:1)]
+        XCTAssertEqual(JourneyConflicts.detect(d).count,1)
+        let warning = JourneyConflicts.detect(d)[0]; d.events.reverse()
+        XCTAssertEqual(JourneyConflicts.detect(d)[0].id,warning.id)
+        d.events[0].minute=60; XCTAssertTrue(JourneyConflicts.detect(d).isEmpty)
+        d.events.removeAll(); XCTAssertTrue(JourneyConflicts.detect(d).isEmpty)
+    }
+    func testEventsInDifferentDestinationsCompareInstantsNotClockLabels() {
+        var d=trip(); d.stops.append(.init(name:"New York",arrival:"2026-09-10",nights:2,timeZone:"America/New_York"))
+        d.events=[event(d,15*60,duration:60),.init(stopID:d.stops[1].id,minute:9*60,kind:.meeting,title:"New York meeting",durationMinutes:60)]
+        XCTAssertEqual(JourneyConflicts.detect(d).count,1)
+        d.events[1].minute=15*60; XCTAssertTrue(JourneyConflicts.detect(d).isEmpty)
+        d.stops[1].timeZone=nil; d.events[1].minute=9*60; XCTAssertTrue(JourneyConflicts.detect(d).isEmpty)
+    }
+    func testDinnerBeforeArrivalAndDifferentAirportExclusion() {
+        var d=trip(); d.flights=[arrival()]; d.events=[event(d,19*60)]
+        XCTAssertEqual(JourneyConflicts.detect(d).first?.kind,.beforeArrival)
+        d.events[0].minute=20*60; XCTAssertTrue(JourneyConflicts.detect(d).isEmpty)
+        d.events[0].minute=19*60; d.flights[0].arrivalLatitude=35.55; d.flights[0].arrivalLongitude=139.78
+        XCTAssertTrue(JourneyConflicts.detect(d).isEmpty)
+    }
+    func testArrivalConversionAcrossMidnightAndMissingZones() {
+        var d=trip(); d.flights=[arrival()]; d.flights[0].arrivalZone="UTC"; d.flights[0].arrivalTime="23:30"
+        d.events=[event(d,60,day:1)]
+        XCTAssertEqual(JourneyConflicts.detect(d).first?.kind,.beforeArrival)
+        d.events[0].minute=90; XCTAssertTrue(JourneyConflicts.detect(d).isEmpty)
+        d.stops[0].timeZone=nil; d.flights[0].arrivalZone=""; d.flights[0].arrivalTime="20:00"; d.events=[event(d,19*60)]
+        XCTAssertEqual(JourneyConflicts.detect(d).first?.kind,.beforeArrival)
+    }
+    func testArrivalAfterMidnightFlagsPreviousEveningPlan() {
+        var d=trip(); d.flights=[arrival()]; d.flights[0].arrivalDay="2026-09-11"; d.flights[0].arrivalTime="01:00"
+        d.events=[event(d,19*60)]
+        XCTAssertEqual(JourneyConflicts.detect(d).first?.kind,.beforeArrival)
+    }
+    func testLaterReturnFlightDoesNotInvalidatePlansAfterFirstArrival() {
+        var d=trip(); var first=arrival(); first.arrivalTime="10:00"; d.flights=[first,arrival()]
+        d.events=[event(d,19*60)]
+        XCTAssertTrue(JourneyConflicts.detect(d).isEmpty)
+    }
+    func testHotelCheckoutDateAndExplicitTimeWithoutAssumedDeadline() {
+        var d=trip(); d.hotels=[hotel()]; d.flights=[departure()]
+        XCTAssertTrue(JourneyConflicts.detect(d).isEmpty) // No checkout hour has been recorded.
+        d.hotels[0].checkOutTime="11:00"; XCTAssertEqual(JourneyConflicts.detect(d).first?.kind,.checkoutAfterFlight)
+        d.hotels[0].checkOutTime="10:00"; XCTAssertTrue(JourneyConflicts.detect(d).isEmpty)
+        d.hotels[0].checkOutTime=nil; d.flights=[departure("2026-09-13")]
+        XCTAssertEqual(JourneyConflicts.detect(d).first?.kind,.checkoutAfterFlight)
+        d.flights=[departure("2026-09-09")]; XCTAssertTrue(JourneyConflicts.detect(d).isEmpty)
+        d.flights=[departure()]; d.hotels[0].checkOutTime="11:00"; d.flights[0].departureLatitude=40.64; d.flights[0].departureLongitude = -73.78
+        XCTAssertTrue(JourneyConflicts.detect(d).isEmpty)
+    }
+    func testLocatedHotelDoesNotRequireAnAgendaStop() {
+        var d=trip(); d.stops=[]; d.hotels=[hotel()]; d.hotels[0].place.latitude=48.85; d.hotels[0].place.longitude=2.35
+        d.flights=[departure("2026-09-13")]
+        XCTAssertEqual(JourneyConflicts.detect(d).first?.kind,.checkoutAfterFlight)
+    }
+    func testUnknownHotelLocationDoesNotAttachItToWrongFlight() {
+        var d=trip(); d.hotels=[hotel()]; d.hotels[0].place.city="London"; d.hotels[0].checkOutTime="11:00"; d.flights=[departure()]
+        XCTAssertTrue(JourneyConflicts.detect(d).isEmpty)
+    }
+    func testFlexiblePlansOnlyCompareRelativeEventsWithinOneStop() {
+        var d=trip(); d.dateMode = .nights; d.flights=[arrival()]; d.hotels=[hotel()]; d.events=[event(d,600,duration:60),event(d,630)]
+        XCTAssertEqual(JourneyConflicts.detect(d).map(\.kind),[.overlappingEvents])
+        d.events[1].day=1; XCTAssertTrue(JourneyConflicts.detect(d).isEmpty)
+    }
+    func testInvalidClockAndDSTGapDoNotCreateWarnings() {
+        XCTAssertNil(JourneyConflicts.minute("24:00")); XCTAssertNil(JourneyConflicts.minute("12:60")); XCTAssertEqual(JourneyConflicts.minute("9:30"),570)
+        var d=trip(); d.stops[0].arrival="2026-03-29"; d.events=[event(d,150,duration:60),event(d,180)]
+        XCTAssertTrue(JourneyConflicts.detect(d).isEmpty) // 02:30 does not exist in Paris that day.
+        d.events[0].minute = -1; XCTAssertTrue(JourneyConflicts.detect(d).isEmpty)
+    }
+    func testCheckoutTimeLegacyRoundTripAndTemplatePrivacy() throws {
+        var d=trip(); d.hotels=[hotel()]
+        let old=try JSONDecoder().decode(JourneyDocument.self,from:JSONEncoder().encode(d)); XCTAssertNil(old.hotels[0].checkOutTime)
+        d.hotels[0].checkOutTime="11:30"
+        let restored=try JSONDecoder().decode(JourneyDocument.self,from:JSONEncoder().encode(d)); XCTAssertEqual(restored.hotels[0].checkOutTime,"11:30")
+        XCTAssertNil(try d.templated(meta:.init()).hotels[0].checkOutTime)
+        d.hotels[0].checkOutTime="25:00"; XCTAssertNotNil(d.validationError())
+    }
+}

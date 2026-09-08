@@ -235,6 +235,7 @@ export function validateDocument(d: any) {
     );
   }
   for (const h of d.hotels) {
+    requireValue(h.checkOutTime == null || (typeof h.checkOutTime === "string" && /^(?:[01]?\d|2[0-3]):[0-5]\d$/.test(h.checkOutTime)), "Invalid planned hotel checkout time.");
     place(h.place);
     money(h.cost);
     requireValue(
