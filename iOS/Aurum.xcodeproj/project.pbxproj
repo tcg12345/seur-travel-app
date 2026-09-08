@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		A567B87CD3439CA2A9D4E4D8 /* Travel/AccountSignIn.swift in Sources */ = {isa = PBXBuildFile; fileRef = 877C737A49B39E525D305ACB /* Travel/AccountSignIn.swift */; };
 		6A33828825070F146F50CB06 /* Travel/JourneyConflicts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52347DD4A0F1F5A3E21200C6 /* Travel/JourneyConflicts.swift */; };
 		FC6D0ECCAAA2B443691DB8C0 /* Travel/FriendsIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC06565654BD0C3A2D979277 /* Travel/FriendsIntents.swift */; };
 		A1A62CA14D89011881E553CF /* TripTemplates.json in Resources */ = {isa = PBXBuildFile; fileRef = 1F80DB39E010B5FAF788E595 /* TripTemplates.json */; };
@@ -83,6 +84,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		877C737A49B39E525D305ACB /* Travel/AccountSignIn.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Travel/AccountSignIn.swift"; sourceTree = "<group>"; };
 		52347DD4A0F1F5A3E21200C6 /* Travel/JourneyConflicts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Travel/JourneyConflicts.swift"; sourceTree = "<group>"; };
 		DC06565654BD0C3A2D979277 /* Travel/FriendsIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Travel/FriendsIntents.swift"; sourceTree = "<group>"; };
 		1F80DB39E010B5FAF788E595 /* TripTemplates.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = Resources/TripTemplates.json; sourceTree = "<group>"; };
@@ -194,6 +196,7 @@
 				35EF526550BED1EC047737E1 /* Travel/TravelServices.swift */,
 				19252540FA5E304E7378258A /* Travel/TravelSocialViews.swift */,
 				836A3CFEC5E2BE5AF3AB29DC /* Travel/TravelViews.swift */,
+				877C737A49B39E525D305ACB /* Travel/AccountSignIn.swift */,
 				52347DD4A0F1F5A3E21200C6 /* Travel/JourneyConflicts.swift */,
 				DC06565654BD0C3A2D979277 /* Travel/FriendsIntents.swift */,
 				3167B51F33C9897885C1E156 /* Travel/TravelStatsView.swift */,
@@ -398,6 +401,7 @@
 				B9EB3F10090B13AF70D9B66B /* Travel/TravelServices.swift in Sources */,
 				F143A7B751A70AAA3AAE8C26 /* Travel/TravelSocialViews.swift in Sources */,
 				C8A40D988C9FC3F7F1EA24DF /* Travel/TravelViews.swift in Sources */,
+				A567B87CD3439CA2A9D4E4D8 /* Travel/AccountSignIn.swift in Sources */,
 				6A33828825070F146F50CB06 /* Travel/JourneyConflicts.swift in Sources */,
 				FC6D0ECCAAA2B443691DB8C0 /* Travel/FriendsIntents.swift in Sources */,
 				CA7257E7494B64FB492658B5 /* Travel/TravelStatsView.swift in Sources */,
@@ -467,7 +471,6 @@
 				APNS_ENVIRONMENT = production;
 				INFOPLIST_KEY_APNSEnvironment = "$(APNS_ENVIRONMENT)";
 				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
-				INFOPLIST_FILE = Aurum/AppInfo.plist;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
@@ -585,7 +588,6 @@
 				APNS_ENVIRONMENT = development;
 				INFOPLIST_KEY_APNSEnvironment = "$(APNS_ENVIRONMENT)";
 				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
-				INFOPLIST_FILE = Aurum/AppInfo.plist;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;

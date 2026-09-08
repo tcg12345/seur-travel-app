@@ -73,9 +73,50 @@ private struct EmptyReply: Codable { var ok: Bool }
         }
     }
     func authenticate(handle: String, name: String, password: String, register: Bool) async throws {
+        let server = baseURL
         let response: TravelAuthResponse = try await request(register ? "/v1/auth/register" : "/v1/auth/login", method: "POST", body: ["handle": handle, "name": name, "password": password])
-        try Self.writeToken(response.token, for: baseURL)
-        token = response.token; account = response.user
+        try acceptAuthentication(response, server: server)
+    }
+    private func acceptAuthentication(_ response: TravelAuthResponse, server: String) throws {
+        guard baseURL == server else { throw JourneyError.message("The account server changed. Please sign in again.") }
+        try Self.writeToken(response.token, for: server)
+        token = response.token; account = response.user; savedFlights = []; savedFlightsError = nil
+    }
+    func authOptions() async throws -> AccountAuthOptions { try await request("/v1/auth/options") }
+    func signUpEmail(_ email: String, name: String, handle: String, password: String) async throws {
+        let _: PendingEmailAccount = try await request("/v1/auth/email/signup", method: "POST", body: ["email": email, "name": name, "handle": handle, "password": password])
+    }
+    func signInEmail(_ email: String, password: String) async throws {
+        let server = baseURL
+        let response: TravelAuthResponse = try await request("/v1/auth/email/login", method: "POST", body: ["email": email, "password": password])
+        try acceptAuthentication(response, server: server)
+    }
+    func verifyEmail(_ email: String, code: String) async throws {
+        let server = baseURL
+        let response: TravelAuthResponse = try await request("/v1/auth/email/verify", method: "POST", body: ["email": email, "code": code])
+        try acceptAuthentication(response, server: server)
+    }
+    func resendEmail(_ email: String) async throws { let _: EmptyReply = try await request("/v1/auth/email/resend", method: "POST", body: ["email": email]) }
+    func signInApple(idToken: String, nonce: String, name: String) async throws {
+        let server = baseURL
+        let response: TravelAuthResponse = try await request("/v1/auth/apple", method: "POST", body: ["idToken": idToken, "nonce": nonce, "name": name])
+        try acceptAuthentication(response, server: server)
+    }
+    func googleSignInURL(challenge: String) async throws -> URL {
+        let link: TravelLink = try await request("/v1/auth/google/start", method: "POST", body: ["challenge": challenge])
+        guard let url = URL(string: link.url), url.scheme == "https", url.host == URL(string: baseURL)?.host, url.path == "/auth/v1/authorize" else { throw JourneyError.message("Google sign-in returned an invalid address.") }
+        return url
+    }
+    func finishGoogleSignIn(code: String, verifier: String) async throws {
+        let server = baseURL
+        let response: TravelAuthResponse = try await request("/v1/auth/google/exchange", method: "POST", body: ["code": code, "verifier": verifier])
+        try acceptAuthentication(response, server: server)
+    }
+    func updateProfile(name: String, handle: String) async throws {
+        let server = baseURL, sessionToken = token
+        let user: TravelAccount = try await request("/v1/me", method: "PUT", body: ["name": name, "handle": handle])
+        guard baseURL == server && token == sessionToken else { return }
+        account = user
     }
     func deleteAccount() async throws {
         let _: EmptyReply = try await request("/v1/account", method: "DELETE", body: [:])

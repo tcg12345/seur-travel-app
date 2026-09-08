@@ -68,8 +68,8 @@ export async function auth(body: any, register: boolean) {
     'Use a username with 3–32 letters, numbers or underscores.',
   );
   requireValue(
-    typeof password === 'string' && password.length >= 12 && password.length <= 256,
-    'Use a password with 12–256 characters.',
+    typeof password === 'string' && password.length >= 8 && password.length <= 256,
+    'Use a password with 8–256 characters.',
   );
   // Username-only accounts preserve the existing app contract. These internal identifiers
   // are never presented as verified real email addresses or used to send email.

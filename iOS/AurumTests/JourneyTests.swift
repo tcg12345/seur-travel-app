@@ -1470,3 +1470,22 @@ import MapKit
         d.hotels[0].checkOutTime="25:00"; XCTAssertNotNil(d.validationError())
     }
 }
+
+@MainActor final class AccountSignInTests: XCTestCase {
+    func testPKCEVerifierEntropyAndStandardChallengeVector() throws {
+        let a=try AccountSignIn.randomToken(),b=try AccountSignIn.randomToken()
+        XCTAssertEqual(a.count,43);XCTAssertNotEqual(a,b)
+        XCTAssertNil(a.range(of:"[^A-Za-z0-9_-]",options:.regularExpression))
+        XCTAssertEqual(AccountSignIn.challenge("dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"),"E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM")
+        XCTAssertEqual(AccountSignIn.nonceHash("abc"),"ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")
+    }
+    func testCallbackRequiresExactRegisteredAppRouteAndSuccessfulCode() throws {
+        XCTAssertEqual(try AccountSignIn.code(from:URL(string:"seur://auth/callback?code=hello")!),"hello")
+        for value in ["https://auth/callback?code=hello","seur://evil/callback?code=hello","seur://auth/other?code=hello","seur://auth/callback?error=denied&code=hello","seur://auth/callback"] { XCTAssertThrowsError(try AccountSignIn.code(from:URL(string:value)!)) }
+    }
+    func testEmailAndProviderConfigurationDecoding() throws {
+        XCTAssertTrue(AccountSignIn.validEmail("me@example.com"));XCTAssertFalse(AccountSignIn.validEmail("me@"));XCTAssertFalse(AccountSignIn.validEmail("me @example.com"))
+        let options=try JSONDecoder().decode(AccountAuthOptions.self,from:Data(#"{"apple":true,"google":false,"email":true,"minimumPasswordLength":8}"#.utf8))
+        XCTAssertEqual(options.minimumPasswordLength,8);XCTAssertFalse(options.google)
+    }
+}

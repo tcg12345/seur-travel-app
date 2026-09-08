@@ -1,3 +1,4 @@
+import { accountAuth, authOptions } from "./account-auth.ts";
 import {
   decodePhoto,
   object,
@@ -249,6 +250,16 @@ export async function handler(req: Request): Promise<Response> {
         requireValue(object(body), "JSON body must be an object.");
       }
     }
+    if (path === "/v1/auth/options" && method === "GET") return json(await authOptions());
+    const modernAuth = path.match(/^\/v1\/auth\/(email\/(signup|login|verify|resend)|apple|google\/(start|exchange))$/);
+    if (modernAuth && method === "POST") {
+      await limit("auth:" + network, 20, 300);
+      if (body.email) await limit("auth-email:" + await digest(String(body.email).trim().toLowerCase()), 10, 300);
+      if (["email/signup", "email/resend"].includes(modernAuth[1])) {
+        await limit("auth-mail:" + await digest(String(body.email).trim().toLowerCase()), 1, 60);
+      }
+      return json(await accountAuth(modernAuth[1], body));
+    }
     if (
       ["/v1/auth/register", "/v1/auth/login"].includes(path) &&
       method === "POST"
@@ -275,6 +286,12 @@ export async function handler(req: Request): Promise<Response> {
       return json({ ok: true });
     }
     const uid = await account(req);
+    if (path === "/v1/me" && method === "PUT") {
+      requireValue(typeof body.name === "string" && body.name.trim().length > 0 && body.name.length <= 100, "Enter your name.");
+      requireValue(typeof body.handle === "string" && /^[a-z0-9_]{3,32}$/.test(body.handle), "Choose a username with 3–32 letters, numbers or underscores.");
+      await platform("/rest/v1/travel_profiles?id=eq." + uid, "PATCH", {name:body.name.trim(),handle:body.handle});
+      return json(await rpc("travel_user", {x:uid}));
+    }
     if (path === "/v1/recaps" && method === "POST") {
       await limit("recap-publish:" + uid, 10);
       requireValue(Deno.env.get("RECAP_WEB_URL"), "Recap web sharing is being configured. Please try again shortly.", 503);

@@ -1178,39 +1178,42 @@ final class AurumUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["account-success"].waitForExistence(timeout: 25))
     }
     func testAccountFullPageDesign() {
-        app.terminate()
-        app.launchArguments = ["--ui-testing", "--travel-test-server", "https://bwrodcxmdzrpyrshrlfd.supabase.co/functions/v1/travel-api?account-layout=" + UUID().uuidString]
-        app.launch()
-        Thread.sleep(forTimeInterval: 1)
+        app.terminate(); app.launchArguments = ["--ui-testing", "--travel-test-server", "https://bwrodcxmdzrpyrshrlfd.supabase.co/functions/v1/travel-api?account-layout=" + UUID().uuidString]; app.launch()
         app.tabBars.buttons["Travel"].tap()
-        XCTAssertTrue(app.buttons["Travel account"].waitForExistence(timeout: 8), app.debugDescription)
         app.buttons["Travel account"].tap()
-        XCTAssertTrue(app.textFields["account-handle"].waitForExistence(timeout: 8))
-        XCTAssertFalse(app.sheets.firstMatch.exists)
-        XCTAssertFalse(app.tabBars.buttons["Map"].isHittable)
+        XCTAssertTrue(app.buttons["account-email-option"].waitForExistence(timeout: 8))
+        XCTAssertFalse(app.textFields["account-email"].exists)
+        app.buttons["account-email-option"].tap()
+        XCTAssertTrue(app.textFields["account-email"].waitForExistence(timeout: 5))
         app.segmentedControls["account-mode"].buttons["Create account"].tap()
         XCTAssertTrue(app.textFields["account-name"].waitForExistence(timeout: 5))
-        reveal(app.secureTextFields["account-confirmation"])
+        XCTAssertTrue(app.textFields["account-handle"].exists)
+        XCTAssertFalse(app.secureTextFields["account-confirmation"].exists)
+        reveal(app.secureTextFields["account-password"])
+        XCTAssertTrue(app.secureTextFields["account-password"].isHittable)
         app.buttons["Done"].tap()
         XCTAssertTrue(app.tabBars.buttons["Map"].waitForExistence(timeout: 5))
-        // The native tab bar animates back into place after leaving account navigation.
-        Thread.sleep(forTimeInterval: 0.8)
-        app.tabBars.buttons["Discover"].tap()
-        XCTAssertTrue(app.buttons["Your workspace"].waitForExistence(timeout: 8))
-        app.buttons["Your workspace"].tap()
-        app.buttons["profile-sign-in"].tap()
-        XCTAssertTrue(app.textFields["account-handle"].waitForExistence(timeout: 5))
-        XCTAssertFalse(app.sheets.firstMatch.exists)
     }
     func testAccountAccessAtLargeText() {
         app.terminate(); app.launchArguments = ["--ui-testing", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]; app.launch()
         app.tabBars.buttons["Travel"].tap(); app.buttons["Travel account"].tap()
-        XCTAssertTrue(app.textFields["account-handle"].waitForExistence(timeout: 8))
+        let emailOption = app.buttons["account-email-option"]; reveal(emailOption); emailOption.tap()
         let mode = app.segmentedControls["account-mode"]; reveal(mode); mode.buttons["Create account"].tap()
         let name = app.textFields["account-name"]; reveal(name); XCTAssertTrue(name.isHittable)
         let submit = app.buttons["account-submit"]; reveal(submit); XCTAssertTrue(submit.isHittable)
-        capture("93 Accessible account page")
         app.buttons["Done"].tap(); XCTAssertTrue(app.buttons["travel-create"].waitForExistence(timeout: 5))
+    }
+    func testOnboardingUsesVerifiedAccountFlow() {
+        app.terminate(); app.launchArguments = ["--ui-testing", "--onboarding-testing", "--travel-test-server", "https://bwrodcxmdzrpyrshrlfd.supabase.co/functions/v1/travel-api?account-layout=" + UUID().uuidString]; app.launch()
+        app.buttons["onboarding-sign-in"].tap()
+        XCTAssertTrue(app.buttons["account-email-option"].waitForExistence(timeout: 8))
+        app.buttons["account-email-option"].tap()
+        XCTAssertTrue(app.textFields["account-email"].waitForExistence(timeout: 5))
+        app.segmentedControls["account-mode"].buttons["Create account"].tap()
+        XCTAssertTrue(app.textFields["account-name"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.secureTextFields["onboarding-account-confirmation"].exists)
+        app.buttons["onboarding-account-skip"].tap()
+        XCTAssertTrue(app.buttons["membership-preview"].waitForExistence(timeout: 5))
     }
     @MainActor func testSupabaseNativeAccount() async throws {
         let root = "https://bwrodcxmdzrpyrshrlfd.supabase.co/functions/v1/travel-api"

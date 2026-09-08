@@ -1,4 +1,5 @@
 import SwiftUI
+import AuthenticationServices
 
 struct TravelAccountView: View {
     var createAccount = false
@@ -11,17 +12,28 @@ struct TravelAccountPage: View {
     @Environment(JourneyLibrary.self) private var library
     @Environment(\.dismiss) private var dismiss
     @State var register = false
+    var onboardingBack: (() -> Void)? = nil
+    var onboardingContinue: (() -> Void)? = nil
     @State private var handle = ""
     @State private var name = ""
     @State private var password = ""
-    @State private var confirmation = ""
+    @State private var email = ""
+    @State private var emailForm = false
+    @State private var pendingEmail: String?
+    @State private var verificationCode = ""
+    @State private var resendAfter = Date.distantPast
+    @State private var showPassword = false
+    @State private var options: AccountAuthOptions?
+    @State private var appleNonce = ""
+    @State private var googleSession = GoogleSignInSession()
+    @State private var editingProfile = false
     @State private var loading = false
     @State private var message: String?
     @State private var cloud: [RemoteJourney] = []
     @State private var confirmingDeletion = false
     @State private var justAuthenticated = false
     @FocusState private var focus: Field?
-    private enum Field { case name, handle, password, confirmation }
+    private enum Field { case name, handle, email, password }
     @Environment(\.dynamicTypeSize) private var typeSize
     var body: some View {
         Group {
@@ -36,7 +48,8 @@ struct TravelAccountPage: View {
                             }
                         }.padding(.vertical, 10)
                         if justAuthenticated { Label("You’re signed in", systemImage: "checkmark.circle.fill").foregroundStyle(Color.bronze).accessibilityIdentifier("account-success") }
-                        Button("Continue exploring") { dismiss() }.accessibilityIdentifier("account-continue")
+                        Button("Edit name or username") { editingProfile = true }
+                        Button(onboardingContinue == nil ? "Continue exploring" : "Continue to membership") { if let onboardingContinue { onboardingContinue() } else { dismiss() } }.accessibilityIdentifier("account-continue")
                     }
                     Section("Cloud trips") {
                         Button("Refresh cloud journeys") { Task { await loadCloud() } }.disabled(loading)
@@ -55,18 +68,28 @@ struct TravelAccountPage: View {
 
                     if let message { Section { Text(message).font(.subheadline).accessibilityIdentifier("account-message") } }
                 }.scrollContentBackground(.hidden)
-            } else { guestPage }
+            } else if pendingEmail != nil { verificationPage } else { guestPage }
         }
         .background(Color.canvas).scrollDismissesKeyboard(.interactively)
         .navigationTitle(api.isSignedIn ? "Your account" : "")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .tabBar)
         .toolbarBackground(.hidden, for: .navigationBar)
-        .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() }.disabled(loading) } }
+        .toolbar {
+            if let onboardingBack {
+                ToolbarItem(placement: .cancellationAction) { Button("Back", action: onboardingBack).disabled(loading).accessibilityIdentifier("onboarding-account-back") }
+            }
+            ToolbarItem(placement: .confirmationAction) {
+                if let onboardingContinue {
+                    Button(api.isSignedIn ? "Continue" : "Skip", action: onboardingContinue).disabled(loading).accessibilityIdentifier("onboarding-account-skip")
+                } else { Button("Done") { dismiss() }.disabled(loading) }
+            }
+        }
         .interactiveDismissDisabled(loading)
-        .onChange(of: register) { focus = nil; password = ""; confirmation = ""; message = nil }
-        .onDisappear { password = ""; confirmation = "" }
-        .task { try? await api.refresh(); if api.isSignedIn { await loadCloud() } }
+        .onChange(of: register) { focus = nil; password = ""; pendingEmail = nil; message = nil }
+        .onDisappear { password = ""; appleNonce = "" }
+        .task { try? await api.refresh(); options = try? await api.authOptions(); if api.isSignedIn { await loadCloud() } }
+        .sheet(isPresented: $editingProfile) { AccountProfileEditor() }
         .confirmationDialog("Delete your cloud account and all cloud trips?", isPresented: $confirmingDeletion, titleVisibility: .visible) {
             Button("Delete account", role: .destructive) { Task { loading = true; defer { loading = false }; do { try await api.deleteAccount(); cloud = []; justAuthenticated = false } catch { message = error.localizedDescription } } }
             Button("Cancel", role: .cancel) { }
@@ -90,13 +113,13 @@ struct TravelAccountPage: View {
                         Text("Made for the journey.").font(.system(.title, design: .serif)).fixedSize(horizontal: false, vertical: true)
                     }.foregroundStyle(.white).padding(24)
                 }
-                .frame(height: typeSize.isAccessibilitySize ? 250 : 205)
+                .frame(height: typeSize.isAccessibilitySize ? 200 : 135)
                 .clipShape(.rect(cornerRadius: 28))
                 .padding(.horizontal, 16).accessibilityElement(children: .combine)
 
                 VStack(alignment: .leading, spacing: 24) {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text(register ? "A world of your own." : "Welcome back.")
+                        Text(register ? "Your journey starts here." : "Welcome back.")
                             .font(.system(.largeTitle, design: .serif)).tracking(-0.8)
                             .fixedSize(horizontal: false, vertical: true).accessibilityAddTraits(.isHeader)
                         Text(register ? "Save your trips. Keep your discoveries." : "Your next journey is waiting.")
@@ -107,48 +130,54 @@ struct TravelAccountPage: View {
                         Text("Create account").tag(true)
                     }.pickerStyle(.segmented).accessibilityIdentifier("account-mode").disabled(loading)
 
-                    VStack(spacing: 0) {
-                        if register {
-                            field("Your name", icon: "person") {
-                                TextField("Display name", text: $name).textContentType(.name).focused($focus, equals: .name)
-                                    .submitLabel(.next).onSubmit { focus = .handle }.accessibilityIdentifier("account-name")
+                    if !emailForm {
+                        socialButtons
+                        Button { emailForm = true; message = nil } label: { Label("Continue with email", systemImage: "envelope").font(.body.weight(.semibold)).frame(maxWidth: .infinity).padding(.vertical, 14) }.buttonStyle(.glass).accessibilityIdentifier("account-email-option")
+                        if !register { Text("Existing accounts can also sign in with their username.").font(.caption).foregroundStyle(.secondary) }
+                    } else {
+                        VStack(spacing: 0) {
+                            if register {
+                                field("Your name", icon: "person") { TextField("Display name", text: $name).textContentType(.name).focused($focus, equals: .name).accessibilityIdentifier("account-name") }
+                                Divider().padding(.leading, 52)
+                                field("Username", icon: "at") { TextField("How friends find you", text: $handle).textContentType(.username).textInputAutocapitalization(.never).autocorrectionDisabled().focused($focus, equals: .handle).accessibilityIdentifier("account-handle") }
+                                Divider().padding(.leading, 52)
+                            }
+                            field(register ? "Email" : "Email or username", icon: "envelope") {
+                                TextField(register ? "you@example.com" : "Email or username", text: $email).textContentType(.username).keyboardType(.emailAddress).textInputAutocapitalization(.never).autocorrectionDisabled().focused($focus, equals: .email).submitLabel(.next).onSubmit { focus = .password }.accessibilityIdentifier("account-email")
                             }
                             Divider().padding(.leading, 52)
-                        }
-                        field("Username", icon: "at") {
-                            TextField(register ? "Choose a username" : "Username", text: $handle).textContentType(.username)
-                                .textInputAutocapitalization(.never).autocorrectionDisabled().focused($focus, equals: .handle)
-                                .submitLabel(.next).onSubmit { focus = .password }.accessibilityIdentifier("account-handle")
-                        }
-                        Divider().padding(.leading, 52)
-                        field("Password", icon: "lock") {
-                            SecureField(register ? "12 or more characters" : "Password", text: $password).textContentType(register ? .newPassword : .password)
-                                .focused($focus, equals: .password).submitLabel(register ? .next : .go)
-                                .onSubmit { if register { focus = .confirmation } else { submit() } }.accessibilityIdentifier("account-password")
-                        }
-                        if register {
-                            Divider().padding(.leading, 52)
-                            field("Confirm password", icon: "checkmark.shield") {
-                                SecureField("Repeat your password", text: $confirmation).textContentType(.newPassword).focused($focus, equals: .confirmation)
-                                    .submitLabel(.go).onSubmit { submit() }.accessibilityIdentifier("account-confirmation")
+                            field("Password", icon: "lock") {
+                                HStack {
+                                    Group { if showPassword { TextField(register ? "At least 8 characters" : "Password", text: $password) } else { SecureField(register ? "At least 8 characters" : "Password", text: $password) } }
+                                        .textContentType(register ? .newPassword : .password).focused($focus, equals: .password).submitLabel(.go).onSubmit { submit() }.accessibilityIdentifier("account-password")
+                                    Button { showPassword.toggle() } label: { Image(systemName: showPassword ? "eye.slash" : "eye").foregroundStyle(.secondary) }.accessibilityLabel(showPassword ? "Hide password" : "Show password")
+                                }
                             }
+                        }.cardSurface(cornerRadius: 24).disabled(loading)
+                        if register { Text("We’ll send a verification email before signing you in. Passwords need at least 8 characters.").font(.caption).foregroundStyle(.secondary) }
+                        else if AccountSignIn.validEmail(email.trimmingCharacters(in: .whitespacesAndNewlines)) {
+                            Button("Finish verifying your email") {
+                                pendingEmail = email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                                verificationCode = ""; message = nil
+                            }.font(.subheadline).disabled(loading)
                         }
                     }
-                    .cardSurface(cornerRadius: 24)
-                    .disabled(loading)
                     if let message {
                         Label(message, systemImage: "exclamationmark.circle").font(.subheadline).foregroundStyle(.red)
                             .fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("account-message")
                     }
-                    Button(action: submit) {
+                    if emailForm { Button(action: submit) {
                         HStack(spacing: 12) {
                             Spacer()
                             if loading { ProgressView().tint(.white) }
-                            Text(loading ? "Connecting…" : register ? "Create account" : "Sign in").fontWeight(.semibold)
+                            Text(loading ? "Connecting…" : register ? "Create account & verify email" : "Sign in").fontWeight(.semibold)
                             if !loading { Image(systemName: "arrow.right") }
                             Spacer()
                         }.padding(.vertical, 14).frame(minHeight: 48)
                     }.buttonStyle(.glassProminent).tint(Color.bronze).disabled(loading).accessibilityIdentifier("account-submit")
+                        if !register && AccountSignIn.validEmail(email.trimmingCharacters(in: .whitespacesAndNewlines)) { Button("Need to verify your email?") { pendingEmail = email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(); message = nil }.font(.subheadline).disabled(loading) }
+                        Button("Other sign-in options") { emailForm = false; focus = nil; message = nil }.font(.subheadline).disabled(loading)
+                    }
                 }.padding(.horizontal, 24).padding(.top, 28).padding(.bottom, 32)
             }
         }.scrollEdgeEffectHidden(true, for: .top).accessibilityIdentifier("account-full-page")
@@ -163,25 +192,82 @@ struct TravelAccountPage: View {
             }
         }.padding(18)
     }
-    private func submit() {
-        guard !loading else { return }
-        message = nil
-        let username = handle.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard username.range(of: "^[a-z0-9_]{3,32}$", options: .regularExpression) != nil else { message = "Enter a username with 3–32 letters, numbers or underscores."; focus = .handle; return }
-        guard !password.isEmpty else { message = "Enter your password."; focus = .password; return }
-        let displayName = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        if register {
-            guard !displayName.isEmpty && displayName.count <= 100 else { message = "Enter your name (up to 100 characters)."; focus = .name; return }
-            guard (12...256).contains(password.count) else { message = "Use a password with 12–256 characters."; focus = .password; return }
-            guard password == confirmation else { message = "Your passwords don’t match."; focus = .confirmation; return }
+    private var socialButtons: some View {
+        VStack(spacing: 12) {
+            SignInWithAppleButton(register ? .signUp : .signIn) { request in
+                do { appleNonce = try AccountSignIn.randomToken(); request.requestedScopes = [.fullName, .email]; request.nonce = AccountSignIn.nonceHash(appleNonce); request.state = appleNonce; loading = true; message = nil }
+                catch { message = error.localizedDescription; appleNonce = "" }
+            } onCompletion: { result in
+                Task { @MainActor in
+                    defer { loading = false; appleNonce = "" }
+                    do {
+                        let authorization = try result.get()
+                        guard !appleNonce.isEmpty, let credential = authorization.credential as? ASAuthorizationAppleIDCredential,
+                              credential.state == appleNonce, let data = credential.identityToken, let idToken = String(data: data, encoding: .utf8) else { throw JourneyError.message("Apple sign-in did not finish. Please try again.") }
+                        let name = credential.fullName.map { PersonNameComponentsFormatter().string(from: $0) } ?? ""
+                        try await api.signInApple(idToken: idToken, nonce: appleNonce, name: name)
+                        await authenticated()
+                    } catch { if (error as NSError).code != ASAuthorizationError.canceled.rawValue { message = error.localizedDescription } }
+                }
+            }.signInWithAppleButtonStyle(.whiteOutline).frame(height: 52).clipShape(.rect(cornerRadius: 12)).disabled(loading || options?.apple != true).accessibilityIdentifier("account-apple")
+            Button { Task { await googleSignIn() } } label: {
+                HStack(spacing: 12) { Image("GoogleSignIn").resizable().scaledToFit().frame(width: 20, height: 20); Text("Continue with Google").fontWeight(.medium).foregroundStyle(Color.black) }.frame(maxWidth: .infinity).frame(height: 52)
+            }.buttonStyle(.plain).background(Color.white, in: .rect(cornerRadius: 12)).overlay { RoundedRectangle(cornerRadius: 12).stroke(Color.primary.opacity(0.2)) }.disabled(loading || options?.google != true).opacity(options?.google == true ? 1 : 0.5).accessibilityIdentifier("account-google")
+            if options?.apple == false || options?.google == false { Text("Some sign-in options are not available yet.").font(.caption).foregroundStyle(.secondary) }
+            if options == nil { Button("Reload sign-in options") { Task { options = try? await api.authOptions() } }.font(.caption) }
         }
+    }
+    private var verificationPage: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 22) {
+                Image(systemName: "envelope.badge.shield.half.filled").font(.system(size: 40, weight: .light)).foregroundStyle(Color.bronze)
+                Text("Check your inbox").font(.system(.largeTitle, design: .serif))
+                Text("We sent a verification email to **\(pendingEmail ?? "")**. Enter its code below, or tap the email’s verification link and return here.").font(.subheadline).foregroundStyle(.secondary)
+                TextField("Verification code", text: $verificationCode).keyboardType(.numberPad).textContentType(.oneTimeCode).font(.title2.monospacedDigit()).padding(18).cardSurface(cornerRadius: 16).onChange(of: verificationCode) { _, value in verificationCode = String(value.filter(\.isNumber).prefix(10)) }.accessibilityIdentifier("account-verification-code")
+                Button("Verify & continue") { Task { await verify() } }.buttonStyle(.glassProminent).disabled(loading || !(6...10).contains(verificationCode.count)).accessibilityIdentifier("account-verify")
+                if !password.isEmpty { Button("I verified using the email link") { Task { loading = true; defer { loading = false }; do { try await api.signInEmail(pendingEmail ?? "", password: password); await authenticated() } catch { message = error.localizedDescription } } }.font(.subheadline).disabled(loading) }
+                TimelineView(.periodic(from: .now, by: 1)) { context in
+                    let remaining = max(0, Int(ceil(resendAfter.timeIntervalSince(context.date))))
+                    Button(remaining > 0 ? "Resend available in \(remaining)s" : "Resend verification email") { Task { loading = true; defer { loading = false }; do { try await api.resendEmail(pendingEmail ?? ""); resendAfter = .now.addingTimeInterval(60); message = "Check your inbox and spam folder for the new email." } catch { message = error.localizedDescription } } }.font(.subheadline).disabled(loading || remaining > 0)
+                }
+                if loading { ProgressView() }
+                if let message { Text(message).font(.subheadline).foregroundStyle(.secondary).accessibilityIdentifier("account-message") }
+                Button("Back to email sign-in") { pendingEmail = nil; verificationCode = ""; register = false; emailForm = true; message = nil }.font(.subheadline).disabled(loading)
+            }.padding(26)
+        }
+    }
+    private func authenticated() async { password = ""; pendingEmail = nil; verificationCode = ""; justAuthenticated = true; await loadCloud() }
+    private func verify() async {
+        guard let pendingEmail, !loading else { return }; loading = true; defer { loading = false }
+        do { try await api.verifyEmail(pendingEmail, code: verificationCode); await authenticated() } catch { message = error.localizedDescription }
+    }
+    private func googleSignIn() async {
+        guard !loading else { return }; loading = true; message = nil; defer { loading = false }
+        do {
+            let verifier = try AccountSignIn.randomToken(), url = try await api.googleSignInURL(challenge: AccountSignIn.challenge(verifier))
+            let callback = try await googleSession.signIn(url: url)
+            try await api.finishGoogleSignIn(code: AccountSignIn.code(from: callback), verifier: verifier)
+            await authenticated()
+        } catch { if (error as NSError).code != ASWebAuthenticationSessionError.canceledLogin.rawValue { message = error.localizedDescription } }
+    }
+    private func submit() {
+        guard !loading else { return }; message = nil
+        let address = email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let username = handle.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !password.isEmpty else { message = "Enter your password."; focus = .password; return }
+        if register {
+            guard AccountSignIn.validEmail(address) else { message = "Enter a valid email address."; focus = .email; return }
+            guard username.range(of: "^[a-z0-9_]{3,32}$", options: .regularExpression) != nil else { message = "Choose a username with 3–32 letters, numbers or underscores."; focus = .handle; return }
+            guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && name.count <= 100 else { message = "Enter your name (up to 100 characters)."; focus = .name; return }
+            guard (8...256).contains(password.count) else { message = "Use a password with 8–256 characters."; focus = .password; return }
+        } else if !AccountSignIn.validEmail(address) && address.range(of: "^[a-z0-9_]{3,32}$", options: .regularExpression) == nil { message = "Enter your email or existing username."; focus = .email; return }
         focus = nil; loading = true
         Task { @MainActor in
             defer { loading = false }
             do {
-                try await api.authenticate(handle: username, name: displayName, password: password, register: register)
-                password = ""; confirmation = ""; justAuthenticated = true
-                await loadCloud()
+                if register { try await api.signUpEmail(address, name: name.trimmingCharacters(in: .whitespacesAndNewlines), handle: username, password: password); pendingEmail = address; resendAfter = .now.addingTimeInterval(60) }
+                else if address.contains("@") { try await api.signInEmail(address, password: password); await authenticated() }
+                else { try await api.authenticate(handle: address, name: "", password: password, register: false); await authenticated() }
             } catch { message = error.localizedDescription }
         }
     }
