@@ -15,6 +15,7 @@ struct DiscoverView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 30) {
+                DiscoverCurrentTripCard()
                 startingPoint
                 browseShortcuts
                 planningShortcut
@@ -192,6 +193,82 @@ struct DiscoverView: View {
             } label: {
                 planningLabel("Let’s plan it together", detail: "Ask Concierge for ideas or a complete itinerary.", symbol: "sparkles")
             }.buttonStyle(PressStyle()).accessibilityIdentifier("discover-concierge")
+        }
+    }
+}
+
+
+/// A local, offline-ready snapshot of the active trip; the full itinerary stays one tap away.
+private struct DiscoverCurrentTripCard: View {
+    @Environment(JourneyLibrary.self) private var library
+    @Environment(TravelAPI.self) private var api
+    @Environment(\.dynamicTypeSize) private var typeSize
+    @State private var statuses = TodayFlightStatusStore.shared
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 60)) { timeline in
+            let now = TodayClock.now(timeline.date)
+            if let trip = TodayPlanner.activeTrip(library.documents, now: now) {
+                let context = TodayPlanner.context(trip, now: now)
+                // Reuse cached flight updates without adding background requests on Discover.
+                let snapshots = Dictionary(uniqueKeysWithValues: trip.flights.compactMap { flight in
+                    statuses.snapshot(flight, server: api.baseURL).map { (flight.id, $0) }
+                })
+                let items = TodayPlanner.items(trip, day: context.day, zone: context.zone, snapshots: snapshots)
+                NavigationLink { JourneyDetailView(id: trip.id) } label: {
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack(spacing: 6) {
+                            Circle().fill(Color.teal).frame(width: 6, height: 6)
+                            Text("ON YOUR TRIP").font(.caption2.weight(.semibold)).tracking(1)
+                            Spacer()
+                            Image(systemName: "chevron.right").font(.caption.weight(.semibold))
+                        }.foregroundStyle(Color.bronze)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(trip.title.isEmpty ? trip.routeLabel : trip.title)
+                                .font(.system(.title3, design: .serif).weight(.semibold))
+                                .foregroundStyle(.primary).lineLimit(2)
+                            Text([context.stop?.name ?? "", "Day \(TravelDay.distance(trip.startDate ?? context.day, context.day) + 1)"].filter { !$0.isEmpty }.joined(separator: " · "))
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                        Divider()
+                        HStack {
+                            Text("Today").font(.caption.weight(.semibold)).foregroundStyle(.primary)
+                            Spacer()
+                            Text(TravelDay.label(context.day)).font(.caption).foregroundStyle(.secondary)
+                        }
+                        if items.isEmpty {
+                            Text("No activities today").font(.subheadline).foregroundStyle(.secondary)
+                        } else {
+                            VStack(spacing: 10) {
+                                ForEach(items.prefix(3)) { item in
+                                    activity(item)
+                                }
+                            }
+                            if items.count > 3 {
+                                Text("+\(items.count - 3) more today").font(.caption.weight(.medium)).foregroundStyle(Color.bronze)
+                            }
+                        }
+                    }.padding(18).frame(maxWidth: .infinity, alignment: .leading)
+                        .cardSurface(cornerRadius: 20, emphasized: true)
+                        .contentShape(.rect(cornerRadius: 20))
+                }.buttonStyle(PressStyle())
+                    .accessibilityIdentifier("discover-current-trip")
+                    .accessibilityHint("Open this trip’s itinerary")
+            }
+        }
+    }
+
+    private func activity(_ item: TodayItem) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Image(systemName: item.symbol).font(.caption).foregroundStyle(Color.bronze)
+                .frame(width: 18).accessibilityHidden(true)
+            let layout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 3)) : AnyLayout(HStackLayout(spacing: 10))
+            layout {
+                Text(item.title).font(.subheadline.weight(.medium)).foregroundStyle(.primary)
+                    .lineLimit(2).frame(maxWidth: .infinity, alignment: .leading)
+                Text(item.schedule).font(.caption.weight(.medium).monospacedDigit()).foregroundStyle(Color.bronze)
+                    .fixedSize(horizontal: true, vertical: false)
+            }
         }
     }
 }

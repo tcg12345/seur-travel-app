@@ -31,6 +31,23 @@ final class AurumUITests: XCTestCase {
         app.buttons["template-save"].tap()
         XCTAssertTrue(app.buttons["trip-save-template"].waitForExistence(timeout: 5))
     }
+    func testDiscoverCurrentTripShowsTodayAndOpensItinerary() {
+        app.terminate(); app.launchArguments = ["--ui-testing", "--today-testing"]; app.launch()
+        let card = app.buttons["discover-current-trip"]
+        XCTAssertTrue(card.waitForExistence(timeout: 5))
+        XCTAssertTrue(card.isHittable)
+        XCTAssertTrue(card.staticTexts["Paris with family"].exists)
+        XCTAssertTrue(card.staticTexts["Lunch by the river"].exists)
+        XCTAssertTrue(card.staticTexts["13:00 – 14:30"].exists)
+        XCTAssertFalse(card.staticTexts["Museum morning"].exists)
+        XCTAssertLessThan(card.frame.minY, app.staticTexts["discover-title"].frame.minY)
+        card.tap()
+        XCTAssertTrue(app.staticTexts["journey-title"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.staticTexts["journey-title"].label, "Paris with family")
+        app.terminate(); app.launchArguments = ["--ui-testing"]; app.launch()
+        XCTAssertTrue(app.buttons["explore-cities"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["discover-current-trip"].exists)
+    }
     func testTodayAutomaticTimelineDayNavigationAndConfirmation() {
         app.terminate(); app.launchArguments = ["--ui-testing", "--today-testing"]; app.launch()
         app.tabBars.buttons["Travel"].tap()
