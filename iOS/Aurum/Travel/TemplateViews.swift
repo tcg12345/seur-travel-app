@@ -26,28 +26,26 @@ import SwiftUI
     }
 }
 struct TemplateEntry: Identifiable { var document: JourneyDocument; var remote = false; var id: UUID { document.id } }
-struct TemplateDiscoveryRow: View {
-    var city = ""
+/// A quiet entry point, visible only when a city has a saved or discoverable template.
+struct CityTemplateLink: View {
+    let city: String
     @Environment(TravelAPI.self) private var api
+    @Environment(JourneyLibrary.self) private var library
     @State private var directory = TemplateDirectory.shared
+    private var hasTemplates: Bool {
+        !directory.entries(city: city).isEmpty || library.documents.contains { TemplateCatalog.matches($0, city: city) }
+    }
     var body: some View {
-        let entries = directory.entries(city: city)
-        Group { if !entries.isEmpty {
-            VStack(alignment: .leading, spacing: 15) {
-                HStack {
-                    Text("Start from an itinerary").font(.title3.weight(.semibold))
-                    Spacer()
-                    NavigationLink { TemplateBrowseView(initialCity: city) } label: { Text("See all").font(.caption.weight(.semibold)) }
-                }
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(alignment: .top, spacing: 20) {
-                        ForEach(entries.prefix(5)) { entry in
-                            NavigationLink { TemplateDetailView(entry: entry) } label: { TemplateCard(document: entry.document).frame(width: 260, alignment: .leading) }.buttonStyle(.plain)
-                        }
-                    }
-                }
+        Group {
+            if hasTemplates {
+                NavigationLink { TemplateBrowseView(initialCity: city) } label: {
+                    Label("Trip templates", systemImage: "doc.on.doc")
+                        .font(.subheadline).foregroundStyle(Color.bronze)
+                        .frame(minHeight: 44, alignment: .leading).contentShape(Rectangle())
+                }.buttonStyle(.plain).accessibilityIdentifier("city-trip-templates")
+                    .accessibilityHint("Browse itineraries for " + city)
             }
-        } }.task { await directory.load(api) }
+        }.task(id: api.baseURL) { await directory.load(api) }
     }
 }
 private struct TemplateCard: View {

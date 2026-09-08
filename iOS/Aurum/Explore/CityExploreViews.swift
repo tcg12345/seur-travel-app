@@ -91,7 +91,6 @@ struct CityGuideView: View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 22) {
                 cityHeader
-                if query.isEmpty && !savedOnly { TemplateDiscoveryRow(city: city.name) }
                 searchControls
                 if !collection.isEmpty && !diningFilters.active && query.isEmpty && [.highlights, .restaurants].contains(interest) && !savedOnly { diningCollection }
                 if model.loading && (!savedOnly || (interest == .restaurants && diningFilters.active)) {
@@ -147,6 +146,7 @@ struct CityGuideView: View {
                 Button { savedOnly.toggle() } label: { Label("Saved (\(savedPlaces.count))", systemImage: savedOnly ? "bookmark.fill" : "bookmark").font(.subheadline.weight(.medium)).padding(.vertical, 6) }
                     .buttonStyle(.glass).accessibilityIdentifier("city-saved-places").accessibilityValue(savedOnly ? "Selected" : "Not selected")
             }
+            CityTemplateLink(city: city.name)
         }
     }
     private var searchControls: some View {
