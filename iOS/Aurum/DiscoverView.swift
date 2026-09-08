@@ -1,7 +1,6 @@
 import SwiftUI
 
 struct DiscoverView: View {
-    @Environment(OnboardingStore.self) private var onboarding
     @Environment(TravelStore.self) private var store
     @Environment(JourneyLibrary.self) private var library
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -9,20 +8,31 @@ struct DiscoverView: View {
     @Namespace private var hotelTransition
     @State private var showProfile = false
     @State private var createTrip = false
+    @State private var clockDate = Date.now
 
     private var latestTrip: JourneyDocument? { library.documents.filter { $0.isTemplate != true }.max { $0.updatedAt < $1.updatedAt } }
 
     var body: some View {
+        let now = TodayClock.now(clockDate)
+        let activeTrip = TodayPlanner.activeTrip(library.documents, now: now)
         ScrollView {
-            VStack(alignment: .leading, spacing: 30) {
-                DiscoverCurrentTripCard()
-                startingPoint
-                browseShortcuts
-                planningShortcut
-                TemplateDiscoveryRow()
-                inspiration
-                conciergeShortcut
-            }.padding(.horizontal, 22).padding(.top, 14).padding(.bottom, 32)
+                VStack(alignment: .leading, spacing: 26) {
+                    if let activeTrip { DiscoverCurrentTripCard(trip: activeTrip, now: now) }
+                    VStack(alignment: .leading, spacing: 12) {
+                        startingPoint
+                        browseShortcuts
+                    }
+                    if latestTrip == nil || latestTrip?.id != activeTrip?.id { planningShortcut }
+                    inspiration
+                    conciergeShortcut
+                }.padding(.horizontal, 22).padding(.top, 10).padding(.bottom, 32)
+        }
+        .task {
+            clockDate = .now
+            while !Task.isCancelled {
+                do { try await Task.sleep(for: .seconds(60)) } catch { return }
+                clockDate = .now
+            }
         }
         .background(Color.canvas)
         .navigationBarTitleDisplayMode(.inline)
@@ -50,60 +60,47 @@ struct DiscoverView: View {
 
     private var startingPoint: some View {
         VStack(alignment: .leading, spacing: 16) {
-            VStack(alignment: .leading, spacing: 8) {
-                Editorial("Where to next?", size: 34).accessibilityIdentifier("discover-title")
-                Text("Choose a city. Find places you’ll love. Make it a trip.")
-                    .font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-            }
             NavigationLink { CityExplorerView() } label: {
                 HStack(spacing: 13) {
                     Image(systemName: "magnifyingglass").font(.title3).foregroundStyle(Color.bronze)
-                    Text("Explore a city").font(.body.weight(.medium)).foregroundStyle(.primary)
+                    Text("Explore cities").font(.body.weight(.medium)).foregroundStyle(.primary)
                     Spacer(minLength: 4)
                     Image(systemName: "arrow.right").font(.subheadline).foregroundStyle(Color.bronze)
-                }.padding(18).cardSurface(cornerRadius: 18, emphasized: true)
+                }.padding(16).cardSurface(cornerRadius: 16, emphasized: true)
             }.buttonStyle(PressStyle()).accessibilityIdentifier("explore-cities")
                 .accessibilityHint("Search any destination for restaurants, stays and things to do")
-            if !onboarding.profile.destination.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                NavigationLink { CityExplorerView(initialQuery: onboarding.profile.destination) } label: {
-                    Label("Continue exploring " + onboarding.profile.destination, systemImage: "clock.arrow.circlepath")
-                        .font(.subheadline).foregroundStyle(Color.bronze).frame(minHeight: 32, alignment: .leading)
-                }.accessibilityIdentifier("personal-destination")
-            }
         }
     }
 
     private var browseShortcuts: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Or start with").font(.subheadline).foregroundStyle(.secondary)
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: typeSize.isAccessibilitySize ? 2 : 4), spacing: 18) {
                 Button {
                     store.query = ""; store.city = "Everywhere"; store.cuisine = "Any cuisine"; store.sort = .featured
                     store.searchPresented = true
-                } label: { shortcutLabel("Stays", symbol: "bed.double", color: .bronze) }
+                } label: { shortcutLabel("Stays", symbol: "bed.double") }
                     .accessibilityIdentifier("category-Stays")
                 NavigationLink { CityExplorerView(initialInterest: .restaurants) } label: {
-                    shortcutLabel("Dining", symbol: "fork.knife", color: .orange)
+                    shortcutLabel("Dining", symbol: "fork.knife")
                 }.accessibilityIdentifier("category-Dining")
                 NavigationLink { CityExplorerView(initialInterest: .attractions) } label: {
-                    shortcutLabel("Things to do", symbol: "sparkles", color: .teal)
+                    shortcutLabel("Things to do", symbol: "sparkles")
                 }.accessibilityIdentifier("category-Experiences")
                 NavigationLink {
                     ScrollView { FlightForm().padding(22) }.background(Color.canvas)
                         .navigationTitle("Find flights").navigationBarTitleDisplayMode(.inline)
-                } label: { shortcutLabel("Flights", symbol: "airplane", color: .blue) }
+                } label: { shortcutLabel("Flights", symbol: "airplane") }
                     .accessibilityIdentifier("category-Flights")
             }.buttonStyle(PressStyle())
         }
     }
 
-    private func shortcutLabel(_ title: String, symbol: String, color: Color) -> some View {
-        VStack(spacing: 9) {
-            Image(systemName: symbol).font(.system(size: 21, weight: .medium))
-                .foregroundStyle(color).frame(width: 48, height: 48)
-                .background(color.opacity(0.10), in: .circle)
+    private func shortcutLabel(_ title: String, symbol: String) -> some View {
+        VStack(spacing: 8) {
+            Image(systemName: symbol).font(.system(size: 20, weight: .regular))
+                .foregroundStyle(Color.bronze).frame(height: 24)
             Text(title).font(.caption.weight(.medium)).foregroundStyle(.primary).multilineTextAlignment(.center)
-        }.frame(maxWidth: .infinity, alignment: .top).contentShape(.rect)
+        }.frame(maxWidth: .infinity, minHeight: 58, alignment: .top).padding(.top, 6).contentShape(.rect)
     }
 
     private var planningShortcut: some View {
@@ -200,62 +197,54 @@ struct DiscoverView: View {
 
 /// A local, offline-ready snapshot of the active trip; the full itinerary stays one tap away.
 private struct DiscoverCurrentTripCard: View {
-    @Environment(JourneyLibrary.self) private var library
+    let trip: JourneyDocument
+    let now: Date
     @Environment(TravelAPI.self) private var api
     @Environment(\.dynamicTypeSize) private var typeSize
     @State private var statuses = TodayFlightStatusStore.shared
 
     var body: some View {
-        TimelineView(.periodic(from: .now, by: 60)) { timeline in
-            let now = TodayClock.now(timeline.date)
-            if let trip = TodayPlanner.activeTrip(library.documents, now: now) {
-                let context = TodayPlanner.context(trip, now: now)
-                // Reuse cached flight updates without adding background requests on Discover.
-                let snapshots = Dictionary(uniqueKeysWithValues: trip.flights.compactMap { flight in
-                    statuses.snapshot(flight, server: api.baseURL).map { (flight.id, $0) }
-                })
-                let items = TodayPlanner.items(trip, day: context.day, zone: context.zone, snapshots: snapshots)
-                NavigationLink { JourneyDetailView(id: trip.id) } label: {
-                    VStack(alignment: .leading, spacing: 12) {
-                        HStack(spacing: 6) {
-                            Circle().fill(Color.teal).frame(width: 6, height: 6)
-                            Text("ON YOUR TRIP").font(.caption2.weight(.semibold)).tracking(1)
-                            Spacer()
-                            Image(systemName: "chevron.right").font(.caption.weight(.semibold))
-                        }.foregroundStyle(Color.bronze)
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(trip.title.isEmpty ? trip.routeLabel : trip.title)
-                                .font(.system(.title3, design: .serif).weight(.semibold))
-                                .foregroundStyle(.primary).lineLimit(2)
-                            Text([context.stop?.name ?? "", "Day \(TravelDay.distance(trip.startDate ?? context.day, context.day) + 1)"].filter { !$0.isEmpty }.joined(separator: " · "))
-                                .font(.caption).foregroundStyle(.secondary)
-                        }
-                        Divider()
-                        HStack {
-                            Text("Today").font(.caption.weight(.semibold)).foregroundStyle(.primary)
-                            Spacer()
-                            Text(TravelDay.label(context.day)).font(.caption).foregroundStyle(.secondary)
-                        }
+        let context = TodayPlanner.context(trip, now: now)
+        let destination = context.stop?.name.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        // Reuse cached flight updates without adding background requests on Discover.
+        let snapshots = Dictionary(uniqueKeysWithValues: trip.flights.compactMap { flight in
+            statuses.snapshot(flight, server: api.baseURL).map { (flight.id, $0) }
+        })
+        let items = TodayPlanner.items(trip, day: context.day, zone: context.zone, snapshots: snapshots)
+        NavigationLink { JourneyDetailView(id: trip.id) } label: {
+            VStack(alignment: .leading, spacing: 15) {
+                VStack(alignment: .leading, spacing: 9) {
+                    HStack(spacing: 6) {
+                        Circle().fill(Color.teal).frame(width: 5, height: 5)
+                        Text("ON YOUR TRIP").font(.caption2.weight(.semibold)).tracking(1)
+                        Spacer()
+                        Image(systemName: "arrow.up.right").font(.subheadline)
+                    }.foregroundStyle(Color.bronze)
+                    Text(destination.isEmpty ? "Your trip today" : "Today in " + destination)
+                        .font(.system(.title2, design: .serif).weight(.medium))
+                        .foregroundStyle(.primary).fixedSize(horizontal: false, vertical: true)
+                    Text("Day \(TravelDay.distance(trip.startDate ?? context.day, context.day) + 1) · " + TravelDay.label(context.day))
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                HStack(spacing: 12) {
+                    RoundedRectangle(cornerRadius: 1).fill(Color.bronze.opacity(0.65)).frame(width: 2)
+                    VStack(alignment: .leading, spacing: 10) {
                         if items.isEmpty {
                             Text("No activities today").font(.subheadline).foregroundStyle(.secondary)
                         } else {
-                            VStack(spacing: 10) {
-                                ForEach(items.prefix(3)) { item in
-                                    activity(item)
-                                }
-                            }
+                            ForEach(items.prefix(3)) { item in activity(item) }
                             if items.count > 3 {
                                 Text("+\(items.count - 3) more today").font(.caption.weight(.medium)).foregroundStyle(Color.bronze)
                             }
                         }
-                    }.padding(18).frame(maxWidth: .infinity, alignment: .leading)
-                        .cardSurface(cornerRadius: 20, emphasized: true)
-                        .contentShape(.rect(cornerRadius: 20))
-                }.buttonStyle(PressStyle())
-                    .accessibilityIdentifier("discover-current-trip")
-                    .accessibilityHint("Open this trip’s itinerary")
-            }
-        }
+                    }.frame(maxWidth: .infinity, alignment: .leading)
+                }.fixedSize(horizontal: false, vertical: true)
+            }.padding(18).frame(maxWidth: .infinity, alignment: .leading)
+                .cardSurface(cornerRadius: 20, emphasized: true)
+                .contentShape(.rect(cornerRadius: 20))
+        }.buttonStyle(PressStyle())
+            .accessibilityIdentifier("discover-current-trip")
+            .accessibilityHint("Open " + (trip.title.isEmpty ? "this trip’s itinerary" : trip.title))
     }
 
     private func activity(_ item: TodayItem) -> some View {
