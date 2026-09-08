@@ -34,6 +34,7 @@ struct TravelAccountPage: View {
     @State private var justAuthenticated = false
     @FocusState private var focus: Field?
     private enum Field { case name, handle, email, password }
+    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dynamicTypeSize) private var typeSize
     var body: some View {
         Group {
@@ -131,10 +132,26 @@ struct TravelAccountPage: View {
                     }.pickerStyle(.segmented).accessibilityIdentifier("account-mode").disabled(loading)
 
                     if !emailForm {
-                        socialButtons
-                        Button { emailForm = true; message = nil } label: { Label("Continue with email", systemImage: "envelope").font(.body.weight(.semibold)).frame(maxWidth: .infinity).padding(.vertical, 14) }.buttonStyle(.glass).accessibilityIdentifier("account-email-option")
-                        if !register { Text("Existing accounts can also sign in with their username.").font(.caption).foregroundStyle(.secondary) }
+                        VStack(spacing: 12) {
+                            socialButtons
+                            HStack(spacing: 14) {
+                                Rectangle().fill(.quaternary).frame(height: 1)
+                                Text("or").font(.caption).foregroundStyle(.secondary)
+                                Rectangle().fill(.quaternary).frame(height: 1)
+                            }.padding(.vertical, 3).accessibilityHidden(true)
+                            Button { emailForm = true; message = nil } label: {
+                                HStack(spacing: 12) {
+                                    Image(systemName: "envelope").font(.system(size: 19, weight: .regular))
+                                    Text("Continue with email").font(.body.weight(.medium)).lineLimit(1).minimumScaleFactor(0.8)
+                                }.frame(maxWidth: .infinity).frame(height: 52)
+                                    .foregroundStyle(Color.primary)
+                                    .background(Color.cardSurface, in: .rect(cornerRadius: 16))
+                                    .overlay { RoundedRectangle(cornerRadius: 16).strokeBorder(Color.primary.opacity(0.10), lineWidth: 1) }
+                                    .contentShape(.rect(cornerRadius: 16))
+                            }.buttonStyle(PressStyle()).dynamicTypeSize(...DynamicTypeSize.xxxLarge).disabled(loading).accessibilityIdentifier("account-email-option")
+                        }
                     } else {
+                        if !register { Text("You can use your email or existing username.").font(.caption).foregroundStyle(.secondary) }
                         VStack(spacing: 0) {
                             if register {
                                 field("Your name", icon: "person") { TextField("Display name", text: $name).textContentType(.name).focused($focus, equals: .name).accessibilityIdentifier("account-name") }
@@ -209,12 +226,24 @@ struct TravelAccountPage: View {
                         await authenticated()
                     } catch { if (error as NSError).code != ASAuthorizationError.canceled.rawValue { message = error.localizedDescription } }
                 }
-            }.signInWithAppleButtonStyle(.whiteOutline).frame(height: 52).clipShape(.rect(cornerRadius: 12)).disabled(loading || options?.apple != true).accessibilityIdentifier("account-apple")
-            Button { Task { await googleSignIn() } } label: {
-                HStack(spacing: 12) { Image("GoogleSignIn").resizable().scaledToFit().frame(width: 20, height: 20); Text("Continue with Google").fontWeight(.medium).foregroundStyle(Color.black) }.frame(maxWidth: .infinity).frame(height: 52)
-            }.buttonStyle(.plain).background(Color.white, in: .rect(cornerRadius: 12)).overlay { RoundedRectangle(cornerRadius: 12).stroke(Color.primary.opacity(0.2)) }.disabled(loading || options?.google != true).opacity(options?.google == true ? 1 : 0.5).accessibilityIdentifier("account-google")
-            if options?.apple == false || options?.google == false { Text("Some sign-in options are not available yet.").font(.caption).foregroundStyle(.secondary) }
-            if options == nil { Button("Reload sign-in options") { Task { options = try? await api.authOptions() } }.font(.caption) }
+            }
+            .signInWithAppleButtonStyle(colorScheme == .dark ? .white : .black)
+            .frame(height: 52).clipShape(.rect(cornerRadius: 16))
+            .disabled(loading || options?.apple != true).accessibilityIdentifier("account-apple")
+            if options?.google == true {
+                Button { Task { await googleSignIn() } } label: {
+                    HStack(spacing: 12) {
+                        Image("GoogleSignIn").resizable().scaledToFit().frame(width: 20, height: 20).accessibilityHidden(true)
+                        Text("Continue with Google").font(.body.weight(.medium)).lineLimit(1).minimumScaleFactor(0.8)
+                    }.frame(maxWidth: .infinity).frame(height: 52)
+                        .foregroundStyle(Color(red: 0.12, green: 0.12, blue: 0.12))
+                        .background(Color.white, in: .rect(cornerRadius: 16))
+                        .overlay { RoundedRectangle(cornerRadius: 16).strokeBorder(Color(red: 0.455, green: 0.467, blue: 0.459), lineWidth: 1) }
+                        .contentShape(.rect(cornerRadius: 16))
+                }.buttonStyle(PressStyle()).dynamicTypeSize(...DynamicTypeSize.xxxLarge).disabled(loading).accessibilityIdentifier("account-google")
+            }
+            if loading { ProgressView().controlSize(.small).accessibilityLabel("Signing in") }
+            if options == nil { Button("Reload sign-in options") { Task { options = try? await api.authOptions() } }.font(.caption).foregroundStyle(.secondary) }
         }
     }
     private var verificationPage: some View {
