@@ -18,6 +18,7 @@ struct TravelHubView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
+                if section == "Trips" && query.isEmpty { TodayHubView() }
                 HStack(spacing: 28) {
                     ForEach(["Trips", "Wishlist"], id: \.self) { title in
                         Button { withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) { section = title; query = "" } } label: {
@@ -105,6 +106,7 @@ struct JourneyDetailView: View {
     @Environment(\.dismiss) private var dismiss
     let id: UUID
     @State private var mode = "Agenda"
+    @State private var choseInitialMode = false
     @State private var chapter = "Plan"
     @State private var selectedDay: String?
     @State private var editInfo = false
@@ -144,10 +146,11 @@ struct JourneyDetailView: View {
                             }.buttonStyle(.plain).accessibilityIdentifier("trip-route-planner")
                         }
                         tripNavigation
-                        if chapter == "Plan" { itinerary(document) } else { journal(document) }
+                        if chapter == "Plan" { if mode == "Today" { TodayView(document: document) } else { itinerary(document) } } else { journal(document) }
                     }.padding(22)
                 }.background(Color.canvas)
                     .accessibilityIdentifier("journey-scroll")
+                    .onAppear { if !choseInitialMode { mode = TodayPlanner.isActive(document, now: TodayClock.now()) ? "Today" : "Agenda"; choseInitialMode = true } }
                     .onScrollGeometryChange(for: CGFloat.self) { geometry in
                         max(0, geometry.contentOffset.y + geometry.contentInsets.top)
                     } action: { _, offset in
@@ -229,13 +232,14 @@ struct JourneyDetailView: View {
                     Picker("Plan view", selection: Binding(get: { mode }, set: { value in
                         withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) { mode = value }
                     })) {
+                        Label("Today", systemImage: "sun.max").tag("Today")
                         Label("List", systemImage: "list.bullet").tag("Agenda")
                         Label("Calendar", systemImage: "calendar").tag("Calendar")
                         Label("Map", systemImage: "map").tag("Map")
                     }
                 } label: {
                     HStack(spacing: 6) {
-                        Image(systemName: mode == "Agenda" ? "list.bullet" : mode == "Calendar" ? "calendar" : "map")
+                        Image(systemName: mode == "Today" ? "sun.max" : mode == "Agenda" ? "list.bullet" : mode == "Calendar" ? "calendar" : "map")
                         Text(mode == "Agenda" ? "List" : mode)
                         Image(systemName: "chevron.down").font(.system(size: 9, weight: .semibold))
                     }
@@ -623,7 +627,7 @@ struct AddTripDestinationView: View {
                         guard var document = library.documents.first(where: { $0.id == documentID }) else { return }
                         guard end > start else { error = "Choose a departure after your arrival."; return }
                         document.dateMode = .dates; document.startDate = start; document.endDate = end; document.destination = destination.trimmingCharacters(in: .whitespacesAndNewlines)
-                        document.stops.append(JourneyStop(name: destination.trimmingCharacters(in: .whitespacesAndNewlines), country: selection?.country ?? "", arrival: start, nights: TravelDay.distance(start, end), latitude: selection?.place.latitude, longitude: selection?.place.longitude))
+                        document.stops.append(JourneyStop(name: destination.trimmingCharacters(in: .whitespacesAndNewlines), country: selection?.country ?? "", arrival: start, nights: TravelDay.distance(start, end), latitude: selection?.place.latitude, longitude: selection?.place.longitude, timeZone: selection?.timeZone))
                         if library.save(document) { if let onContinue { onContinue() } else { dismiss() } } else { error = library.error }
                     }.disabled(destination.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty).accessibilityIdentifier("add-trip-continue") }
                 }

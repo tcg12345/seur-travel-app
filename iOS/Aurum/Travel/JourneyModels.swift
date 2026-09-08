@@ -70,6 +70,7 @@ struct JourneyStop: Codable, Hashable, Identifiable {
     var nights = 3
     var latitude: Double?
     var longitude: Double?
+    var timeZone: String?
     var departure: String { TravelDay.adding(nights, to: arrival) }
 }
 enum ItineraryItemKind: String, Codable, CaseIterable, Identifiable {
@@ -341,6 +342,7 @@ struct JourneyLibraryArchive: Codable { var version = 1; var documents: [Journey
         self.url = url ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent(testing ? "AurumUITestTravel/library.json" : "AurumTravel/library.json")
         if url == nil && testing && !ProcessInfo.processInfo.arguments.contains("--preserve-state") { try? FileManager.default.removeItem(at: self.url) }
         #if DEBUG
+        if url == nil && testing && ProcessInfo.processInfo.arguments.contains("--today-testing") && !ProcessInfo.processInfo.arguments.contains("--preserve-state") { documents = [TodayFixtures.trip]; return }
         if url == nil && testing && ProcessInfo.processInfo.arguments.contains("--routing-testing") && !ProcessInfo.processInfo.arguments.contains("--preserve-state") { documents = [MultiCityRouteFixtures.trip]; return }
         if url == nil && FlightMapFixtures.enabled && !ProcessInfo.processInfo.arguments.contains("--preserve-state") { documents = [FlightMapFixtures.trip]; return }
         #endif

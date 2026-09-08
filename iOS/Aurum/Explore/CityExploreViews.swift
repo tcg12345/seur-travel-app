@@ -293,7 +293,7 @@ struct ExplorePlaceDetailView: View {
     @State private var compactAdd = false
     @State private var locating = false
     private var hotel: Hotel? { store.hotels.first { $0.id == place.hotelID } }
-    private var mapQuery: URL { var url = URLComponents(string: "https://maps.apple.com/")!; url.queryItems = [URLQueryItem(name: "q", value: place.record.name + " " + place.subtitle + " " + place.city.name)]; return url.url! }
+    private var mapQuery: URL { TravelPlaceActions.directions(place.record) ?? URL(string: "maps://")! }
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 25) {

@@ -12,6 +12,31 @@ final class AurumUITests: XCTestCase {
         app.tabBars.buttons["Map"].firstMatch.tap()
         if app.buttons["map-saved"].waitForExistence(timeout: 2) { app.buttons["map-saved"].tap() }
     }
+    func testTodayAutomaticTimelineDayNavigationAndConfirmation() {
+        app.terminate(); app.launchArguments = ["--ui-testing", "--today-testing"]; app.launch()
+        app.tabBars.buttons["Travel"].tap()
+        XCTAssertTrue(app.staticTexts["today-day-title"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.staticTexts["today-day-title"].label, "Today")
+        XCTAssertTrue(app.descendants(matching: .any)["today-next"].exists)
+        app.buttons["today-next-day"].tap()
+        XCTAssertEqual(app.staticTexts["today-day-title"].label, "Tomorrow")
+        XCTAssertTrue(app.staticTexts["Museum morning"].exists)
+        app.buttons["today-previous"].tap()
+        let heading = app.staticTexts["today-day-title"]
+        let from = heading.coordinate(withNormalizedOffset: CGVector(dx: 0.8, dy: 0.5))
+        let to = from.withOffset(CGVector(dx: -180, dy: 0))
+        from.press(forDuration: 0.05, thenDragTo: to)
+        XCTAssertEqual(heading.label, "Tomorrow")
+        app.buttons["today-previous"].tap()
+        let confirmation = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "today-confirmation-")).firstMatch
+        reveal(confirmation); XCTAssertTrue(confirmation.exists); confirmation.tap()
+        XCTAssertTrue(confirmation.label.contains("copied"))
+        let open = app.buttons["today-open-trip"]; reveal(open); open.tap()
+        let mode = app.buttons["trip-plan-view"]; reveal(mode)
+        XCTAssertEqual(mode.value as? String, "Today")
+        mode.tap(); app.buttons["List"].tap()
+        XCTAssertEqual(mode.value as? String, "List")
+    }
     func testMultiCityRouteSuggestionManualOrderAndPersistence() {
         app.terminate(); app.launchArguments = ["--ui-testing", "--routing-testing", "--location-testing", "--city-testing"]; app.launch()
         app.tabBars.buttons["Travel"].tap()

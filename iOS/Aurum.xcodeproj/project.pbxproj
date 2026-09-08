@@ -7,6 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		9EE0AEEA75080A55B3732709 /* TodayFlightStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCD464B0936A90046A12E912 /* TodayFlightStatus.swift */; };
+		D61F06E2102E4ECCD90C17CE /* TodayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05D0C395918BA1B3C633DE8F /* TodayView.swift */; };
+		6B1EE5C8B2A2572962E49792 /* TodayModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = AFA4495E18F0E589DA6F2B0E /* TodayModels.swift */; };
 		B7D82862EDC97260E7DE4110 /* RoutePlannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BB83D9302419E585880114D /* RoutePlannerView.swift */; };
 		8AFFDA6BF21475208DEEC9A1 /* MultiCityRouting.swift in Sources */ = {isa = PBXBuildFile; fileRef = C01E6561AC28934707E6C8EE /* MultiCityRouting.swift */; };
 		00194D9641B7405F8697AEBB /* Travel/JourneyEditors.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED71E368AD0C9DF9B974CE5D /* Travel/JourneyEditors.swift */; };
@@ -70,6 +73,9 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		FCD464B0936A90046A12E912 /* TodayFlightStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Travel/TodayFlightStatus.swift; sourceTree = "<group>"; };
+		05D0C395918BA1B3C633DE8F /* TodayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Travel/TodayView.swift; sourceTree = "<group>"; };
+		AFA4495E18F0E589DA6F2B0E /* TodayModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Travel/TodayModels.swift; sourceTree = "<group>"; };
 		1BB83D9302419E585880114D /* RoutePlannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Travel/RoutePlannerView.swift; sourceTree = "<group>"; };
 		C01E6561AC28934707E6C8EE /* MultiCityRouting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Travel/MultiCityRouting.swift; sourceTree = "<group>"; };
 		0749CAC36E1330F48EB188EF /* AurumApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AurumApp.swift; sourceTree = "<group>"; };
@@ -168,6 +174,9 @@
 				35EF526550BED1EC047737E1 /* Travel/TravelServices.swift */,
 				19252540FA5E304E7378258A /* Travel/TravelSocialViews.swift */,
 				836A3CFEC5E2BE5AF3AB29DC /* Travel/TravelViews.swift */,
+				FCD464B0936A90046A12E912 /* TodayFlightStatus.swift */,
+				05D0C395918BA1B3C633DE8F /* TodayView.swift */,
+				AFA4495E18F0E589DA6F2B0E /* TodayModels.swift */,
 				1BB83D9302419E585880114D /* RoutePlannerView.swift */,
 				C01E6561AC28934707E6C8EE /* MultiCityRouting.swift */,
 				ADDD00000000000000000002 /* RestaurantDetailView.swift */,
@@ -358,6 +367,9 @@
 				B9EB3F10090B13AF70D9B66B /* Travel/TravelServices.swift in Sources */,
 				F143A7B751A70AAA3AAE8C26 /* Travel/TravelSocialViews.swift in Sources */,
 				C8A40D988C9FC3F7F1EA24DF /* Travel/TravelViews.swift in Sources */,
+				9EE0AEEA75080A55B3732709 /* TodayFlightStatus.swift in Sources */,
+				D61F06E2102E4ECCD90C17CE /* TodayView.swift in Sources */,
+				6B1EE5C8B2A2572962E49792 /* TodayModels.swift in Sources */,
 				B7D82862EDC97260E7DE4110 /* RoutePlannerView.swift in Sources */,
 				8AFFDA6BF21475208DEEC9A1 /* MultiCityRouting.swift in Sources */,
 				ADDD00000000000000000001 /* RestaurantDetailView.swift in Sources */,

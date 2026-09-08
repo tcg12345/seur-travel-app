@@ -998,3 +998,124 @@ import MapKit
         model.reset(); XCTAssertTrue(model.friends.isEmpty); XCTAssertTrue(model.trips.isEmpty); XCTAssertTrue(model.chats.isEmpty); XCTAssertTrue(model.saved.isEmpty)
     }
 }
+
+@MainActor final class TodayTests: XCTestCase {
+    private let paris = TimeZone(identifier: "Europe/Paris")!
+    private func instant(_ value: String) -> Date { FlightSnapshot.date(value)! }
+    func testActiveTripUsesDestinationDateAndIncludesLastDay() {
+        var trip = TodayFixtures.trip
+        let la = TimeZone(identifier: "America/Los_Angeles")!
+        XCTAssertTrue(TodayPlanner.isActive(trip, now: instant("2026-09-05T23:00:00Z"), fallback: la))
+        XCTAssertTrue(TodayPlanner.isActive(trip, now: instant("2026-09-09T21:59:00Z"), fallback: la))
+        XCTAssertFalse(TodayPlanner.isActive(trip, now: instant("2026-09-09T22:01:00Z"), fallback: la))
+        trip.dateMode = .nights
+        XCTAssertFalse(TodayPlanner.isActive(trip, now: instant("2026-09-07T07:00:00Z")))
+        XCTAssertTrue(TodayPlanner.items(trip, day: "2026-09-07", zone: paris).isEmpty)
+    }
+    func testCalendarDaysSurviveBothDaylightSavingChanges() {
+        let ny = TimeZone(identifier: "America/New_York")!
+        let spring = TodayPlanner.date("2026-03-08", minute: 0, zone: ny)!
+        let next = TodayPlanner.date("2026-03-09", minute: 0, zone: ny)!
+        XCTAssertEqual(next.timeIntervalSince(spring), 23 * 3600)
+        let autumn = TodayPlanner.date("2026-11-01", minute: 0, zone: ny)!
+        XCTAssertEqual(TodayPlanner.date("2026-11-02", minute: 0, zone: ny)!.timeIntervalSince(autumn), 25 * 3600)
+    }
+    func testTransferDayRetainsBothCitiesAndSortsReminders() {
+        var trip = TodayFixtures.trip
+        trip.stops[0].nights = 1
+        let nextStop = JourneyStop(name: "Lyon", arrival: "2026-09-07", nights: 2, timeZone: "Europe/Paris")
+        trip.stops.append(nextStop)
+        trip.events.append(JourneyEvent(stopID: nextStop.id, day: 0, minute: 1200, place: PlaceRecord(name: "Lyon dinner")))
+        trip.events.append(JourneyEvent(stopID: nextStop.id, day: 0, place: PlaceRecord(name: "Anytime walk"), allDay: true))
+        trip.hotels[0].checkOut = "2026-09-07"
+        trip.hotels.append(HotelReservation(place: PlaceRecord(name: "Lyon hotel"), checkIn: "2026-09-07", checkOut: "2026-09-09"))
+        let context = TodayPlanner.context(trip, now: instant("2026-09-07T07:00:00Z"))
+        XCTAssertEqual(context.stop?.id, nextStop.id)
+        XCTAssertEqual(context.agendaDays.count, 2)
+        let items = TodayPlanner.items(trip, day: context.day, zone: context.zone)
+        XCTAssertEqual(items.map(\.sortMinute), [-1, 660, 780, 900, 1200])
+        XCTAssertNil(items.first { $0.kind == .hotel }?.start)
+        XCTAssertEqual(TodayPlanner.nextItem(items, now: instant("2026-09-07T07:00:00Z"))?.title, "Lunch by the river")
+        XCTAssertEqual(TodayPlanner.nextItem(items, now: instant("2026-09-07T11:30:00Z"))?.title, "Lunch by the river")
+        XCTAssertEqual(TodayPlanner.nextItem(items, now: instant("2026-09-07T12:31:00Z"))?.title, "Lyon dinner")
+        XCTAssertNil(TodayPlanner.nextItem(items, now: instant("2026-09-07T21:00:00Z")))
+    }
+    func testOvernightFlightArrivalAndTimezoneFallback() {
+        var trip = TodayFixtures.trip
+        trip.stops[0].timeZone = nil
+        var flight = FlightReservation(flightNumber: "AF1", departureAirport: "JFK", arrivalAirport: "CDG", departureDay: "2026-09-05", arrivalDay: "2026-09-06", departureTime: "22:00", arrivalTime: "11:00", arrivalLatitude: 49.0097, arrivalLongitude: 2.5479, departureZone: "America/New_York", arrivalZone: "Europe/Paris")
+        trip.flights = [flight]
+        XCTAssertEqual(TodayPlanner.zone(for: trip.stops[0], in: trip, fallback: .gmt).identifier, "Europe/Paris")
+        let items = TodayPlanner.items(trip, day: "2026-09-06", zone: paris).filter { $0.kind == .flight }
+        XCTAssertEqual(items.count, 2) // 22:00 JFK is 04:00 on the destination's next day.
+        XCTAssertEqual(items.map(\.schedule), ["22:00", "11:00"])
+        flight.arrivalLatitude = 35.6; flight.arrivalLongitude = 139.7; trip.flights = [flight]
+        XCTAssertEqual(TodayPlanner.zone(for: trip.stops[0], in: trip, fallback: .gmt), .gmt)
+    }
+    func testDelayedFlightStaysAtEndOfOriginalDayAndCancelledIsNotNext() {
+        var trip = TodayFixtures.trip
+        var flight = FlightMapFixtures.trip.flights[0]
+        flight.departureDay = "2026-09-07"; flight.departureTime = "23:30"; flight.departureZone = "Europe/Paris"
+        flight.arrivalDay = "2026-09-08"; flight.arrivalTime = "02:00"; flight.arrivalZone = "Europe/Paris"
+        trip.flights = [flight]
+        var live = FlightMapFixtures.snapshot
+        live.scheduledOut = "2026-09-07T21:30:00Z"; live.estimatedOut = "2026-09-07T22:30:00Z"
+        live.estimatedIn = "2026-09-08T00:00:00Z"
+        let items = TodayPlanner.items(trip, day: "2026-09-07", zone: paris, snapshots: [flight.id: live])
+        XCTAssertEqual(items.last?.sortMinute, 1470)
+        XCTAssertEqual(TodayPlanner.nextItem(items, now: instant("2026-09-07T21:00:00Z"))?.kind, .flight)
+        live.cancelled = true
+        XCTAssertNil(TodayPlanner.nextItem(TodayPlanner.items(trip, day: "2026-09-07", zone: paris, snapshots: [flight.id: live]), now: instant("2026-09-07T21:00:00Z")))
+    }
+    func testActiveChoiceIsStableAndEmptyDaysStillResolve() {
+        let trip = TodayFixtures.trip
+        var later = trip; later.id = UUID(); later.startDate = "2026-09-07"
+        let now = instant("2026-09-07T07:00:00Z")
+        XCTAssertEqual(TodayPlanner.activeTrip([trip, later], now: now)?.id, later.id)
+        XCTAssertEqual(TodayPlanner.activeTrip([later, trip], now: now)?.id, later.id)
+        XCTAssertTrue(TodayPlanner.items(trip, day: "2026-09-10", zone: paris).isEmpty)
+        var noStops = trip; noStops.stops = []; noStops.events = []
+        XCTAssertTrue(TodayPlanner.isActive(noStops, now: now, fallback: paris))
+        XCTAssertNil(TodayPlanner.context(noStops, now: now).stop)
+    }
+    func testStopTimezoneArchiveCompatibilityAndSafeActions() throws {
+        let legacy = Data("{\"id\":\"00000000-0000-0000-0000-000000000001\",\"name\":\"Paris\",\"code\":\"\",\"country\":\"France\",\"arrival\":\"2026-09-07\",\"nights\":3}".utf8)
+        XCTAssertNil(try JSONDecoder().decode(JourneyStop.self, from: legacy).timeZone)
+        let encoded = try JSONEncoder().encode(TodayFixtures.trip)
+        XCTAssertEqual(try JSONDecoder().decode(JourneyDocument.self, from: encoded).stops[0].timeZone, paris.identifier)
+        let place = PlaceRecord(name: "A & B", address: "1 Rue + Paris", latitude: 48.85, longitude: 2.35)
+        let url = try XCTUnwrap(TravelPlaceActions.directions(place))
+        XCTAssertEqual(url.scheme, "maps")
+        XCTAssertEqual(URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first?.value, "48.85,2.35")
+        XCTAssertEqual(TravelPlaceActions.phone("+33 (1) 23-45-67-89")?.absoluteString, "tel:+33123456789")
+        XCTAssertNil(TravelPlaceActions.phone("Unavailable"))
+        XCTAssertNil(TravelPlaceActions.booking("javascript:alert(1)"))
+        XCTAssertNil(TravelPlaceActions.directions(PlaceRecord()))
+    }
+    func testFlightCachePersistsOfflineAndThrottlesRequests() async throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".json")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let now = Date.now
+        var feed = FlightMapFixtures.feed
+        var flight = FlightMapFixtures.trip.flights[0]
+        let snapshot = feed.flights[0]
+        flight.departureAirport = snapshot.origin; flight.arrivalAirport = snapshot.destination
+        flight.departureDay = TodayPlanner.key(FlightSnapshot.date(snapshot.scheduledOut)!, zone: TimeZone(identifier: snapshot.originZone)!)
+        feed.fetchedAt = now.timeIntervalSince1970
+        let cache = TodayFlightStatusStore(url: url)
+        var calls = 0
+        await cache.refresh(flight, server: "test", now: now) { calls += 1; return feed }
+        await cache.refresh(flight, server: "test", now: now.addingTimeInterval(60)) { calls += 1; return feed }
+        XCTAssertEqual(calls, 1)
+        let offline = TodayFlightStatusStore(url: url)
+        XCTAssertNotNil(offline.snapshot(flight, server: "test"))
+        XCTAssertNil(offline.snapshot(flight, server: "different-server"))
+        await offline.refresh(flight, server: "test", now: now.addingTimeInterval(600)) { calls += 1; throw URLError(.notConnectedToInternet) }
+        XCTAssertNotNil(offline.snapshot(flight, server: "test"))
+        XCTAssertTrue(offline.label(flight, server: "test", now: now.addingTimeInterval(600)).contains("Last known status"))
+        var ambiguous = feed; ambiguous.flights.append(snapshot)
+        XCTAssertNil(TodayFlightStatusStore.match(ambiguous, flight: flight))
+        var wrongRoute = flight; wrongRoute.arrivalAirport = "ZZZ"
+        XCTAssertNil(TodayFlightStatusStore.match(feed, flight: wrongRoute))
+    }
+}

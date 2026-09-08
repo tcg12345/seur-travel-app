@@ -47,7 +47,7 @@ struct TripCreationView: View {
         let location = destination.trimmingCharacters(in: .whitespacesAndNewlines)
         let start = TravelDay.key(departure), end = TravelDay.key(returnDate)
         guard !location.isEmpty else { return }
-        let stop = JourneyStop(name: location, country: selectedLocation?.country ?? "", arrival: start, nights: TravelDay.distance(start, end), latitude: selectedLocation?.place.latitude, longitude: selectedLocation?.place.longitude)
+        let stop = JourneyStop(name: location, country: selectedLocation?.country ?? "", arrival: start, nights: TravelDay.distance(start, end), latitude: selectedLocation?.place.latitude, longitude: selectedLocation?.place.longitude, timeZone: selectedLocation?.timeZone)
         let trip = JourneyDocument(title: "Trip to " + location, destination: location, startDate: start, endDate: end, stops: [stop])
         if library.save(trip) { onCreated(trip.id); dismiss() } else { error = library.error }
     }
@@ -130,11 +130,11 @@ private struct StopEditor: View {
         TripEditorNavigation {
             Form {
                 Section {
-                    LocationAutocompleteField("City or destination", text: $stop.name, kind: .city, identifier: "stop-name", onEdit: { stop.latitude = nil; stop.longitude = nil; stop.country = ""; stop.code = "" }) { selected in
-                        stop.code = ""; stop.country = selected.country; stop.latitude = selected.place.latitude; stop.longitude = selected.place.longitude
+                    LocationAutocompleteField("City or destination", text: $stop.name, kind: .city, identifier: "stop-name", onEdit: { stop.latitude = nil; stop.longitude = nil; stop.timeZone = nil; stop.country = ""; stop.code = "" }) { selected in
+                        stop.code = ""; stop.country = selected.country; stop.latitude = selected.place.latitude; stop.longitude = selected.place.longitude; stop.timeZone = selected.timeZone
                     }
                     LocationAutocompleteField("City / airport code or name (optional)", text: $stop.code, kind: .airport, identifier: "stop-airport")
-                    LocationAutocompleteField("Country (optional)", text: $stop.country, kind: .country, identifier: "stop-country", onEdit: { stop.latitude = nil; stop.longitude = nil }, onSelect: { _ in stop.latitude = nil; stop.longitude = nil })
+                    LocationAutocompleteField("Country (optional)", text: $stop.country, kind: .country, identifier: "stop-country", onEdit: { stop.latitude = nil; stop.longitude = nil; stop.timeZone = nil }, onSelect: { _ in stop.latitude = nil; stop.longitude = nil; stop.timeZone = nil })
                 }
                 Section("Length of stay") {
                     if mode == .dates {
