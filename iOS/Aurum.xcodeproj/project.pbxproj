@@ -51,6 +51,8 @@
 		F0C92F8648BCC2FE9CAE6C13 = {isa = PBXBuildFile; fileRef = F1415C84BDA17552F762D95B; settings = {ATTRIBUTES = (RemoveHeadersOnCopy,); }; };
 		AA7700000000000000000003 /* Travel/WishlistModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA7700000000000000000001; };
 		AA7700000000000000000004 /* Travel/WishlistViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA7700000000000000000002; };
+		0754952EA7DAC12BEA58F085 /* Travel/TripRecap.swift in Sources */ = {isa = PBXBuildFile; fileRef = 429FA0EF01CD2302F400F8AE; };
+		D5940E01B85CE3E9314E867A /* Travel/RecapViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36EA427399F0609B5D9DF68C; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -122,6 +124,8 @@
 		F1415C84BDA17552F762D95B = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; path = SeurFlightActivity.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		AA7700000000000000000001 /* Travel/WishlistModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Travel/WishlistModels.swift; sourceTree = "<group>"; };
 		AA7700000000000000000002 /* Travel/WishlistViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Travel/WishlistViews.swift; sourceTree = "<group>"; };
+		429FA0EF01CD2302F400F8AE /* Travel/TripRecap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Travel/TripRecap.swift; sourceTree = "<group>"; };
+		36EA427399F0609B5D9DF68C /* Travel/RecapViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Travel/RecapViews.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -180,6 +184,8 @@
 				35EF526550BED1EC047737E1 /* Travel/TravelServices.swift */,
 				19252540FA5E304E7378258A /* Travel/TravelSocialViews.swift */,
 				836A3CFEC5E2BE5AF3AB29DC /* Travel/TravelViews.swift */,
+				36EA427399F0609B5D9DF68C /* Travel/RecapViews.swift */,
+				429FA0EF01CD2302F400F8AE /* Travel/TripRecap.swift */,
 				1F80DB39E010B5FAF788E595 /* TripTemplates.json */,
 				C44E11619D8889BE6BB72E5B /* TemplateViews.swift */,
 				76404B64202EEB047BBB7AB9 /* TripTemplates.swift */,
@@ -377,6 +383,8 @@
 				B9EB3F10090B13AF70D9B66B /* Travel/TravelServices.swift in Sources */,
 				F143A7B751A70AAA3AAE8C26 /* Travel/TravelSocialViews.swift in Sources */,
 				C8A40D988C9FC3F7F1EA24DF /* Travel/TravelViews.swift in Sources */,
+				D5940E01B85CE3E9314E867A /* Travel/RecapViews.swift in Sources */,
+				0754952EA7DAC12BEA58F085 /* Travel/TripRecap.swift in Sources */,
 				13212C1DAC8784BC6E6EFA48 /* TemplateViews.swift in Sources */,
 				0695E4FD81EFAE4050FA15E6 /* TripTemplates.swift in Sources */,
 				9EE0AEEA75080A55B3732709 /* TodayFlightStatus.swift in Sources */,

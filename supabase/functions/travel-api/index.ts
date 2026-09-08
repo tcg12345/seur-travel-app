@@ -36,6 +36,7 @@ import {
   historyEnabled,
   nearbyFlightAirport,
 } from "./flights.ts";
+import { recapSnapshot } from "./recaps.ts";
 import { sanitizedTemplate, templateSummary } from "./templates.ts";
 import { concierge } from "./concierge.ts";
 import { notificationWorker, pushConfigured, watches } from "./notifications.ts";
@@ -131,7 +132,24 @@ export async function handler(req: Request): Promise<Response> {
         "This link is unavailable.",
         404,
       );
-      await limit("share:" + network, 30);
+      await limit((q.has("asset") ? "recap-media:" : "share:") + network, q.has("asset") ? 180 : 30);
+      const recapHash = await digest(value);
+      const recaps = await platform("/rest/v1/travel_recaps?select=body&token_hash=eq." + recapHash);
+      // A recap capability never falls through to the full-document/PDF endpoint,
+      // regardless of format/view parameters. Unselected photos have no media row.
+      if (recaps.length) {
+        if (q.has("asset")) {
+          const id = q.get("asset")!;
+          requireValue(id === "map" || uuid(id), "Image unavailable.", 404);
+          const rows = await platform("/rest/v1/travel_recap_media?select=jpeg&token_hash=eq." + recapHash + "&image_id=eq." + id.toLowerCase());
+          requireValue(rows[0], "Image unavailable.", 404);
+          return new Response(new Uint8Array(decodePhoto(rows[0].jpeg)), { headers: {...headers,"Content-Type":"image/jpeg"} });
+        }
+        if (q.get("format") === "json") return json(recaps[0].body);
+        const host = Deno.env.get("RECAP_WEB_URL");
+        requireValue(host && /^https:\/\//.test(host), "Recap web sharing is being configured. Please try again shortly.", 503);
+        return new Response(null, {status:302,headers:{...headers,Location:host + "#" + value}});
+      }
       const links = await platform(
         "/rest/v1/travel_links?select=document_id&token_hash=eq." +
           await digest(value),
@@ -257,6 +275,19 @@ export async function handler(req: Request): Promise<Response> {
       return json({ ok: true });
     }
     const uid = await account(req);
+    if (path === "/v1/recaps" && method === "POST") {
+      await limit("recap-publish:" + uid, 10);
+      requireValue(Deno.env.get("RECAP_WEB_URL"), "Recap web sharing is being configured. Please try again shortly.", 503);
+      const {snapshot,images,documentID,visibility} = recapSnapshot(body), value = token();
+      await rpc("travel_save_recap", {actor:uid,hash:await digest(value),doc:documentID,audience:visibility,snapshot,images});
+      return json({url:apiURL + "/s/" + value + "?view=recap"});
+    }
+    const recapDelete = path.match(/^\/v1\/recaps\/([a-fA-F0-9-]{36})$/);
+    if (recapDelete && method === "DELETE") {
+      await platform("/rest/v1/travel_recaps?owner_id=eq." + uid + "&document_id=eq." + recapDelete[1], "DELETE");
+      return json({ok:true});
+    }
+
     if (path === "/v1/flight-notifications" && ["GET", "POST", "PUT", "DELETE"].includes(method)) {
       await limit("push-settings:" + uid, 30);
       return json(await watches(uid, method, method === "GET" ? { installationID: q.get("installationID") } : body, await digest(req.headers.get("Authorization")!.slice(7))));
@@ -423,6 +454,7 @@ export async function handler(req: Request): Promise<Response> {
       if (method === "DELETE" && !match[2]) {
         const old = await dispatch(uid, "GET", path);
         const r = await dispatch(uid, method, path);
+        await platform("/rest/v1/travel_recaps?owner_id=eq." + uid + "&document_id=eq." + match[1], "DELETE");
         await removePhotos(paths(old.document)).catch(() => {});
         return json(r);
       }
@@ -433,6 +465,7 @@ export async function handler(req: Request): Promise<Response> {
       }
     }
     const value = path === "/v1/feed" && method === "GET" ? await rpc("travel_social_feed", { actor: uid }) : await dispatch(uid, method, path, body);
+    if (method === "POST" && match?.[2] === "revoke") { await platform("/rest/v1/travel_recaps?owner_id=eq." + uid + "&document_id=eq." + match[1], "DELETE"); }
     if (Array.isArray(value) && ["/v1/documents", "/v1/feed"].includes(path)) {
       return json(await Promise.all(value.map((v) => hydrate(v, true))));
     }

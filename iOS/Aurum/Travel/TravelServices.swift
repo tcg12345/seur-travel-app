@@ -220,6 +220,8 @@ private struct EmptyReply: Codable { var ok: Bool }
     func document(_ id: String) async throws -> RemoteJourney { try await request("/v1/documents/\(id)") }
     func upload(_ document: JourneyDocument) async throws -> RemoteJourney { try await request("/v1/documents/\(document.id.uuidString)", method: "PUT", encodable: document) }
     func deleteDocument(_ id: String) async throws { let _: EmptyReply = try await request("/v1/documents/\(id)", method: "DELETE") }
+    func recapLink(_ payload: RecapShareRequest) async throws -> TravelLink { try await perform("/v1/recaps", method: "POST", data: JSONEncoder().encode(payload), timeout: 90) }
+    func revokeRecaps(_ id: UUID) async throws { let _: EmptyReply = try await request("/v1/recaps/" + id.uuidString, method: "DELETE") }
     func link(_ id: UUID) async throws -> TravelLink { try await request("/v1/documents/\(id.uuidString)/link", method: "POST", body: [:]) }
     func revoke(_ id: UUID) async throws { let _: EmptyReply = try await request("/v1/documents/\(id.uuidString)/revoke", method: "POST", body: [:]) }
     func conversations() async throws -> [TravelConversation] { try await request("/v1/conversations") }

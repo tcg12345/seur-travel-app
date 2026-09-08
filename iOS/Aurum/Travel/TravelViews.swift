@@ -135,7 +135,7 @@ struct JourneyDetailView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 25) {
                         header(document)
-                        if !document.stops.isEmpty {
+                        if chapter == "Plan" && !document.stops.isEmpty {
                             Button { if document.stops.count > 1 { routing = true } else { editInfo = true } } label: {
                                 HStack(spacing: 13) {
                                     Image(systemName: "point.topleft.down.to.point.bottomright.curvepath").font(.title2).foregroundStyle(Color.bronze)
@@ -147,8 +147,13 @@ struct JourneyDetailView: View {
                                 }.padding(16).cardSurface(cornerRadius: 18)
                             }.buttonStyle(.plain).accessibilityIdentifier("trip-route-planner")
                         }
+                        if chapter != "Recap" && TripRecap(document: document).hasEnded() {
+                            Button { withAnimation { chapter = "Recap" } } label: {
+                                Label("Your trip recap is ready", systemImage: "sparkles").font(.subheadline.weight(.medium)).frame(maxWidth: .infinity, alignment: .leading).padding(14)
+                            }.buttonStyle(.glass).accessibilityIdentifier("recap-ready")
+                        }
                         tripNavigation
-                        if chapter == "Plan" { if mode == "Today" { TodayView(document: document) } else { itinerary(document) } } else { journal(document) }
+                        if chapter == "Plan" { if mode == "Today" { TodayView(document: document) } else { itinerary(document) } } else if chapter == "Recap" { TripRecapView(document: document) { chapter = "Journal"; journalPlanPicker = true } } else { journal(document) }
                     }.padding(22)
                 }.background(Color.canvas)
                     .accessibilityIdentifier("journey-scroll")
@@ -181,10 +186,10 @@ struct JourneyDetailView: View {
                     .safeAreaInset(edge: .bottom, spacing: 0) {
                         HStack {
                             Spacer(minLength: 0)
-                            addButton
+                            if chapter != "Recap" { addButton }
                         }
                         .padding(.horizontal, 22)
-                        .frame(height: 70, alignment: .top)
+                        .frame(height: chapter == "Recap" ? 0 : 70, alignment: .top)
                     }
                     .sheet(isPresented: $routing) { RoutePlannerView(document: document) { updated in
                         guard library.documents.first(where: { $0.id == id }) == document else { return "This trip changed while you were planning. Close and reopen the route planner to use the latest version." }
@@ -208,8 +213,8 @@ struct JourneyDetailView: View {
         }.alert("Travel", isPresented: Binding(get: { error != nil || library.error != nil }, set: { if !$0 { error = nil; library.error = nil } })) { Button("OK") { error = nil; library.error = nil } } message: { Text(error ?? library.error ?? "") }
     }
     private var tripNavigation: some View {
-        HStack(spacing: 24) {
-            ForEach(["Plan", "Journal"], id: \.self) { tab in
+        HStack(spacing: 16) {
+            ForEach(["Plan", "Journal", "Recap"], id: \.self) { tab in
                 let selected = chapter == tab
                 Button {
                     withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) { chapter = tab }
@@ -288,13 +293,13 @@ struct JourneyDetailView: View {
             Label(d.routeLabel.isEmpty ? "Add your destination" : d.routeLabel, systemImage: "mappin.and.ellipse").font(.subheadline).foregroundStyle(.secondary)
             if let start = d.startDate { Text(TravelDay.label(start) + (d.endDate.map { " – " + TravelDay.label($0) } ?? "")).font(.caption).foregroundStyle(Color.bronze) }
             if !d.description.isEmpty { Text(d.description).font(.subheadline).foregroundStyle(.secondary).lineSpacing(4) }
-            HStack(spacing: 0) {
+            if chapter != "Recap" { HStack(spacing: 0) {
                 metric("\(d.nights)", "Nights")
                 Divider().frame(height: 34)
                 metric("\(d.planCount)", "Plans")
                 Divider().frame(height: 34)
                 metric("\(d.places.count)", "Journal entries")
-            }.padding(.top, 8)
+            }.padding(.top, 8) }
         }
     }
     private func metric(_ value: String, _ caption: String) -> some View { VStack(spacing: 6) { Text(value).font(.system(.title2, design: .serif)); Text(caption).font(.caption2).foregroundStyle(.secondary) }.frame(maxWidth: .infinity) }

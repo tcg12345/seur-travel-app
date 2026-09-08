@@ -1,4 +1,5 @@
 import XCTest
+import SwiftUI
 import PDFKit
 import MapKit
 @testable import Aurum
@@ -12,6 +13,53 @@ import MapKit
         var d = JourneyDocument(title: "Paris, thoughtfully", startDate: "2026-10-01", endDate: "2026-10-04", stops: [stop])
         d.events = [JourneyEvent(stopID: stop.id, place: PlaceRecord(id: "dinner", name: "Dinner", category: .restaurant), cost: TravelMoney(amount: Decimal(string: "85.50")!, currency: "EUR"))]
         return d
+    }
+    func testRecapPosterRendersExactVerticalDimensionsWithoutNetwork() throws {
+        let renderer = ImageRenderer(content: RecapPoster(recap: TripRecap(document: itinerary()), map: nil, photos: []).frame(width: 360, height: 640))
+        renderer.scale = 3
+        let image = try XCTUnwrap(renderer.uiImage?.cgImage)
+        XCTAssertEqual(image.width, 1080); XCTAssertEqual(image.height, 1920)
+    }
+    func testRecapCombinesTransferDaysKeepsEmptyDaysAndUndatedMemories() {
+        let paris = JourneyStop(name: "Paris", arrival: "2026-10-01", nights: 2)
+        let lyon = JourneyStop(name: "Lyon", arrival: "2026-10-03", nights: 1)
+        var d = JourneyDocument(title: "France", startDate: "2026-10-01", endDate: "2026-10-04", stops: [paris, lyon])
+        d.places = [RatedPlace(place: .init(name: "A table"), overall: 9, visitedOn: "2026-10-03", michelinStars: 2), RatedPlace(place: .init(name: "Undated"))]
+        d.hotels = [HotelReservation(place: .init(name: "Stay", category: .hotel), checkIn: "2026-10-01", checkOut: "2026-10-03")]
+        let recap = TripRecap(document: d)
+        XCTAssertEqual(recap.days.count, 5)
+        XCTAssertEqual(recap.days[2].cities, ["Paris", "Lyon"])
+        XCTAssertEqual(recap.days[2].places.count, 1)
+        XCTAssertTrue(recap.days[1].places.isEmpty)
+        XCTAssertEqual(recap.days[0].stays.count, 1)
+        XCTAssertEqual(recap.days.last?.id, "undated")
+        XCTAssertEqual(recap.ratedCount, 1); XCTAssertEqual(recap.stars, 2)
+    }
+    func testRecapPhotoSelectionStripsPrivateFieldsWithoutMutatingOriginal() throws {
+        var d = itinerary()
+        let first = JournalPhoto(jpeg: Data([1,2])), second = JournalPhoto(jpeg: Data([3,4]))
+        d.places = [RatedPlace(place: .init(name: "Dinner", phone: "PRIVATE", website: "PRIVATE", overview: "PRIVATE"), overall: 8, notes: "PRIVATE", photos: [first, second])]
+        d.hotels = [HotelReservation(confirmation: "PRIVATE", notes: "PRIVATE")]
+        d.events[0].attendees = "PRIVATE"
+        d.flights = [FlightReservation(bookingLink: "PRIVATE", notes: "PRIVATE")]
+        d.description = "PRIVATE"
+        let copy = TripRecap(document: d).shareDocument(photoIDs: [first.id])
+        let json = String(data: try JSONEncoder().encode(copy), encoding: .utf8)!
+        XCTAssertFalse(json.contains("PRIVATE")); XCTAssertEqual(copy.places[0].photos.map(\.id), [first.id])
+        XCTAssertEqual(d.places[0].photos.count, 2); XCTAssertEqual(d.visibility, copy.visibility)
+        XCTAssertTrue(copy.events.isEmpty)
+    }
+    func testRecapMilesSkipMissingCoordinatesAndMapFitsDateLine() {
+        var d = itinerary()
+        d.flights = [FlightReservation(departureLatitude: 40.6413, departureLongitude: -73.7781, arrivalLatitude: 51.47, arrivalLongitude: -0.4543), FlightReservation()]
+        let recap = TripRecap(document: d)
+        XCTAssertEqual(recap.flightMiles, 3451, accuracy: 10)
+        let region = RecapMapGeometry.region([.init(id: "a", name: "a", latitude: 30, longitude: 179), .init(id: "b", name: "b", latitude: 32, longitude: -179)])
+        XCTAssertLessThan(region.span.longitudeDelta, 4); XCTAssertEqual(abs(region.center.longitude), 180, accuracy: 0.01)
+        var c = d; c.endDate = "2026-10-04"; c.stops[0].timeZone = "Pacific/Honolulu"
+        let now = ISO8601DateFormatter().date(from: "2026-10-05T05:00:00Z")!
+        XCTAssertFalse(TripRecap(document: c).hasEnded(now: now))
+        XCTAssertTrue(TripRecap(document: c).hasEnded(now: now.addingTimeInterval(6*3600)))
     }
     func testMultiCitySuggestionMatchesExhaustiveSearchAndPreservesEndpoints() throws {
         let stops = (0..<6).map { i in JourneyStop(name: "City \(i)", nights: 2, latitude: [48.8,52.3,50.8,55.6,53.5,59.3][i], longitude: [2.3,4.9,4.3,12.5,9.9,18.0][i]) }
