@@ -8,6 +8,7 @@ struct TravelStatsPreview: View {
     var compact = false
     var body: some View {
         let summary = TravelStatistics(documents: library.documents, catalog: store.hotels).summary()
+        if !compact || summary.trips > 0 {
         NavigationLink { TravelStatsView() } label: {
             VStack(alignment: .leading, spacing: compact ? 12 : 20) {
                 HStack {
@@ -24,6 +25,7 @@ struct TravelStatsPreview: View {
             }.padding(.vertical, compact ? 10 : 14).contentShape(Rectangle())
         }.buttonStyle(.plain).accessibilityIdentifier(compact ? "travel-stats-strip" : "profile-travel-stats")
             .task { await TravelStatsMetadata.shared.enrich(library, catalog: store.hotels) }
+        }
     }
     private func number(_ number: Int, _ label: String) -> some View {
         VStack(alignment: .leading, spacing: 5) {

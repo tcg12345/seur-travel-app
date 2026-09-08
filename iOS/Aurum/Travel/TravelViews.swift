@@ -17,7 +17,7 @@ struct TravelHubView: View {
     }
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
+            VStack(alignment: .leading, spacing: 18) {
                 if section == "Trips" && query.isEmpty { TodayHubView() }
                 HStack(spacing: 28) {
                     ForEach(["Trips", "Wishlist", "Templates"], id: \.self) { title in
