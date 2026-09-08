@@ -1,6 +1,6 @@
 # Travel wishlist
 
-Travel has two sections: Trips and Wishlist. The navigation-bar plus always creates a trip. Wishlist’s **Add idea** action creates an undated personal idea.
+Travel has Trips, Wishlist and Templates sections. The navigation-bar plus always creates a trip. Wishlist’s **Add idea** action creates an undated personal idea.
 
 ## Saving and organizing
 
@@ -18,6 +18,16 @@ Destination ideas and saved cities offer **Plan a trip here**, opening trip crea
 
 ## Storage and privacy
 
-This feature is private and local to the device; there is no wishlist cloud sync or sharing. Extra metadata and personal ideas live in versioned `seur.wishlist.v1` UserDefaults storage in the same suite as existing bookmarks. Catalog and Explore bookmarks remain in their existing stores. Unreadable wishlist data is preserved and cannot be overwritten by a subsequent save. No new paid API calls are needed to display, search, organize or add manual ideas.
+Saved places and ideas are private and local to the device; they have no separate wishlist cloud sync. Full wishlist trip plans use JourneyLibrary and the existing explicit journey sharing/backup flow. Extra metadata and personal ideas live in versioned `seur.wishlist.v1` UserDefaults storage in the same suite as existing bookmarks. Catalog and Explore bookmarks remain in their existing stores. Unreadable wishlist data is preserved and cannot be overwritten by a subsequent save. No new paid API calls are needed to display, search, organize or add manual ideas.
 
 Implementation: `Travel/WishlistModels.swift`, `Travel/WishlistViews.swift`, the Travel section switcher, bookmark registration hooks and an optional callback/prefill on `TripCreationView`.
+
+## Full wishlist trip plans
+
+Wishlist → Trip plans → Plan a trip creates a complete JourneyDocument with `dateMode = .nights`. Add destinations and choose nights per stop, then plan activities, restaurants, hotel stays and flight ideas using relative days. No calendar date is required. Hotels use check-in/check-out day selectors; flight ideas are editable itinerary items until actual dates are chosen.
+
+Regular trip creation and route editing expose arrival/departure dates only. The timing mode switch and dated-stop nights stepper are removed. Existing non-template length-of-stay documents appear in Wishlist automatically; the archive format is unchanged.
+
+Choose dates & move to Trips asks for a departure date, previews the route, and converts the same document in place. Stop/event IDs, notes, stays and daily offsets are preserved. Stays move with their destination; shortening a destination below an existing stay is rejected without discarding the stay. Explicit transfer-day allowances remain in the route. Dated trips appear in Trips; flexible plans appear in Wishlist. Templates remain separate.
+
+Wishlist places can be attached to either a dated trip or a wishlist trip plan. Plans are stored in the existing JourneyLibrary archive; saved-place metadata keeps its existing storage.

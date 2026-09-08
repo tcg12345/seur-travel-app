@@ -259,6 +259,7 @@ enum MultiCityRouting {
                 d.events.append(event)
             }
         }
+        if d.isWishlistTrip { try d.scheduleWishlist(from: original.stops, departure: "2000-01-01") }
         if let error = d.validationError() { throw JourneyError.message(error) }
         return d
     }

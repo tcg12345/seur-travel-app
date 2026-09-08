@@ -14,6 +14,40 @@ import MapKit
         d.events = [JourneyEvent(stopID: stop.id, place: PlaceRecord(id: "dinner", name: "Dinner", category: .restaurant), cost: TravelMoney(amount: Decimal(string: "85.50")!, currency: "EUR"))]
         return d
     }
+    func testWishlistItineraryPersistsAndMovesToDatedTripsWithoutLosingPlans() throws {
+        let paris = JourneyStop(name: "Paris", arrival: "2000-01-01", nights: 3)
+        let lyon = JourneyStop(name: "Lyon", arrival: "2000-01-04", nights: 2)
+        var draft = JourneyDocument(title: "France someday", dateMode: .nights, stops: [paris, lyon])
+        draft.events = [JourneyEvent(stopID: lyon.id, day: 1, place: PlaceRecord(name: "Dinner", city: "Lyon"), description: "Window table")]
+        draft.hotels = [HotelReservation(place: PlaceRecord(name: "Lyon hotel", category: .hotel, city: "Lyon"), checkIn: "2000-01-04", checkOut: "2000-01-06", notes: "Suite idea")]
+        let url = directory.appendingPathComponent("wishlist.json")
+        let library = JourneyLibrary(url: url)
+        XCTAssertTrue(library.save(draft)); XCTAssertTrue(library.trips.isEmpty)
+        XCTAssertEqual(library.wishlistTrips.count, 1)
+        let reloaded = JourneyLibrary(url: url)
+        let restored = try XCTUnwrap(reloaded.wishlistTrips.first)
+        XCTAssertTrue(restored.days.allSatisfy { $0.date == nil })
+        let trip = try restored.scheduledWishlist(departure: "2027-03-10")
+        XCTAssertEqual(trip.id, draft.id); XCTAssertEqual(trip.stops.map(\.arrival), ["2027-03-10", "2027-03-13"])
+        XCTAssertEqual(trip.hotels[0].checkIn, "2027-03-13"); XCTAssertEqual(trip.hotels[0].checkOut, "2027-03-15")
+        XCTAssertEqual(trip.hotels[0].notes, "Suite idea"); XCTAssertEqual(trip.events, draft.events)
+        XCTAssertEqual(trip.date(for: trip.events[0]), "2027-03-14")
+        XCTAssertTrue(reloaded.save(trip)); XCTAssertTrue(reloaded.wishlistTrips.isEmpty); XCTAssertEqual(reloaded.trips.count, 1)
+        XCTAssertEqual(restored.dateMode, .nights)
+    }
+    func testWishlistReorderKeepsHotelDayOffsetsAndRejectsShortenedStay() throws {
+        let paris = JourneyStop(name: "Paris", arrival: "2000-01-01", nights: 3)
+        let lyon = JourneyStop(name: "Lyon", arrival: "2000-01-04", nights: 2)
+        var draft = JourneyDocument(title: "Route", dateMode: .nights, stops: [lyon, paris])
+        draft.hotels = [HotelReservation(place: PlaceRecord(name: "Paris hotel", category: .hotel, city: "Paris"), checkIn: "2000-01-02", checkOut: "2000-01-04")]
+        try draft.scheduleWishlist(from: [paris, lyon], departure: "2000-01-01")
+        XCTAssertEqual(draft.hotels[0].checkIn, "2000-01-04"); XCTAssertEqual(draft.hotels[0].checkOut, "2000-01-06")
+        XCTAssertEqual(draft.stayLabel(draft.hotels[0]), "Day 4 – Day 6")
+        let old = draft.stops; draft.stops[1].nights = 1
+        let before = draft
+        XCTAssertThrowsError(try draft.scheduleWishlist(from: old, departure: "2000-01-01"))
+        XCTAssertEqual(draft, before)
+    }
     private var statsNow: Date { ISO8601DateFormatter().date(from: "2026-09-07T16:00:00Z")! }
     func testStatisticsSeparatesPlannedStopsFromJournaledVisitsAndFlightConnections() {
         let paris = JourneyStop(name: "Paris", country: "France", arrival: "2026-09-06", nights: 3, countryCode: "FR")

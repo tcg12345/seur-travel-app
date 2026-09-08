@@ -9,13 +9,40 @@ struct WishlistContent: View {
     @State private var topPicks = false
     @State private var sort: WishlistSort = .newest
     @State private var adding = false
+    @State private var planningTrip = false
+    @State private var createdTrip: UUID?
+    private var tripPlans: [JourneyDocument] { library.wishlistTrips.filter { query.isEmpty || ($0.title + " " + $0.routeLabel).localizedCaseInsensitiveContains(query) }.sorted { $0.updatedAt > $1.updatedAt } }
     private var entries: [WishlistEntry] { store.wishlistMatches(query: query, kind: kind, collection: collection, topPicks: topPicks, sort: sort) }
     private var filtered: Bool { kind != nil || collection != nil || topPicks || sort != .newest }
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             VStack(alignment: .leading, spacing: 7) {
                 Editorial("Someday starts here.", size: 28)
-                Text("Saved places and ideas, ready for your next trip.").font(.subheadline).foregroundStyle(.secondary)
+                Text("Full trip plans and saved places, ready when you are.").font(.subheadline).foregroundStyle(.secondary)
+            }
+            VStack(alignment: .leading, spacing: 14) {
+                HStack {
+                    Text("Trip plans").font(.headline)
+                    Spacer()
+                    Button("Plan a trip", systemImage: "plus") { planningTrip = true }.font(.subheadline).accessibilityIdentifier("wishlist-create-trip")
+                }
+                if tripPlans.isEmpty {
+                    Text(query.isEmpty ? "Build a whole itinerary with nights in each destination. Add dates when you’re ready to go." : "No trip plans match your search.").font(.subheadline).foregroundStyle(.secondary)
+                }
+                ForEach(tripPlans) { trip in
+                    NavigationLink { JourneyDetailView(id: trip.id) } label: {
+                        HStack(spacing: 14) {
+                            Image(systemName: "point.topleft.down.to.point.bottomright.curvepath").font(.title2).foregroundStyle(Color.bronze)
+                            VStack(alignment: .leading, spacing: 5) {
+                                Text(trip.title).font(.headline).foregroundStyle(.primary)
+                                Text(trip.routeLabel).font(.subheadline).foregroundStyle(.secondary)
+                                Text("\(trip.nights) nights · \(trip.planCount) plans · Dates flexible").font(.caption).foregroundStyle(Color.bronze)
+                            }
+                            Spacer(); Image(systemName: "chevron.right").font(.caption)
+                        }.padding(.vertical, 10)
+                    }.buttonStyle(.plain).accessibilityIdentifier("wishlist-trip-plan-" + trip.id.uuidString)
+                    Divider()
+                }
             }
             HStack {
                 Menu {
@@ -58,6 +85,8 @@ struct WishlistContent: View {
             Label("Private · Saved on this device", systemImage: "lock").font(.caption).foregroundStyle(.secondary)
         }
         .sheet(isPresented: $adding) { WishlistEditor() }
+        .sheet(isPresented: $planningTrip) { TripCreationView(wishlist: true, onCreated: { createdTrip = $0 }) }
+        .navigationDestination(item: $createdTrip) { JourneyDetailView(id: $0) }
         .alert("Wishlist", isPresented: Binding(get: { store.wishlist.error != nil }, set: { if !$0 { store.wishlist.error = nil } })) { Button("OK") { store.wishlist.error = nil } } message: { Text(store.wishlist.error ?? "") }
     }
     private func resetFilters() { kind = nil; collection = nil; topPicks = false; sort = .newest }
@@ -74,7 +103,7 @@ struct WishlistContent: View {
                 if !info.notes.isEmpty { Text(info.notes).font(.subheadline).foregroundStyle(.secondary).lineLimit(2) }
                 HStack(spacing: 10) {
                     if !info.collection.isEmpty { Label(info.collection, systemImage: "folder").lineLimit(1) }
-                    if library.trips.contains(where: { entry.isPlanned(in: $0) }) { Label("In your plans", systemImage: "checkmark.circle") }
+                    if (library.trips + library.wishlistTrips).contains(where: { entry.isPlanned(in: $0) }) { Label("In your plans", systemImage: "checkmark.circle") }
                 }.font(.caption2).foregroundStyle(Color.bronze)
             }
             Spacer(minLength: 0)
@@ -108,7 +137,7 @@ struct WishlistDetailView: View {
     }
     private func content(_ entry: WishlistEntry) -> some View {
         let info = store.wishlist.info(entry.id)
-        let trips = library.trips.filter { entry.isPlanned(in: $0) }
+        let trips = (library.trips + library.wishlistTrips).filter { entry.isPlanned(in: $0) }
         return ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 VStack(alignment: .leading, spacing: 12) {
@@ -237,17 +266,17 @@ struct WishlistPlanView: View {
     var body: some View {
         NavigationStack {
             List {
-                Section { Text(entry.title).font(.headline); Text("Choose a trip, then review the dates and details. Your wishlist idea stays saved.").font(.subheadline).foregroundStyle(.secondary) }
-                Section("Your trips") {
-                    ForEach(library.trips.sorted { $0.updatedAt > $1.updatedAt }) { trip in
+                Section { Text(entry.title).font(.headline); Text("Choose a trip or wishlist plan, then review its days and details. Your wishlist idea stays saved.").font(.subheadline).foregroundStyle(.secondary) }
+                Section("Trips & wishlist plans") {
+                    ForEach((library.trips + library.wishlistTrips).sorted { $0.updatedAt > $1.updatedAt }) { trip in
                         Button { choose(trip.id) } label: {
                             VStack(alignment: .leading, spacing: 5) {
                                 Text(trip.title).foregroundStyle(.primary)
-                                Text(entry.isPlanned(in: trip) ? "Already planned · Review details" : trip.routeLabel).font(.caption).foregroundStyle(.secondary)
+                                Text(entry.isPlanned(in: trip) ? "Already planned · Review details" : trip.routeLabel + (trip.isWishlistTrip ? " · Dates flexible" : "")).font(.caption).foregroundStyle(.secondary)
                             }.padding(.vertical, 5)
                         }.accessibilityIdentifier("wishlist-trip-" + trip.id.uuidString)
                     }
-                    if library.trips.isEmpty { Text("No trips yet. Create one to give this idea a place in your plans.").foregroundStyle(.secondary) }
+                    if (library.trips + library.wishlistTrips).isEmpty { Text("No trips yet. Create one to give this idea a place in your plans.").foregroundStyle(.secondary) }
                     Button("Create a new trip", systemImage: "plus") { route = .create }.accessibilityIdentifier("wishlist-new-trip")
                 }
                 if let error { Text(error).foregroundStyle(.red) }
@@ -256,7 +285,7 @@ struct WishlistPlanView: View {
         }
         .sheet(item: $route, onDismiss: {
             if saved { store.showMessage("Saved to your trip"); dismiss() }
-            else if let id = pending { pending = nil; if library.trips.first(where: { $0.id == id })?.stops.isEmpty == false { choose(id) } }
+            else if let id = pending { pending = nil; if (library.trips + library.wishlistTrips).first(where: { $0.id == id })?.stops.isEmpty == false { choose(id) } }
         }) { value in
             switch value {
             case .create: TripCreationView(initialDestination: entry.place.city, onCreated: { pending = $0 })
@@ -267,7 +296,7 @@ struct WishlistPlanView: View {
         }
     }
     private func choose(_ id: UUID) {
-        guard var trip = library.trips.first(where: { $0.id == id }) else { error = "That trip is no longer available."; return }
+        guard var trip = (library.trips + library.wishlistTrips).first(where: { $0.id == id }) else { error = "That trip is no longer available."; return }
         saved = false
         if trip.preparePlanningRoute(), !library.save(trip) { error = library.error; return }
         if entry.kind == .stays {
@@ -283,6 +312,39 @@ struct WishlistPlanView: View {
             guard let stop = trip.stops.first(where: { !entry.place.city.isEmpty && $0.name.localizedCaseInsensitiveContains(entry.place.city) }) ?? trip.stops.first else { pending = id; route = .destination(id); return }
             let event = trip.events.first { $0.place.id == entry.place.id && $0.place.source == entry.place.source } ?? JourneyEvent(stopID: stop.id, place: entry.place, description: notes, links: validatedURL(entry.place.website) == nil ? [] : [entry.place.website], kind: .place)
             route = .event(id, event)
+        }
+    }
+}
+
+struct WishlistScheduleView: View {
+    @Environment(JourneyLibrary.self) private var library
+    @Environment(\.dismiss) private var dismiss
+    let documentID: UUID
+    @State private var departure = Calendar.current.startOfDay(for: .now)
+    @State private var error: String?
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("When will you go?") {
+                    DatePicker("Departure", selection: $departure, displayedComponents: .date).accessibilityIdentifier("wishlist-departure-date")
+                    Text("Each destination keeps its nights. Your stays and daily plans move with the route, and the itinerary appears in Trips.").font(.subheadline).foregroundStyle(.secondary)
+                }
+                if let document = library.documents.first(where: { $0.id == documentID }),
+                   let scheduled = try? document.scheduledWishlist(departure: TravelDay.key(departure)) {
+                    Section("Your route") { ForEach(scheduled.stops) { stop in
+                        LabeledContent(stop.name, value: "\(TravelDay.label(stop.arrival)) – \(TravelDay.label(stop.departure))")
+                    } }
+                }
+                if let error { Text(error).foregroundStyle(.red) }
+            }.scrollContentBackground(.hidden).background(Color.canvas).navigationTitle("Set travel dates").navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                    ToolbarItem(placement: .confirmationAction) { Button("Move to Trips") {
+                        guard let document = library.documents.first(where: { $0.id == documentID }) else { return }
+                        do { let scheduled = try document.scheduledWishlist(departure: TravelDay.key(departure)); if library.save(scheduled) { dismiss() } else { error = library.error } }
+                        catch { self.error = error.localizedDescription }
+                    }.accessibilityIdentifier("wishlist-confirm-dates") }
+                }
         }
     }
 }

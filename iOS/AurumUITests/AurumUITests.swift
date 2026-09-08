@@ -160,6 +160,32 @@ final class AurumUITests: XCTestCase {
         XCTAssertTrue(app.buttons["travel-section-Wishlist"].waitForExistence(timeout: 8)); app.buttons["travel-section-Wishlist"].tap()
     }
     private func firstWishlistItem() -> XCUIElement { app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "wishlist-item-")).firstMatch }
+    func testWishlistFullTripUsesNightsThenDatesOnlyAfterScheduling() {
+        app.terminate(); app.launchArguments = ["--ui-testing", "--location-testing"]; app.launch()
+        app.tabBars.buttons["Travel"].tap(); app.buttons["travel-section-Wishlist"].tap()
+        app.buttons["wishlist-create-trip"].tap()
+        XCTAssertTrue(app.steppers["wishlist-trip-nights"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.datePickers["trip-departure-date"].exists)
+        app.textFields["trip-destination"].tap(); app.textFields["trip-destination"].typeText("Paris\n")
+        app.buttons["journey-save"].tap()
+        XCTAssertTrue(app.buttons["wishlist-schedule-trip"].waitForExistence(timeout: 8))
+        app.buttons["journey-menu"].tap(); app.buttons["Edit journey"].tap()
+        XCTAssertFalse(app.segmentedControls["Plan with"].exists)
+        let stop = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "journey-stop-")).firstMatch
+        reveal(stop); stop.tap()
+        XCTAssertTrue(app.steppers["stop-nights"].waitForExistence(timeout: 5))
+        app.buttons["stop-save"].tap(); app.buttons["journey-save"].tap()
+        app.buttons["wishlist-schedule-trip"].tap()
+        XCTAssertTrue(app.datePickers["wishlist-departure-date"].waitForExistence(timeout: 5))
+        app.buttons["wishlist-confirm-dates"].tap()
+        XCTAssertTrue(app.buttons["journey-menu"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["wishlist-schedule-trip"].exists)
+        app.buttons["journey-menu"].tap(); app.buttons["Edit journey"].tap()
+        XCTAssertFalse(app.segmentedControls["Plan with"].exists)
+        reveal(stop); stop.tap()
+        XCTAssertFalse(app.steppers["stop-nights"].exists)
+        XCTAssertEqual(app.datePickers.count, 2)
+    }
     func testWishlistCustomIdeaPersistencePlanningAndRemoval() {
         openWishlist()
         app.buttons["wishlist-add"].tap()

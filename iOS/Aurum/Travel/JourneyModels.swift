@@ -218,6 +218,7 @@ struct JourneyDocument: Codable, Hashable, Identifiable {
         dateMode = .dates
         return true
     }
+    var isWishlistTrip: Bool { dateMode == .nights && isTemplate != true }
     var routeLabel: String { stops.isEmpty ? destination : stops.map(\.name).joined(separator: " → ") }
     var nights: Int { stops.reduce(0) { $0 + $1.nights } }
     var planCount: Int { events.count + hotels.count + flights.count }
@@ -341,7 +342,8 @@ struct JourneyArchive: Codable { var version = 1; var document: JourneyDocument 
 struct JourneyLibraryArchive: Codable { var version = 1; var documents: [JourneyDocument] }
 
 @MainActor @Observable final class JourneyLibrary {
-    var trips: [JourneyDocument] { documents.filter { $0.isTemplate != true } }
+    var trips: [JourneyDocument] { documents.filter { $0.isTemplate != true && !$0.isWishlistTrip } }
+    var wishlistTrips: [JourneyDocument] { documents.filter(\.isWishlistTrip) }
     private(set) var documents: [JourneyDocument] = []
     var error: String?
     private let url: URL

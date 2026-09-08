@@ -13,7 +13,7 @@ struct TravelHubView: View {
     @State private var section = "Trips"
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private var documents: [JourneyDocument] {
-        library.documents.filter { $0.isTemplate != true && (query.isEmpty || ($0.title + " " + $0.routeLabel).localizedCaseInsensitiveContains(query)) && (filter == "All" || $0.visibility.title == filter) }.sorted { $0.updatedAt > $1.updatedAt }
+        library.trips.filter { (query.isEmpty || ($0.title + " " + $0.routeLabel).localizedCaseInsensitiveContains(query)) && (filter == "All" || $0.visibility.title == filter) }.sorted { $0.updatedAt > $1.updatedAt }
     }
     var body: some View {
         ScrollView {
@@ -112,6 +112,7 @@ struct JourneyDetailView: View {
     @State private var choseInitialMode = false
     @State private var chapter = "Plan"
     @State private var selectedDay: String?
+    @State private var chooseDates = false
     @State private var editInfo = false
     @State private var routing = false
     @State private var event: JourneyEvent?
@@ -136,6 +137,9 @@ struct JourneyDetailView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 25) {
                         header(document)
+                        if document.isWishlistTrip {
+                            Button { chooseDates = true } label: { Label("Choose dates & move to Trips", systemImage: "calendar.badge.plus").frame(maxWidth: .infinity).padding(.vertical, 8) }.buttonStyle(.glassProminent).accessibilityIdentifier("wishlist-schedule-trip")
+                        }
                         if chapter == "Plan" && !document.stops.isEmpty {
                             Button { if document.stops.count > 1 { routing = true } else { editInfo = true } } label: {
                                 HStack(spacing: 13) {
@@ -197,6 +201,7 @@ struct JourneyDetailView: View {
                         return library.save(updated) ? nil : library.error
                     } }
                     .sheet(isPresented: $editInfo) { JourneyEditor(document: document) }
+                    .sheet(isPresented: $chooseDates) { WishlistScheduleView(documentID: id) }
                     .sheet(isPresented: $addingPlan) { TripAddFlowView(documentID: id, day: addingDay) }
                     .sheet(item: $event) { JourneyEventEditor(documentID: id, event: $0) }
                     .sheet(item: $hotel) { HotelReservationEditor(documentID: id, reservation: $0) }
@@ -215,7 +220,7 @@ struct JourneyDetailView: View {
     }
     private var tripNavigation: some View {
         HStack(spacing: 16) {
-            ForEach(["Plan", "Journal", "Recap"], id: \.self) { tab in
+            ForEach(document?.isWishlistTrip == true ? ["Plan"] : ["Plan", "Journal", "Recap"], id: \.self) { tab in
                 let selected = chapter == tab
                 Button {
                     withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) { chapter = tab }
@@ -240,9 +245,9 @@ struct JourneyDetailView: View {
                     Picker("Plan view", selection: Binding(get: { mode }, set: { value in
                         withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) { mode = value }
                     })) {
-                        Label("Today", systemImage: "sun.max").tag("Today")
+                        if document?.isWishlistTrip != true { Label("Today", systemImage: "sun.max").tag("Today") }
                         Label("List", systemImage: "list.bullet").tag("Agenda")
-                        Label("Calendar", systemImage: "calendar").tag("Calendar")
+                        if document?.isWishlistTrip != true { Label("Calendar", systemImage: "calendar").tag("Calendar") }
                         Label("Map", systemImage: "map").tag("Map")
                     }
                 } label: {
@@ -292,6 +297,7 @@ struct JourneyDetailView: View {
             if let source = d.templateMeta?.sourceTitle, d.importedFrom != nil { Text("Based on " + source + (d.templateMeta?.authorHandle.isEmpty == false ? " · @" + d.templateMeta!.authorHandle : "")).font(.caption).foregroundStyle(.secondary) }
             Editorial(d.title, size: 32).accessibilityIdentifier("journey-title")
             Label(d.routeLabel.isEmpty ? "Add your destination" : d.routeLabel, systemImage: "mappin.and.ellipse").font(.subheadline).foregroundStyle(.secondary)
+            if d.isWishlistTrip { Label("Wishlist trip · \(d.nights) nights · Dates flexible", systemImage: "heart").font(.caption).foregroundStyle(Color.bronze) }
             if let start = d.startDate { Text(TravelDay.label(start) + (d.endDate.map { " – " + TravelDay.label($0) } ?? "")).font(.caption).foregroundStyle(Color.bronze) }
             if !d.description.isEmpty { Text(d.description).font(.subheadline).foregroundStyle(.secondary).lineSpacing(4) }
             if chapter != "Recap" { HStack(spacing: 0) {
@@ -364,7 +370,7 @@ struct JourneyDetailView: View {
     private func bookingSection(_ d: JourneyDocument, conflicts: [JourneyConflicts.Warning]) -> some View {
         VStack(alignment: .leading, spacing: 14) {
             SectionHeading(title: "Bookings")
-            ForEach(d.hotels) { item in Button { hotel = item } label: { bookingRow(item.place.name, subtitle: "\(TravelDay.label(item.checkIn)) – \(TravelDay.label(item.checkOut)) · \(item.rooms) rooms", symbol: "bed.double", cost: item.cost) }.buttonStyle(PressStyle()).contextMenu { Button("Log or rate stay", systemImage: "star.bubble") { rated = d.places.first(where: { $0.place.id == item.place.id && $0.place.source == item.place.source }) ?? RatedPlace(place: item.place) } }
+            ForEach(d.hotels) { item in Button { hotel = item } label: { bookingRow(item.place.name, subtitle: d.stayLabel(item) + " · \(item.rooms) rooms", symbol: "bed.double", cost: item.cost) }.buttonStyle(PressStyle()).contextMenu { Button("Log or rate stay", systemImage: "star.bubble") { rated = d.places.first(where: { $0.place.id == item.place.id && $0.place.source == item.place.source }) ?? RatedPlace(place: item.place) } }
                 if mode != "Map" { ForEach(conflicts.filter { $0.hotelID == item.id }) { warning in conflictWarning(warning) { hotel = item } } }
             }
             ForEach(d.flights) { item in Button { flight = item } label: { bookingRow("\(item.departureAirport) → \(item.arrivalAirport)", subtitle: "\(item.airline) \(item.flightNumber) · \(item.departureDay)", symbol: "airplane", cost: item.cost) }.buttonStyle(PressStyle()) }
@@ -618,6 +624,10 @@ struct TripAddFlowView: View {
             if hotel.checkOut <= hotel.checkIn { hotel.checkOut = TravelDay.adding(1, to: hotel.checkIn) }
             route = .hotel(hotel)
         case "flight":
+            if document.isWishlistTrip, let stop {
+                route = .event(JourneyEvent(stopID: stop.id, day: day?.localDay ?? 0, place: PlaceRecord(category: .other, city: stop.name), description: "Flight idea · choose a service after setting travel dates.", kind: .custom, title: "Flight to your next destination"))
+                return
+            }
             withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.24)) { addingFlight = true }
         default:
             guard let stop else { pendingChoice = choice; route = .destination; return }

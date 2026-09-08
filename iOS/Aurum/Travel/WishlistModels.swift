@@ -160,3 +160,48 @@ extension TravelStore {
         return true
     }
 }
+
+extension JourneyDocument {
+    /// Relative plans use internal day anchors; the UI never presents those as travel dates.
+    mutating func scheduleWishlist(from previous: [JourneyStop], departure: String) throws {
+        var scheduled = self
+        try scheduled.applyWishlistSchedule(from: previous, departure: departure)
+        self = scheduled
+    }
+    private mutating func applyWishlistSchedule(from previous: [JourneyStop], departure: String) throws {
+        guard TravelDay.date(departure) != nil, !stops.isEmpty else { throw JourneyError.message("Add a destination and choose a valid departure date.") }
+        var next = departure
+        for i in stops.indices {
+            if i > 0, let plan = routePlan {
+                let key = stops[i - 1].id.uuidString + ">" + stops[i].id.uuidString
+                next = TravelDay.adding(plan.choices.first { $0.key == key }?.extraDays ?? 0, to: next)
+            }
+            stops[i].arrival = next; next = stops[i].departure
+        }
+        for i in hotels.indices {
+            let stay = hotels[i]
+            let candidates = previous.filter { $0.arrival <= stay.checkIn && stay.checkIn < $0.departure && stay.checkOut <= $0.departure }
+            let named = candidates.filter { !stay.place.city.isEmpty && ($0.name.localizedCaseInsensitiveContains(stay.place.city) || stay.place.city.localizedCaseInsensitiveContains($0.name)) }
+            guard let old = named.count == 1 ? named.first : candidates.count == 1 ? candidates.first : nil,
+                  let stop = stops.first(where: { $0.id == old.id }) else { throw JourneyError.message("Choose a destination and days for the stay at \(stay.place.name) before changing this route.") }
+            let first = TravelDay.distance(old.arrival, stay.checkIn), last = TravelDay.distance(old.arrival, stay.checkOut)
+            guard last <= stop.nights else { throw JourneyError.message("The stay at \(stay.place.name) is longer than your new stop. Shorten the stay first.") }
+            hotels[i].checkIn = TravelDay.adding(first, to: stop.arrival)
+            hotels[i].checkOut = TravelDay.adding(last, to: stop.arrival)
+        }
+        if dateMode == .dates { startDate = departure; endDate = stops.last?.departure }
+        else { startDate = nil; endDate = nil }
+    }
+    func scheduledWishlist(departure: String) throws -> JourneyDocument {
+        guard isWishlistTrip else { throw JourneyError.message("This plan already has travel dates.") }
+        var trip = self
+        trip.dateMode = .dates
+        try trip.scheduleWishlist(from: stops, departure: departure)
+        if let error = trip.validationError() { throw JourneyError.message(error) }
+        return trip
+    }
+    func stayLabel(_ hotel: HotelReservation) -> String {
+        guard isWishlistTrip, let start = stops.first?.arrival else { return "\(TravelDay.label(hotel.checkIn)) – \(TravelDay.label(hotel.checkOut))" }
+        return "Day \(TravelDay.distance(start, hotel.checkIn) + 1) – Day \(TravelDay.distance(start, hotel.checkOut) + 1)"
+    }
+}
