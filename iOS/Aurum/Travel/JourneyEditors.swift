@@ -47,7 +47,7 @@ struct TripCreationView: View {
         let location = destination.trimmingCharacters(in: .whitespacesAndNewlines)
         let start = TravelDay.key(departure), end = TravelDay.key(returnDate)
         guard !location.isEmpty else { return }
-        let stop = JourneyStop(name: location, country: selectedLocation?.country ?? "", arrival: start, nights: TravelDay.distance(start, end), latitude: selectedLocation?.place.latitude, longitude: selectedLocation?.place.longitude, timeZone: selectedLocation?.timeZone)
+        let stop = JourneyStop(name: location, country: selectedLocation?.country ?? "", arrival: start, nights: TravelDay.distance(start, end), latitude: selectedLocation?.place.latitude, longitude: selectedLocation?.place.longitude, timeZone: selectedLocation?.timeZone, countryCode: TravelStatistics.countryCode(selectedLocation?.countryCode) ?? TravelStatistics.countryCode(selectedLocation?.country))
         let trip = JourneyDocument(title: "Trip to " + location, destination: location, startDate: start, endDate: end, stops: [stop])
         if library.save(trip) { onCreated(trip.id); dismiss() } else { error = library.error }
     }
@@ -130,11 +130,11 @@ private struct StopEditor: View {
         TripEditorNavigation {
             Form {
                 Section {
-                    LocationAutocompleteField("City or destination", text: $stop.name, kind: .city, identifier: "stop-name", onEdit: { stop.latitude = nil; stop.longitude = nil; stop.timeZone = nil; stop.country = ""; stop.code = "" }) { selected in
-                        stop.code = ""; stop.country = selected.country; stop.latitude = selected.place.latitude; stop.longitude = selected.place.longitude; stop.timeZone = selected.timeZone
+                    LocationAutocompleteField("City or destination", text: $stop.name, kind: .city, identifier: "stop-name", onEdit: { stop.latitude = nil; stop.longitude = nil; stop.timeZone = nil; stop.country = ""; stop.countryCode = nil; stop.code = "" }) { selected in
+                        stop.code = ""; stop.country = selected.country; stop.countryCode = TravelStatistics.countryCode(selected.countryCode) ?? TravelStatistics.countryCode(selected.country); stop.latitude = selected.place.latitude; stop.longitude = selected.place.longitude; stop.timeZone = selected.timeZone
                     }
                     LocationAutocompleteField("City / airport code or name (optional)", text: $stop.code, kind: .airport, identifier: "stop-airport")
-                    LocationAutocompleteField("Country (optional)", text: $stop.country, kind: .country, identifier: "stop-country", onEdit: { stop.latitude = nil; stop.longitude = nil; stop.timeZone = nil }, onSelect: { _ in stop.latitude = nil; stop.longitude = nil; stop.timeZone = nil })
+                    LocationAutocompleteField("Country (optional)", text: $stop.country, kind: .country, identifier: "stop-country", onEdit: { stop.countryCode = nil; stop.latitude = nil; stop.longitude = nil; stop.timeZone = nil }, onSelect: { selection in stop.countryCode = TravelStatistics.countryCode(selection.country); stop.latitude = nil; stop.longitude = nil; stop.timeZone = nil })
                 }
                 Section("Length of stay") {
                     if mode == .dates {
@@ -237,6 +237,7 @@ struct HotelReservationEditor: View {
     @Environment(\.dismiss) private var dismiss
     let documentID: UUID
     @State var reservation: HotelReservation
+    @Environment(TravelStore.self) private var catalog
     var onSaved: () -> Void = {}
     @State private var error: String?
     @State private var loading = false
@@ -246,6 +247,9 @@ struct HotelReservationEditor: View {
         TripEditorNavigation {
             Form {
                 PlaceFields(place: $reservation.place, fixedCategory: .hotel, context: reservation.place.city)
+                Section("Hotel brand") {
+                    TextField("Brand or collection (optional)", text: Binding(get: { reservation.place.brand ?? "" }, set: { reservation.place.brand = $0 })).accessibilityIdentifier("hotel-brand")
+                }
                 Section("Your stay") {
                     DayField(title: "Check-in", value: $reservation.checkIn)
                     DayField(title: "Check-out", value: $reservation.checkOut)
@@ -273,7 +277,8 @@ struct HotelReservationEditor: View {
             }.scrollDismissesKeyboard(.interactively).scrollContentBackground(.hidden).background(Color.canvas).navigationTitle("Your stay").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .cancellationAction) { TripEditorBackButton() }; ToolbarItem(placement: .confirmationAction) { Button("Save") { save() }.accessibilityIdentifier("hotel-record-save") } }
                 .confirmationDialog("Remove this hotel record?", isPresented: $delete, titleVisibility: .visible) { Button("Remove record", role: .destructive) { save(remove: true) } }
-            .onAppear { bookingDetails = !reservation.roomType.isEmpty || !reservation.confirmation.isEmpty || !reservation.notes.isEmpty || reservation.cost != nil }
+            .onAppear { if reservation.place.brand == nil { reservation.place.brand = TravelStatistics.brand(for: reservation.place, catalog: catalog.hotels) }; bookingDetails = !reservation.roomType.isEmpty || !reservation.confirmation.isEmpty || !reservation.notes.isEmpty || reservation.cost != nil }
+            .onChange(of: reservation.place.id) { _, _ in if reservation.place.brand == nil { reservation.place.brand = TravelStatistics.brand(for: reservation.place, catalog: catalog.hotels) } }
             .onChange(of: reservation.checkIn) { if reservation.checkOut <= reservation.checkIn { reservation.checkOut = TravelDay.adding(1, to: reservation.checkIn) } }
         }
     }

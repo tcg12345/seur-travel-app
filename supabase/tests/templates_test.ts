@@ -36,3 +36,13 @@ Deno.test("summary omits full itinerary and malformed styles or hotel mappings f
   d.templateMeta.tags = ["bad!tag"];
   assert.throws(() => validateDocument(d));
 });
+Deno.test("country codes and hotel brands survive sharing and reject malformed metadata", () => {
+  const d = structuredClone(seeds[0]);
+  d.stops[0].countryCode = "MC"; d.hotels[0].place.brand = "Monte-Carlo Société des Bains de Mer";
+  validateDocument(d);
+  const clean = sanitizedTemplate(d, "editor");
+  assert.equal(clean.stops[0].countryCode,"MC");
+  assert.equal(clean.hotels[0].place.brand,d.hotels[0].place.brand);
+  d.stops[0].countryCode = "Monaco"; assert.throws(()=>validateDocument(d));
+  d.stops[0].countryCode = "MC"; d.hotels[0].place.brand = "x".repeat(201); assert.throws(()=>validateDocument(d));
+});

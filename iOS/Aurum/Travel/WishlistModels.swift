@@ -115,7 +115,7 @@ enum WishlistSort: String, CaseIterable { case newest = "Recently saved", name =
 extension TravelStore {
     var wishlistEntries: [WishlistEntry] {
         var entries = savedHotels.map { hotel in
-            WishlistEntry(id: "hotel:" + hotel.id, source: .hotel(hotel), place: PlaceRecord(id: hotel.id, name: hotel.name, category: .hotel, city: hotel.city, address: hotel.address.usefulCollectionText, website: hotel.website, source: "Seur hotel collection"), kind: .stays)
+            WishlistEntry(id: "hotel:" + hotel.id, source: .hotel(hotel), place: PlaceRecord(id: hotel.id, name: hotel.name, category: .hotel, city: hotel.city, address: hotel.address.usefulCollectionText, website: hotel.website, source: "Seur hotel collection", brand: hotel.brand), kind: .stays)
         }
         entries += savedDiscoveries.map { place in
             WishlistEntry(id: place.isCollection ? "restaurant:" + place.record.id : "place:" + place.id, source: .discovery(place), place: place.record, kind: .forPlace(place.record))

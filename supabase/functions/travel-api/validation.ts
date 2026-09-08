@@ -73,6 +73,7 @@ export const eventKinds: Record<string, string> = {
 export function place(p: any, empty = false) {
   requireValue(object(p), "Invalid place.");
   text(p.id, "place ID", 500);
+  if (p.brand != null) text(p.brand, "hotel brand", 200, true);
   text(p.name, "place name", 500, empty);
   requireValue(categories.has(p.category), "Invalid place category.");
   for (
@@ -178,6 +179,7 @@ export function validateDocument(d: any) {
   let previous = 0;
   for (const s of d.stops) {
     text(s.name, "destination name", 500);
+    requireValue(s.countryCode == null || typeof s.countryCode === "string" && /^[A-Z]{2}$/.test(s.countryCode), "Invalid ISO country code.");
     requireValue(
       Number.isInteger(s.nights) && s.nights >= 1 && s.nights <= 365 &&
         day(s.arrival),

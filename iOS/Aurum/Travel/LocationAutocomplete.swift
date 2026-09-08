@@ -26,6 +26,7 @@ struct LocationSelection {
     var place: PlaceRecord
     var country = ""
     var timeZone = ""
+    var countryCode: String?
 }
 
 struct LocationSuggestion: Identifiable {
@@ -173,7 +174,7 @@ struct LocationSuggestion: Identifiable {
                 default: text = place.name
                 }
                 self.resolving = false
-                completion(LocationSelection(text: text, place: place, country: mapItem.addressRepresentations?.regionName ?? "", timeZone: mapItem.timeZone?.identifier ?? ""))
+                completion(LocationSelection(text: text, place: place, country: mapItem.addressRepresentations?.regionName ?? "", timeZone: mapItem.timeZone?.identifier ?? "", countryCode: mapItem.placemark.isoCountryCode))
             } catch {
                 guard let self, !Task.isCancelled, self.revision == current else { return }
                 self.resolving = false; self.message = "Couldn’t open that suggestion. Try again or enter the location manually."

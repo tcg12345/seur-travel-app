@@ -14,6 +14,79 @@ import MapKit
         d.events = [JourneyEvent(stopID: stop.id, place: PlaceRecord(id: "dinner", name: "Dinner", category: .restaurant), cost: TravelMoney(amount: Decimal(string: "85.50")!, currency: "EUR"))]
         return d
     }
+    private var statsNow: Date { ISO8601DateFormatter().date(from: "2026-09-07T16:00:00Z")! }
+    func testStatisticsSeparatesPlannedStopsFromJournaledVisitsAndFlightConnections() {
+        let paris = JourneyStop(name: "Paris", country: "France", arrival: "2026-09-06", nights: 3, countryCode: "FR")
+        let tokyo = JourneyStop(name: "Tokyo", country: "Japan", arrival: "2026-09-10", nights: 3, countryCode: "JP")
+        var d = JourneyDocument(title: "Two cities", startDate: "2026-09-06", endDate: "2026-09-13", stops: [paris,tokyo])
+        d.places = [RatedPlace(place: .init(name: "Dinner", category: .restaurant, city: "Paris"), overall: 9, visitedOn: "2026-09-06", michelinStars: 3)]
+        d.flights = [FlightReservation(departureAirport: "DOH", arrivalAirport: "NRT", departureDay: "2026-09-10", arrivalDay: "2026-09-10", departureLatitude: 25.2, departureLongitude: 51.6, arrivalLatitude: 35.7, arrivalLongitude: 140.3)]
+        let values = TravelStatistics(documents:[d], now:statsNow, deviceZone:TimeZone(secondsFromGMT:0)!).summary()
+        XCTAssertEqual(values.countries,["FR"]); XCTAssertEqual(values.cities,["paris"])
+        XCTAssertEqual(values.planned.map(\.city),["Tokyo"]); XCTAssertEqual(values.upcomingTrips,1)
+        XCTAssertEqual(values.kilometers,0); XCTAssertEqual(values.stars,3); XCTAssertNil(values.longest)
+        var template = d; template.id = UUID(); template.isTemplate = true
+        XCTAssertEqual(TravelStatistics(documents:[template],now:statsNow).summary().stars,0)
+        var future = d; future.startDate = "2026-10-01"; future.endDate = "2026-10-06"; future.stops = [JourneyStop(name: "Tokyo",country:"Japan",arrival:"2026-10-01",nights:5)]
+        XCTAssertTrue(TravelStatistics(documents:[future],now:statsNow).summary().countries.isEmpty)
+    }
+    func testStatisticsUsesHotelDestinationDayRatherThanFutureStopTimeZone() {
+        let ny = JourneyStop(name:"New York",country:"US",arrival:"2026-09-06",nights:3,timeZone:"America/New_York")
+        let tokyo = JourneyStop(name:"Tokyo",country:"JP",arrival:"2026-09-10",nights:3,timeZone:"Asia/Tokyo")
+        var d = JourneyDocument(title:"Across the world",startDate:"2026-09-06",endDate:"2026-09-13",stops:[ny,tokyo])
+        d.places = [RatedPlace(place:.init(name:"Lunch",city:"New York"),overall:8,visitedOn:"2026-09-06")]
+        d.hotels = [HotelReservation(place:.init(name:"Stay",category:.hotel,city:"New York"),checkIn:"2026-09-06",checkOut:"2026-09-09")]
+        let date = ISO8601DateFormatter().date(from:"2026-09-07T23:30:00Z")!
+        XCTAssertEqual(TravelStatistics(documents:[d],now:date).summary().hotelNights,1)
+    }
+    func testStatisticsSplitsHotelNightsByYearAndKeepsCurrenciesSeparate() {
+        let stop = JourneyStop(name:"Paris",country:"france",arrival:"2025-12-30",nights:3)
+        var d = JourneyDocument(title:"New Year",startDate:"2025-12-30",endDate:"2026-01-02",stops:[stop])
+        d.hotels = [HotelReservation(place:.init(name:"Paris stay",category:.hotel),checkIn:"2025-12-30",checkOut:"2026-01-02",cost:.init(amount:900,currency:"EUR"))]
+        d.events = [JourneyEvent(stopID:stop.id,day:2,place:.init(name:"Lunch"),cost:.init(amount:100,currency:"USD"))]
+        let stats = TravelStatistics(documents:[d,d],now:statsNow)
+        XCTAssertEqual(stats.summary(year:2025).hotelNights,2); XCTAssertEqual(stats.summary(year:2026).hotelNights,1)
+        XCTAssertEqual(stats.summary().trips,1); XCTAssertEqual(stats.summary().nightsAway,3)
+        XCTAssertEqual(stats.summary().spend,["EUR":900,"USD":100]); XCTAssertEqual(stats.summary().longest?.nights,3)
+        XCTAssertEqual(stats.summary(year:2025).countries,["FR"]); XCTAssertEqual(stats.summary(year:2026).countries,["FR"])
+        d.hotels = []
+        let fallback = TravelStatistics(documents:[d],now:statsNow).summary()
+        XCTAssertEqual(fallback.hotelNights,0); XCTAssertEqual(fallback.otherNights,3); XCTAssertEqual(fallback.nightsLabel,"Nights away")
+    }
+    func testStatisticsCountryNormalizationStarredRestaurantsAndBrandThreshold() {
+        XCTAssertEqual(TravelStatistics.countryCode("United Kingdom"),"GB"); XCTAssertEqual(TravelStatistics.countryCode("uk"),"GB")
+        XCTAssertEqual(TravelStatistics.countryCode("france"),"FR"); XCTAssertNil(TravelStatistics.countryCode("Imaginary country"))
+        var d = itinerary(); d.startDate = "2026-01-01"; d.endDate = "2026-01-04"; d.stops[0].arrival = "2026-01-01"
+        let place = PlaceRecord(name:"A great table",category:.restaurant,city:"Paris")
+        d.places = [RatedPlace(place:place,overall:9,visitedOn:"2026-01-01",michelinStars:3),RatedPlace(place:place,overall:8,visitedOn:"2026-01-02",michelinStars:3),RatedPlace(place:.init(name:"A hotel",category:.hotel),overall:0,michelinStars:3)]
+        d.hotels = (1...3).map { i in HotelReservation(place:.init(name:"Stay \(i)",category:.hotel,brand:"Seur Hotels"),checkIn:"2026-01-0\(i)",checkOut:"2026-01-0\(i+1)") }
+        let value = TravelStatistics(documents:[d],now:statsNow).summary()
+        XCTAssertEqual(value.favoriteBrands,["Seur Hotels"]); XCTAssertEqual(value.stars,6); XCTAssertEqual(value.starredRestaurants,1)
+        XCTAssertEqual(value.average,8.5)
+        d.hotels.removeLast(); XCTAssertTrue(TravelStatistics(documents:[d],now:statsNow).summary().favoriteBrands.isEmpty)
+    }
+    func testStatisticsLegacyFieldsAndImageAreCompatible() throws {
+        let old = try JSONDecoder().decode(JourneyDocument.self,from:JSONEncoder().encode(itinerary()))
+        XCTAssertNil(old.stops[0].countryCode); XCTAssertNil(old.events[0].place.brand)
+        var d = old; d.stops[0].countryCode = "FR"; d.events[0].place.brand = "A brand"
+        let restored = try JSONDecoder().decode(JourneyDocument.self,from:JSONEncoder().encode(d))
+        XCTAssertEqual(restored.stops[0].countryCode,"FR"); XCTAssertEqual(restored.events[0].place.brand,"A brand")
+        let renderer = ImageRenderer(content:TravelStatsCard(summary:TravelStatistics(documents:[d],now:statsNow).summary(year:2026),year:2026).frame(width:360,height:640))
+        renderer.scale = 3
+        let image = try XCTUnwrap(renderer.uiImage?.cgImage)
+        XCTAssertEqual(image.width,1080); XCTAssertEqual(image.height,1920)
+    }
+    func testStatisticsUndatedJournalOnlyAppearsInLifetimeAndDeduplicatesFlights() {
+        var d = JourneyDocument(title:"Memories",dateMode:.nights,stops:[JourneyStop(name:"London",country:"UK",nights:2)])
+        d.places = [RatedPlace(place:.init(name:"Lunch",city:"London"),overall:8,michelinStars:1)]
+        let flight = FlightReservation(flightNumber:"BA1",departureAirport:"JFK",arrivalAirport:"LHR",departureDay:"2026-01-01",arrivalDay:"2026-01-02",departureLatitude:40.6413,departureLongitude:-73.7781,arrivalLatitude:51.47,arrivalLongitude:-0.4543)
+        d.flights = [flight,flight]
+        let stats = TravelStatistics(documents:[d],now:statsNow)
+        XCTAssertEqual(stats.summary().countries,["GB"]); XCTAssertEqual(stats.summary().stars,1)
+        XCTAssertEqual(stats.summary(year:2026).stars,0); XCTAssertEqual(stats.summary(year:2026).undatedEntries,1)
+        XCTAssertEqual(stats.summary().miles,3451,accuracy:10)
+        XCTAssertEqual(stats.summary().kilometers,stats.summary().miles/0.6213711922,accuracy:0.01)
+    }
     func testRecapPosterRendersExactVerticalDimensionsWithoutNetwork() throws {
         let renderer = ImageRenderer(content: RecapPoster(recap: TripRecap(document: itinerary()), map: nil, photos: []).frame(width: 360, height: 640))
         renderer.scale = 3

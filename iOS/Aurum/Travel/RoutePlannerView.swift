@@ -119,7 +119,7 @@ struct RoutePlannerView: View {
                 }
                 .sheet(item: $editingLeg) { leg in RouteLegEditor(leg: leg) { choice in plan.choices.removeAll { $0.key == leg.id }; if let choice { plan.choices.append(choice) } } }
                 .sheet(item: $locating) { stop in RouteLocationPicker(title: "Locate " + stop.name, initial: stop.name) { point in
-                    if let i = stops.firstIndex(where: { $0.id == stop.id }) { stops[i].name = point.name; stops[i].latitude = point.latitude; stops[i].longitude = point.longitude; stops[i].timeZone = point.timeZone }
+                    if let i = stops.firstIndex(where: { $0.id == stop.id }) { stops[i].name = point.name; stops[i].latitude = point.latitude; stops[i].longitude = point.longitude; stops[i].timeZone = point.timeZone; stops[i].countryCode = point.countryCode ?? stops[i].countryCode }
                 } }
                 .sheet(isPresented: $choosingHome) { RouteLocationPicker(title: "Starting city", initial: plan.home?.name ?? "") { point in var home = point; home.id = "route-home"; plan.home = home } }
                 .onAppear { if document.routePlan == nil && message == nil && ready { suggest() } }
@@ -211,7 +211,7 @@ private struct RouteLocationPicker: View {
         NavigationStack {
             Form {
                 LocationAutocompleteField("Search city", text: $text, kind: .city, identifier: "route-city-query", onEdit: { point = nil }) { location in
-                    if let lat = location.place.latitude, let lon = location.place.longitude { point = RoutePoint(id: "", name: location.text, latitude: lat, longitude: lon, timeZone: location.timeZone) }
+                    if let lat = location.place.latitude, let lon = location.place.longitude { point = RoutePoint(id: "", name: location.text, latitude: lat, longitude: lon, timeZone: location.timeZone, countryCode: TravelStatistics.countryCode(location.countryCode) ?? TravelStatistics.countryCode(location.country)) }
                 }
                 Text("Select a city result so its location can be used in your route.").font(.caption).foregroundStyle(.secondary)
             }.scrollContentBackground(.hidden).background(Color.canvas).navigationTitle(title).navigationBarTitleDisplayMode(.inline)

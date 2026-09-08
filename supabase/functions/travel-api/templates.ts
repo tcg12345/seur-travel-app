@@ -7,11 +7,11 @@ export function sanitizedTemplate(d: any, author: string) {
   const meta = d.templateMeta ?? {};
   const costs = meta.includesCosts === true, ratings = meta.includesRatings === true;
   const pick = (source: any, keys: string[]) => Object.fromEntries(keys.filter(k => source[k] != null).map(k => [k, source[k]]));
-  const place = (p: any) => ({ ...pick(p, ["id", "name", "category", "city", "address", "phone", "website", "latitude", "longitude", "source", "sourceURL"]), overview: "", ...(ratings && p.rating != null ? { rating: p.rating } : {}) });
+  const place = (p: any) => ({ ...pick(p, ["id", "name", "category", "city", "address", "phone", "website", "latitude", "longitude", "source", "sourceURL", "brand"]), overview: "", ...(ratings && p.rating != null ? { rating: p.rating } : {}) });
   const add = (day: string, nights: number) => new Date(Date.parse(day) + nights * 86400000).toISOString().slice(0, 10);
   const distance = (a: string, b: string) => Math.round((Date.parse(b) - Date.parse(a)) / 86400000);
   let arrival = "2000-01-01";
-  const stops = d.stops.map((s: any) => { const stop = { ...pick(s, ["id", "name", "code", "country", "nights", "latitude", "longitude", "timeZone"]), arrival }; arrival = add(arrival, s.nights); return stop; });
+  const stops = d.stops.map((s: any) => { const stop = { ...pick(s, ["id", "name", "code", "country", "nights", "latitude", "longitude", "timeZone", "countryCode"]), arrival }; arrival = add(arrival, s.nights); return stop; });
   const hotels = d.hotels.map((h: any) => {
     const matches = d.stops.filter((s: any) => s.arrival <= h.checkIn && h.checkIn < add(s.arrival, s.nights) && h.checkOut <= add(s.arrival, s.nights));
     requireValue(matches.length === 1, "Match each hotel stay to one destination before publishing.");

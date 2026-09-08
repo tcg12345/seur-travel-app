@@ -33,6 +33,7 @@ struct TravelHubView: View {
                 if section == "Templates" { TemplateLibraryView(search: query) }
                 else if section == "Wishlist" { WishlistContent(query: query) }
                 else { Group {
+                    if query.isEmpty { TravelStatsPreview(compact: true) }
                     if !library.trips.isEmpty { HStack {
                         Menu { Picker("Show", selection: $filter) { ForEach(["All", "Private", "Friends", "Public"], id: \.self) { Text($0) } } } label: { Label(filter == "All" ? "All trips" : filter, systemImage: "line.3.horizontal.decrease") }.font(.subheadline)
                         Spacer()

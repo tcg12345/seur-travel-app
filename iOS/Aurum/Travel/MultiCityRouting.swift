@@ -6,11 +6,12 @@ struct RoutePoint: Codable, Hashable, Identifiable {
     var latitude: Double
     var longitude: Double
     var timeZone: String?
+    var countryCode: String?
     var valid: Bool { latitude.isFinite && longitude.isFinite && abs(latitude) <= 90 && abs(longitude) <= 180 }
-    init(id: String, name: String, latitude: Double, longitude: Double, timeZone: String? = nil) { self.timeZone = timeZone; self.id = id; self.name = name; self.latitude = latitude; self.longitude = longitude }
+    init(id: String, name: String, latitude: Double, longitude: Double, timeZone: String? = nil, countryCode: String? = nil) { self.countryCode = countryCode; self.timeZone = timeZone; self.id = id; self.name = name; self.latitude = latitude; self.longitude = longitude }
     init?(_ stop: JourneyStop) {
         guard let lat = stop.latitude, let lon = stop.longitude else { return nil }
-        self.init(id: stop.id.uuidString, name: stop.name, latitude: lat, longitude: lon, timeZone: stop.timeZone)
+        self.init(id: stop.id.uuidString, name: stop.name, latitude: lat, longitude: lon, timeZone: stop.timeZone, countryCode: stop.countryCode)
         if !valid { return nil }
     }
     func distance(to other: Self) -> Double {

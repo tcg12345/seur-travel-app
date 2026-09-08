@@ -192,6 +192,8 @@ struct ProfileView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
+                TravelStatsPreview()
+                Divider()
                 SeurLogo(size: 76)
                 VStack(alignment: .leading, spacing: 16) {
                     if let account = api.account, api.isSignedIn {

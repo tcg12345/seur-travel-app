@@ -59,6 +59,7 @@ struct PlaceRecord: Codable, Hashable, Identifiable {
     var sourceURL: String?
     var source = "Manual entry"
     var overview = ""
+    var brand: String?
     var hasCoordinate: Bool { if let latitude, let longitude { return latitude.isFinite && longitude.isFinite && (-90...90).contains(latitude) && (-180...180).contains(longitude) }; return false }
 }
 struct JourneyStop: Codable, Hashable, Identifiable {
@@ -71,6 +72,7 @@ struct JourneyStop: Codable, Hashable, Identifiable {
     var latitude: Double?
     var longitude: Double?
     var timeZone: String?
+    var countryCode: String?
     var departure: String { TravelDay.adding(nights, to: arrival) }
 }
 enum ItineraryItemKind: String, Codable, CaseIterable, Identifiable {
@@ -315,6 +317,7 @@ struct JourneyDocument: Codable, Hashable, Identifiable {
             if p.photos.count > 6 || p.photos.contains(where: { $0.jpeg.count > 1_500_000 }) { return "Use up to six photos, each smaller than 1.5 MB." }
         }
         let allPlaces = events.map(\.place) + hotels.map(\.place) + places.map(\.place)
+        if allPlaces.contains(where: { ($0.brand?.count ?? 0) > 200 }) { return "Keep hotel brands under 200 characters." }
         if allPlaces.contains(where: { ($0.latitude != nil || $0.longitude != nil) && !$0.hasCoordinate }) { return "Enter valid latitude and longitude together." }
         for money in events.compactMap(\.cost) + hotels.compactMap(\.cost) + flights.compactMap(\.cost) {
             if money.amount.isNaN || money.amount < 0 || money.amount > 1_000_000_000 || money.currency.count != 3 { return "Enter a valid nonnegative price and three-letter currency." }
@@ -360,6 +363,7 @@ struct JourneyLibraryArchive: Codable { var version = 1; var documents: [Journey
     @discardableResult func save(_ input: JourneyDocument) -> Bool {
         if let validation = input.validationError() { error = validation; return false }
         var document = input; document.kind = .journey; document.updatedAt = Date.now.timeIntervalSince1970
+        for i in document.stops.indices { document.stops[i].countryCode = TravelStatistics.countryCode(document.stops[i].countryCode) ?? TravelStatistics.countryCode(document.stops[i].country) }
         var next = documents
         if let i = next.firstIndex(where: { $0.id == document.id }) { next[i] = document } else { next.insert(document, at: 0) }
         return persist(next)
