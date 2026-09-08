@@ -37,7 +37,7 @@ struct CityExplorerView: View {
                     ForEach(ExploreCity.collection) { city in
                         Button { selected = city } label: {
                             VStack(alignment: .leading, spacing: 18) {
-                                HStack { Image(systemName: "building.2").font(.title2.weight(.ultraLight)); Spacer(); Image(systemName: "arrow.up.right").font(.caption) }.foregroundStyle(Color.bronze)
+                                HStack { Image(systemName: "building.2").font(.title2.weight(.ultraLight)); Spacer() }.foregroundStyle(Color.bronze)
                                 VStack(alignment: .leading, spacing: 6) { Text(city.name).font(.system(.title3, design: .serif)).foregroundStyle(.primary); Text(city.country).font(.caption).foregroundStyle(.secondary) }
                             }.frame(maxWidth: .infinity, minHeight: 92, alignment: .leading).padding(18).cardSurface(cornerRadius: 24)
                         }.buttonStyle(PressStyle()).accessibilityIdentifier("explore-city-" + city.name)
@@ -182,7 +182,6 @@ struct CityGuideView: View {
                     Text("Restaurants, bars and cafés to discover").font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
-                Image(systemName: "chevron.right").font(.caption).foregroundStyle(Color.bronze)
             }.padding(.vertical, 12).contentShape(Rectangle())
                 .overlay(alignment: .bottom) { Divider() }
         }.buttonStyle(.plain).accessibilityIdentifier("city-collection-all")
@@ -386,7 +385,7 @@ struct ExploreAddToTripView: View {
                     TextField("Find an existing trip", text: $query).padding(16).cardSurface(cornerRadius: 19).accessibilityIdentifier("explore-trip-query")
                     ForEach(trips) { trip in
                         Button { choose(trip.id) } label: {
-                            HStack(spacing: 15) { Image(systemName: "suitcase.rolling").font(.title2.weight(.light)).foregroundStyle(Color.bronze); VStack(alignment: .leading, spacing: 7) { Text(trip.title).font(.system(.headline, design: .serif)).foregroundStyle(.primary); Text(trip.routeLabel.isEmpty ? "Destination to come" : trip.routeLabel).font(.caption).foregroundStyle(.secondary); if let start = trip.startDate { Text(TravelDay.label(start) + (trip.endDate.map { " – " + TravelDay.label($0) } ?? "")).font(.caption2).foregroundStyle(Color.bronze) } }; Spacer(); Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary) }.padding(19).cardSurface(cornerRadius: 23)
+                            HStack(spacing: 15) { Image(systemName: "suitcase.rolling").font(.title2.weight(.light)).foregroundStyle(Color.bronze); VStack(alignment: .leading, spacing: 7) { Text(trip.title).font(.system(.headline, design: .serif)).foregroundStyle(.primary); Text(trip.routeLabel.isEmpty ? "Destination to come" : trip.routeLabel).font(.caption).foregroundStyle(.secondary); if let start = trip.startDate { Text(TravelDay.label(start) + (trip.endDate.map { " – " + TravelDay.label($0) } ?? "")).font(.caption2).foregroundStyle(Color.bronze) } }; Spacer() }.padding(19).cardSurface(cornerRadius: 23)
                         }.buttonStyle(PressStyle()).disabled(locating).accessibilityIdentifier("explore-trip-" + trip.id.uuidString)
                     }
                     if trips.isEmpty { Text(library.trips.isEmpty ? "Create your first trip, then choose when you’ll visit." : "No trips match that search.").font(.subheadline).foregroundStyle(.secondary) }
@@ -504,7 +503,6 @@ struct TripadvisorDetailsLink: View {
                     Text("Look up this place on Tripadvisor").font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
-                Image(systemName: "chevron.right").font(.caption).foregroundStyle(Color.bronze)
             }.padding(.vertical, 12).contentShape(.rect)
         }.buttonStyle(.plain).accessibilityIdentifier("place-tripadvisor-details")
     }
@@ -549,7 +547,7 @@ private struct TripadvisorPlaceView: View {
                                         Text(match.name).font(.headline).foregroundStyle(.primary)
                                         Text(match.address).font(.subheadline).foregroundStyle(.secondary)
                                     }
-                                    Spacer(); Image(systemName: "chevron.right").font(.caption)
+                                    Spacer()
                                 }.padding(.vertical, 12).contentShape(.rect)
                             }.buttonStyle(.plain)
                             Divider()

@@ -108,7 +108,6 @@ private struct TodayItemRow: View {
                     if let timing = item.timing { Label(timing.label, systemImage: timing.symbol).font(.caption2).foregroundStyle(timing.color) }
                 }.frame(maxWidth: .infinity, alignment: .leading)
                 Text(item.schedule).font(.subheadline.weight(.medium).monospacedDigit()).foregroundStyle(accent).fixedSize(horizontal: true, vertical: false)
-                Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold)).foregroundStyle(.tertiary).accessibilityHidden(true)
             }.padding(.horizontal, 12).padding(.vertical, 12)
                 .background(isNext ? accent.opacity(0.055) : .clear, in: .rect(cornerRadius: 16))
                 .contentShape(.rect(cornerRadius: 16))

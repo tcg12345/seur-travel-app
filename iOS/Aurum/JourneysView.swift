@@ -27,7 +27,7 @@ struct FlightForm: View {
             Button {
                 error = search.error
                 if let url = search.url { browser = BrowserDestination(url: url) }
-            } label: { Label("Find flights", systemImage: "arrow.up.right").font(.headline).frame(maxWidth: .infinity).padding(.vertical, 13) }.buttonStyle(.glassProminent).accessibilityIdentifier("find-flights")
+            } label: { Label("Find flights", systemImage: "arrow.up.right").labelStyle(.titleOnly).font(.headline).frame(maxWidth: .infinity).padding(.vertical, 13) }.buttonStyle(.glassProminent).accessibilityIdentifier("find-flights")
             if let error { Label(error, systemImage: "exclamationmark.circle").font(.subheadline).foregroundStyle(.red).accessibilityIdentifier("flight-error") }
             Text("Compare current fares on Google Flights. Availability, payment, and booking are handled by your selected airline or provider. Review your search details there.").font(.footnote).foregroundStyle(.secondary).lineSpacing(4)
         }
@@ -66,7 +66,7 @@ struct ExperiencesView: View {
                     Button {
                         var parts = URLComponents(string: "https://www.getyourguide.com/s/")!; parts.queryItems = [URLQueryItem(name: "q", value: city + " " + query)]
                         if let url = parts.url { browser = BrowserDestination(url: url) }
-                    } label: { Label("Explore experiences", systemImage: "arrow.up.right").frame(maxWidth: .infinity).padding(.vertical, 7) }.buttonStyle(.glass)
+                    } label: { Label("Explore experiences", systemImage: "arrow.up.right").labelStyle(.titleOnly).frame(maxWidth: .infinity).padding(.vertical, 7) }.buttonStyle(.glass)
                     Button {
                         if store.addPlan(name: name, city: city, kind: "Experience", hotelID: nil, dates: store.dates) { planned.insert(city + name) }
                     } label: { Label(planned.contains(city + name) ? "Idea added" : "Add idea to my trip", systemImage: planned.contains(city + name) ? "checkmark" : "plus").font(.caption) }.disabled(planned.contains(city + name))

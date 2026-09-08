@@ -13,7 +13,7 @@ struct TravelStatsPreview: View {
             VStack(alignment: .leading, spacing: compact ? 12 : 20) {
                 HStack {
                     Text("Your travel").font(compact ? .subheadline.weight(.semibold) : .title2.weight(.semibold)).foregroundStyle(.primary)
-                    Spacer(); Image(systemName: "arrow.up.right").font(.caption).foregroundStyle(Color.bronze)
+                    Spacer()
                 }
                 HStack(alignment: .top, spacing: 8) {
                     number(summary.stars, "Michelin stars")

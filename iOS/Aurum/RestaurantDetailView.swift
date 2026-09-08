@@ -153,7 +153,6 @@ struct RestaurantDetailView: View {
                     Text("A little inside knowledge").font(.system(.headline, design: .serif)).foregroundStyle(.primary)
                     Text("Ask your concierge").font(.caption).foregroundStyle(.secondary)
                 }.frame(maxWidth: .infinity, alignment: .leading)
-                Image(systemName: "arrow.up.right").foregroundStyle(Color.bronze)
             }.padding(21).cardSurface(cornerRadius: 24, emphasized: true)
         }.buttonStyle(PressStyle()).disabled(store.concierge.isReplying).accessibilityIdentifier("restaurant-concierge")
     }
@@ -183,7 +182,7 @@ struct RestaurantDetailView: View {
                     Text("\(hotel.city), \(hotel.country)").font(.caption).foregroundStyle(.secondary)
                 }
             }
-            Button(action: openMap) { Label("Open in Apple Maps", systemImage: "arrow.up.right").font(.subheadline).frame(maxWidth: .infinity).padding(.vertical, 10) }.buttonStyle(.glass)
+            Button(action: openMap) { Label("Open in Apple Maps", systemImage: "arrow.up.right").labelStyle(.titleOnly).font(.subheadline).frame(maxWidth: .infinity).padding(.vertical, 10) }.buttonStyle(.glass)
         }
     }
     private func openMap() {

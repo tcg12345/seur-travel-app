@@ -593,7 +593,7 @@ struct FriendsHubView: View {
                     HStack(spacing: 12) {
                         FriendsAvatar(name: conversation.name, size: 44)
                         VStack(alignment: .leading, spacing: 4) { Text(conversation.name).font(.subheadline.weight(.semibold)); Text(conversation.members.filter { $0.id != api.account?.id }.map(\.name).joined(separator: ", ")).font(.caption).foregroundStyle(.secondary).lineLimit(2); if let pending = conversation.pendingRequests, pending > 0 { Text("\(pending) trip request\(pending == 1 ? "" : "s") awaiting your reply").font(.caption).foregroundStyle(FlightDisplay.teal) } }
-                        Spacer(); Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary)
+                        Spacer()
                     }.padding(.vertical, 7)
                 }.buttonStyle(.plain)
                 Divider()
@@ -628,7 +628,7 @@ struct FriendsTripRow: View {
     let remote: RemoteJourney
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .top) { Text(remote.document.title).font(.system(.title3, design: .serif)).foregroundStyle(.primary); Spacer(); Image(systemName: "arrow.up.right").font(.subheadline).foregroundStyle(Color.bronze) }
+            HStack(alignment: .top) { Text(remote.document.title).font(.system(.title3, design: .serif)).foregroundStyle(.primary); Spacer() }
             Text(remote.document.routeLabel).font(.subheadline).foregroundStyle(.secondary)
             HStack { Label(FriendsTravel.dates(remote.document), systemImage: "calendar"); Spacer(); Text("\(remote.document.planCount) plans") }.font(.caption).foregroundStyle(.secondary)
             if FriendsTravel.phase(remote.document) == .traveling { Label("Traveling now", systemImage: "airplane").font(.caption.weight(.semibold)).foregroundStyle(FlightDisplay.teal) }

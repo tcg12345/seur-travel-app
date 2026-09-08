@@ -38,7 +38,7 @@ struct WishlistContent: View {
                                 Text(trip.routeLabel).font(.subheadline).foregroundStyle(.secondary)
                                 Text("\(trip.nights) nights · \(trip.planCount) plans · Dates flexible").font(.caption).foregroundStyle(Color.bronze)
                             }
-                            Spacer(); Image(systemName: "chevron.right").font(.caption)
+                            Spacer()
                         }.padding(.vertical, 10)
                     }.buttonStyle(.plain).accessibilityIdentifier("wishlist-trip-plan-" + trip.id.uuidString)
                     Divider()
@@ -80,7 +80,7 @@ struct WishlistContent: View {
                 }
             }
             NavigationLink { CityExplorerView() } label: {
-                HStack { Label("Find more places", systemImage: "globe.europe.africa"); Spacer(); Image(systemName: "arrow.right") }.font(.subheadline).padding(.vertical, 12)
+                HStack { Label("Find more places", systemImage: "globe.europe.africa"); Spacer() }.font(.subheadline).padding(.vertical, 12)
             }.accessibilityIdentifier("wishlist-find-places")
             Label("Private · Saved on this device", systemImage: "lock").font(.caption).foregroundStyle(.secondary)
         }
@@ -107,7 +107,6 @@ struct WishlistContent: View {
                 }.font(.caption2).foregroundStyle(Color.bronze)
             }
             Spacer(minLength: 0)
-            Image(systemName: "chevron.right").font(.caption.weight(.medium)).foregroundStyle(.secondary).padding(.top, 6)
         }.padding(.vertical, 19).frame(maxWidth: .infinity, alignment: .leading).contentShape(.rect)
     }
 }
@@ -162,10 +161,10 @@ struct WishlistDetailView: View {
                     if !info.collection.isEmpty { Label(info.collection, systemImage: "folder").font(.subheadline).foregroundStyle(Color.bronze) }
                 }
                 if case .idea = entry.source {
-                    if let url = validatedURL(entry.place.website) { Link(destination: url) { Label("Open saved link", systemImage: "arrow.up.right") }.font(.subheadline) }
+                    if let url = validatedURL(entry.place.website) { Link(destination: url) { Label("Open saved link", systemImage: "arrow.up.right").labelStyle(.titleOnly) }.font(.subheadline) }
                 } else {
                     NavigationLink { sourceDetail(entry) } label: {
-                        HStack { Text(entry.kind == .destinations ? "Explore this city" : "View place details"); Spacer(); Image(systemName: "arrow.up.right") }.font(.subheadline).padding(.vertical, 10)
+                        HStack { Text(entry.kind == .destinations ? "Explore this city" : "View place details"); Spacer() }.font(.subheadline).padding(.vertical, 10)
                     }.accessibilityIdentifier("wishlist-source")
                 }
                 if !trips.isEmpty {
@@ -173,7 +172,7 @@ struct WishlistDetailView: View {
                         Text("In your plans").font(.headline)
                         ForEach(trips) { trip in
                             NavigationLink { JourneyDetailView(id: trip.id) } label: {
-                                HStack { Label(trip.title, systemImage: "suitcase.rolling"); Spacer(); Image(systemName: "chevron.right") }.font(.subheadline)
+                                HStack { Label(trip.title, systemImage: "suitcase.rolling"); Spacer() }.font(.subheadline)
                             }.accessibilityIdentifier("wishlist-planned-trip")
                         }
                     }

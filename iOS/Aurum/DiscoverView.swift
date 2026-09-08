@@ -65,7 +65,6 @@ struct DiscoverView: View {
                     Image(systemName: "magnifyingglass").font(.title3).foregroundStyle(Color.bronze)
                     Text("Explore cities").font(.body.weight(.medium)).foregroundStyle(.primary)
                     Spacer(minLength: 4)
-                    Image(systemName: "arrow.right").font(.subheadline).foregroundStyle(Color.bronze)
                 }.padding(16).cardSurface(cornerRadius: 16, emphasized: true)
             }.buttonStyle(PressStyle()).accessibilityIdentifier("explore-cities")
                 .accessibilityHint("Search any destination for restaurants, stays and things to do")
@@ -127,7 +126,6 @@ struct DiscoverView: View {
                 Text(detail).font(.caption).foregroundStyle(.secondary).lineLimit(2)
             }
             Spacer(minLength: 6)
-            Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
         }.padding(.vertical, 18).frame(maxWidth: .infinity, alignment: .leading).contentShape(.rect)
     }
 
@@ -150,7 +148,6 @@ struct DiscoverView: View {
                                 Text("Stay & dine").font(.caption).foregroundStyle(.secondary)
                             }
                             Spacer(minLength: 4)
-                            Image(systemName: "arrow.up.right").font(.subheadline).foregroundStyle(Color.bronze)
                         }.contentShape(.rect)
                     }.buttonStyle(PressStyle()).matchedTransitionSource(id: hotel.id, in: hotelTransition)
                 }
@@ -175,7 +172,6 @@ struct DiscoverView: View {
                         Text("Discover the stay and its dining collection.").font(.caption).foregroundStyle(.secondary)
                     }
                     Spacer(minLength: 4)
-                    Image(systemName: "arrow.up.right").foregroundStyle(Color.bronze)
                 }
             }.contentShape(.rect)
         }.buttonStyle(PressStyle()).matchedTransitionSource(id: hotel.id, in: hotelTransition)
@@ -218,7 +214,6 @@ private struct DiscoverCurrentTripCard: View {
                         Circle().fill(Color.teal).frame(width: 5, height: 5)
                         Text("ON YOUR TRIP").font(.caption2.weight(.semibold)).tracking(1)
                         Spacer()
-                        Image(systemName: "arrow.up.right").font(.subheadline)
                     }.foregroundStyle(Color.bronze)
                     Text(destination.isEmpty ? "Your trip today" : "Today in " + destination)
                         .font(.system(.title2, design: .serif).weight(.medium))

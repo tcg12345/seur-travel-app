@@ -279,7 +279,6 @@ struct WorldMapView: View {
                         Text("Explore " + selectedCity.name).foregroundStyle(.primary)
                         Spacer()
                         Text("City guide").foregroundStyle(.secondary)
-                        Image(systemName: "chevron.right").font(.caption2).foregroundStyle(.secondary)
                     }.font(.subheadline).padding(.vertical, 12).contentShape(Rectangle())
                 }.buttonStyle(.plain).accessibilityIdentifier("map-city-guide")
             }
@@ -307,7 +306,6 @@ struct WorldMapView: View {
                         Image(systemName: "globe.europe.africa").foregroundStyle(Color.bronze)
                         Text("Browse city guides").foregroundStyle(.primary)
                         Spacer()
-                        Image(systemName: "chevron.right").font(.caption2).foregroundStyle(.secondary)
                     }.font(.subheadline).padding(.vertical, 12).contentShape(Rectangle())
                 }.buttonStyle(.plain)
             }
@@ -343,7 +341,7 @@ struct WorldMapView: View {
                 if let selection, let place = tripPlaces.first(where: { "tripplace:" + $0.id == selection }) { Text(place.name).font(.headline); Text(place.address).font(.caption).foregroundStyle(.secondary) }
                 ForEach(flights.filter { $0.tripID == trip.id }) { flight in flightRow(flight) }
             } else {
-                ForEach(library.trips) { document in Button { tripID = document.id; focus(document); resizePanel(.medium) } label: { HStack { Image(systemName: "suitcase.rolling").font(.title2); VStack(alignment: .leading, spacing: 6) { Text(document.title).font(.system(.headline, design: .serif)); Text(document.routeLabel).font(.caption).foregroundStyle(.secondary) }; Spacer(); Image(systemName: "arrow.up.right") }.padding(17).cardSurface(cornerRadius: 22) }.buttonStyle(.plain).accessibilityIdentifier("map-trip-" + document.id.uuidString) }
+                ForEach(library.trips) { document in Button { tripID = document.id; focus(document); resizePanel(.medium) } label: { HStack { Image(systemName: "suitcase.rolling").font(.title2); VStack(alignment: .leading, spacing: 6) { Text(document.title).font(.system(.headline, design: .serif)); Text(document.routeLabel).font(.caption).foregroundStyle(.secondary) }; Spacer() }.padding(17).cardSurface(cornerRadius: 22) }.buttonStyle(.plain).accessibilityIdentifier("map-trip-" + document.id.uuidString) }
                 if library.trips.isEmpty { HStack { Label("No trips yet", systemImage: "suitcase.rolling").foregroundStyle(.secondary); Spacer(); Button { newTrip = true } label: { Label("Create trip", systemImage: "plus") }.buttonStyle(.glassProminent) }.font(.subheadline).padding(.vertical, 8) }
             }
         }

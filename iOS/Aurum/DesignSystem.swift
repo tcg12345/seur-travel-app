@@ -124,7 +124,7 @@ struct PressStyle: ButtonStyle {
 }
 struct HotelRow: View {
     let hotel: Hotel
-    var showsChevron = true
+    var showsChevron = false
     var body: some View {
         HStack(spacing: 15) {
             HotelPhoto(hotel: hotel).frame(width: 90, height: 104).clipShape(.rect(cornerRadius: 18))

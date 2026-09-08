@@ -101,7 +101,7 @@ private struct JourneyCard: View {
                 Text("\(document.planCount) plans · \(document.places.count) journal places" + (document.nights > 0 ? " · \(document.nights) nights" : "")).font(.caption).foregroundStyle(.secondary)
                 HStack {
                     Label(document.visibility.title, systemImage: document.visibility == .private ? "lock" : "person.2").font(.caption2).foregroundStyle(.secondary)
-                    Spacer(); Image(systemName: "arrow.up.right").foregroundStyle(Color.bronze)
+                    Spacer()
                 }
             }.padding(19)
         }.cardSurface(cornerRadius: 27).clipShape(.rect(cornerRadius: 27))
@@ -154,7 +154,7 @@ struct JourneyDetailView: View {
                                         Text(document.stops.count > 1 ? "Plan your route" : "Add another destination").font(.headline).foregroundStyle(.primary)
                                         Text(document.stops.count > 1 ? "Compare city order and transfer days" : "Turn this into a multi-city trip").font(.caption).foregroundStyle(.secondary)
                                     }
-                                    Spacer(); Image(systemName: "chevron.right").font(.caption).foregroundStyle(Color.bronze)
+                                    Spacer()
                                 }.padding(16).cardSurface(cornerRadius: 18)
                             }.buttonStyle(.plain).accessibilityIdentifier("trip-route-planner")
                         }
@@ -399,7 +399,7 @@ struct JourneyDetailView: View {
         VStack(alignment: .leading, spacing: 8) { Text(label).font(.subheadline.weight(.medium)); if totals.isEmpty { Text("No prices added").font(.caption).foregroundStyle(.secondary) }; ForEach(totals.keys.sorted(), id: \.self) { currency in HStack { Text(currency).foregroundStyle(.secondary); Spacer(); Text(TravelMoney(amount: totals[currency]!, currency: currency).formatted) }.font(.subheadline) } }
     }
     private func bookingRow(_ name: String, subtitle: String, symbol: String, cost: TravelMoney?) -> some View {
-        HStack(spacing: 16) { Image(systemName: symbol).font(.title2.weight(.light)).foregroundStyle(Color.bronze); VStack(alignment: .leading, spacing: 7) { Text(name).font(.system(.headline, design: .serif)).foregroundStyle(.primary); Text(subtitle).font(.caption).foregroundStyle(.secondary); if let cost { Text(cost.formatted).font(.caption).foregroundStyle(Color.bronze) } }.frame(maxWidth: .infinity, alignment: .leading); Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary) }.padding(19).cardSurface(cornerRadius: 23)
+        HStack(spacing: 16) { Image(systemName: symbol).font(.title2.weight(.light)).foregroundStyle(Color.bronze); VStack(alignment: .leading, spacing: 7) { Text(name).font(.system(.headline, design: .serif)).foregroundStyle(.primary); Text(subtitle).font(.caption).foregroundStyle(.secondary); if let cost { Text(cost.formatted).font(.caption).foregroundStyle(Color.bronze) } }.frame(maxWidth: .infinity, alignment: .leading) }.padding(19).cardSurface(cornerRadius: 23)
     }
     private func journal(_ d: JourneyDocument) -> some View {
         VStack(alignment: .leading, spacing: 22) {
@@ -423,7 +423,6 @@ struct JourneyDetailView: View {
                             Text("From your plan").font(.subheadline.weight(.semibold)).foregroundStyle(.primary)
                             Text("Choose a place you visited and add its details.").font(.caption).foregroundStyle(.secondary)
                         }.frame(maxWidth: .infinity, alignment: .leading)
-                        Image(systemName: "chevron.right").font(.caption).foregroundStyle(Color.bronze)
                     }.padding(16).cardSurface(cornerRadius: 20)
                 }.buttonStyle(PressStyle()).accessibilityIdentifier("trip-journal-planned")
             }
@@ -446,7 +445,6 @@ struct JourneyDetailView: View {
                             HStack {
                                 Label(place.overall == 0 && place.notes.isEmpty && place.photos.isEmpty && place.visitedOn == nil ? "Add visit details" : "Edit entry", systemImage: "square.and.pencil")
                                 Spacer(minLength: 0)
-                                Image(systemName: "chevron.right")
                             }.font(.caption.weight(.semibold)).foregroundStyle(Color.bronze)
                         }.frame(maxWidth: .infinity, alignment: .leading).padding(18).cardSurface(cornerRadius: 23)
                     }.buttonStyle(PressStyle()).accessibilityIdentifier("journal-entry-" + place.id.uuidString)
@@ -489,7 +487,6 @@ private struct JournalPlanPlacesView: View {
                                 Text(entry(for: place) == nil ? "Add visit details" : "Edit existing journal entry")
                                     .font(.caption).foregroundStyle(.secondary)
                             }.frame(maxWidth: .infinity, alignment: .leading)
-                            Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary)
                         }.padding(.vertical, 6)
                     }.accessibilityIdentifier("journal-plan-place-" + place.id)
                 }
@@ -520,7 +517,7 @@ struct JourneyMapView: View {
             else {
                 Map(initialPosition: initialCamera, selection: $selected) { ForEach(plotted) { place in Marker(place.name, systemImage: place.category.symbol, coordinate: CLLocationCoordinate2D(latitude: place.latitude!, longitude: place.longitude!)).tint(Color.bronze).tag(place.id) } }.id(plotted).mapStyle(.standard(elevation: .realistic)).mapControls { MapCompass(); MapScaleView() }
                 if let selected, let place = plotted.first(where: { $0.id == selected }) {
-                    Button { let item = MKMapItem(location: CLLocation(latitude: place.latitude!, longitude: place.longitude!), address: nil); item.name = place.name; item.openInMaps() } label: { Label("\(place.name) · Open in Maps", systemImage: "arrow.up.right").font(.caption) }.padding(.horizontal)
+                    Button { let item = MKMapItem(location: CLLocation(latitude: place.latitude!, longitude: place.longitude!), address: nil); item.name = place.name; item.openInMaps() } label: { Label("\(place.name) · Open in Maps", systemImage: "arrow.up.right").labelStyle(.titleOnly).font(.caption) }.padding(.horizontal)
                 }
             }
             if !plotted.isEmpty { Text("\(plotted.count) \(plotted.count == 1 ? "place" : "places") on your map").font(.caption2).foregroundStyle(.secondary).accessibilityIdentifier("trip-map-count") }

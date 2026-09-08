@@ -259,7 +259,7 @@ struct FlightCard: View {
     let flight: FlightReservation
     var subtitle: String
     var status: String = "Saved schedule"
-    var actionSymbol = "chevron.right"
+    var actionSymbol: String? = nil
     @Environment(\.dynamicTypeSize) private var typeSize
     private var accent: Color {
         let seed = flight.airline.unicodeScalars.reduce(0) { $0 + Int($1.value) }
@@ -272,7 +272,7 @@ struct FlightCard: View {
                 Text(flight.flightNumber.isEmpty ? "Your flight" : flight.flightNumber.uppercased()).font(.subheadline.weight(.semibold)).foregroundStyle(accent).fixedSize()
                 Text(flight.airline).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                 Spacer(minLength: 0)
-                Image(systemName: actionSymbol).font(.caption.weight(.medium)).foregroundStyle(Color.bronze)
+                if let actionSymbol { Image(systemName: actionSymbol).font(.caption.weight(.medium)).foregroundStyle(Color.bronze) }
             }
             let layout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 10)) : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: 12))
             layout {
@@ -396,7 +396,7 @@ struct FlightDetailPanel: View {
             VStack(alignment: .leading, spacing: 12) {
                 HStack { Label("Your flight notes", systemImage: "text.alignleft").font(.subheadline.weight(.medium)); Spacer(); Button("Edit", action: edit).font(.subheadline) }
                 Text(flight.flight.notes.isEmpty ? "Keep your booking details and reminders here." : flight.flight.notes).font(.subheadline).foregroundStyle(.secondary)
-                if let link = validatedURL(flight.flight.bookingLink) { Link(destination: link) { Label("Open booking", systemImage: "arrow.up.right.square").font(.subheadline) } }
+                if let link = validatedURL(flight.flight.bookingLink) { Link(destination: link) { Label("Open booking", systemImage: "arrow.up.right.square").labelStyle(.titleOnly).font(.subheadline) } }
             }.padding(16).cardSurface(cornerRadius: 18)
             HStack(alignment: .top) {
                 Text("Airport local times · Live updates by FlightAware").font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("flight-detail-footer")
