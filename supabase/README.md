@@ -34,9 +34,17 @@ A branded HTML sharing page would require a Supabase custom domain or a separate
 
 ## Providers and limits
 
-Google Places and FlightAware credentials are configured as **Supabase Edge Function secrets** and have been verified with live requests. Flight history remains disabled pending account entitlement confirmation. Tripadvisor and OpenAI adapter routes are deployed but their keys have not been supplied/configured. Apple Maps discovery and the local concierge preview remain available.
+Google Places and FlightAware credentials are configured as **Supabase Edge Function secrets** and have been verified with live requests. Flight history remains disabled pending account entitlement confirmation. OpenAI and Tripadvisor secrets are detected by the deployed function. OpenAI hotel overview has passed a live request. Activity recommendations now use a bounded Apple Maps shortlist supplied by the native app; they no longer depend on Tripadvisor. Legacy requests without candidates return an update-required response.
 
-Authenticated provider limits: autocomplete 60/minute per account, flights 20/minute per account with a 600/hour application cap, place search 30/minute and AI 10/hour per account. Auth and public routes have additional limits. These are application safeguards, not a provider billing guarantee.
+Tripadvisor's most recent pre-change recheck returned upstream HTTP 403. The adapter supports an optional `TRIPADVISOR_REFERER` secret for domain-restricted keys; it must be a URL matching the hostname allowed in Tripadvisor’s credentials settings. Apple search continues independently. Place details are an explicit optional lookup, with user confirmation of the matching listing. See `iOS/PlacesCostControls.md` for the routing and cost policy.
+
+Authenticated provider limits: autocomplete 60/minute per account, flights 20/minute per account with a 600/hour application cap, place search 30/minute, hotel/activity AI 10/hour per account, and concierge 40 requests/hour per account plus 1,000/hour application-wide. A concierge turn uses one request, or two when it requests Apple Maps lookups. Auth and public routes have additional limits. These are application safeguards, not a provider billing guarantee.
+
+### Live AI concierge
+
+`POST /v1/ai/concierge` uses the existing authenticated app session and server-only `OPENAI_API_KEY`. The model is `OPENAI_CONCIERGE_MODEL`, defaulting to `gpt-5.4-mini` independently of the older hotel/activity `OPENAI_MODEL` setting. Responses use strict structured output, medium reasoning effort, a 6,500-token output ceiling and `store: false`. The model generates the structured itinerary before its explanation to improve consistency between the saved draft and the reply. No additional key is required for native Apple Maps search.
+
+The native app sends bounded recent conversation history, prior draft itineraries, the selected trip's schedule and enabled preference/saved-place context. It omits booking references, private booking notes, journal notes and photos. Map candidates are validated and stripped to supported fields. At most two Apple Maps searches and a single final AI call follow the initial response; no Google or Tripadvisor requests occur in this chat flow. Outputs contain readable advice, follow-up suggestions and an optional draft of up to fourteen days. Users review and save drafts into local Travel themselves; the model has no booking, payment, account mutation or cloud-save tools.
 
 Flight status/position cache lasts 60 seconds; historical results last one hour. Historical calls are opt-in; far-future flights return a saved-schedule explanation without an upstream lookup. Expired session/cache metadata is cleaned on sign-in. Successful trip saves remove superseded immutable photo objects and sweep up to 100 unreferenced objects older than one day. Request-time cleanup does not run while the app is completely idle.
 
@@ -69,3 +77,13 @@ The previous local SQLite database had zero users, cloud documents, friendships,
 New authenticated FlightAware routes: `/v1/flights/route` (origin, destination, local date), `/v1/flights/airport` (code) and `/v1/flights/airport-nearby` (selected airport coordinates). Lookups share existing provider rate limits; airport metadata is cached for 24 hours. Nearby airport normalization accepts both current and legacy FlightAware code fields. Route searches request one nonstop provider page and disclose their limited date window.
 
 Run `python3 supabase/tests/flights_smoke.py --providers` for disposable-account ownership/CRUD tests and four bounded live provider queries. Verified September 7, 2026: one BA178 departure, two JFK–LHR route results, airport details and autocomplete resolution. Temporary users and their flights are deleted afterward.
+
+## Flight push monitoring
+
+`/v1/flight-notifications` provides authenticated per-installation watch listing, registration, token refresh and removal. Live flight identity is validated against FlightAware before following. Device-token rotation preserves the existing Live Activity token. Registrations are tied to the originating session, and logout revokes them transactionally through a foreign-key cascade.
+
+The `seur-flight-notifications` database cron runs every five minutes and skips Edge Function calls when no watches are due. Its internal worker endpoint requires an expiring, single-use database ticket. Work uses row-lock leases, shared flight lookups, bounded polling and an additional 120/hour provider limit. Tables have explicit deny policies for client roles and service-only grants. Secrets: `APNS_PRIVATE_KEY_B64`, `APNS_KEY_ID`, `APNS_TEAM_ID`, `APNS_BUNDLE_ID`; never deploy a `.p8` file as function source. [Native setup and operating details](../iOS/AppleServices.md).
+
+## Friends tab feed
+
+`GET /v1/feed` now uses the service-only `travel_social_feed(actor)` RPC. It includes accepted friends’ friends/public itineraries and private itineraries explicitly granted to the current account. The actor comes from the authenticated Seur session. Existing document redaction, photo summaries, grants and revocation rules apply; unrelated public itineraries are excluded. No new client database grants or public profile directory are added. The extended live smoke test verifies private-share inclusion, third-party exclusion, redaction, direct-RPC access denial and removal after revocation.

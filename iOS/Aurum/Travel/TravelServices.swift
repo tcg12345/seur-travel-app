@@ -2,18 +2,35 @@ import SwiftUI
 import MapKit
 import Security
 
-struct TravelAccount: Codable, Identifiable { var id: String; var handle: String; var name: String }
+struct TravelAccount: Codable, Identifiable, Hashable { var id: String; var handle: String; var name: String }
 struct TravelAuthResponse: Codable { var token: String; var user: TravelAccount }
 struct TravelServiceStatus: Codable { var tripadvisor: Bool; var ai: Bool; var publicSharing: Bool; var googlePlaces: Bool?; var flightTracking: Bool?; var flightHistory: Bool? }
 struct GooglePlaceSuggestion: Codable, Identifiable { var id: String; var title: String; var subtitle: String }
 struct TravelFriend: Codable, Identifiable { var id: String; var handle: String; var name: String; var status: String; var incoming: Bool }
 struct RemoteJourney: Codable, Identifiable { var id: String; var owner: TravelAccount; var document: JourneyDocument; var revision: Int; var isSummary: Bool? }
-struct TravelConversation: Codable, Identifiable { var id: String; var name: String; var members: [TravelAccount] }
-struct TravelChatMessage: Codable, Identifiable { var id: String; var sender: TravelAccount; var text: String; var documentID: String?; var createdAt: Double; var timestamp: String { Date(timeIntervalSince1970: createdAt).formatted(date: .abbreviated, time: .shortened) } }
+struct TravelConversation: Codable, Identifiable, Hashable { var id: String; var name: String; var members: [TravelAccount]; var pendingRequests: Int? = nil }
+struct TravelChatMessage: Codable, Identifiable { var id: String; var sender: TravelAccount; var text: String; var documentID: String?; var createdAt: Double; var tripRequest: TripRequestIntent? = nil; var replyTo: String? = nil; var documentIsTemplate: Bool? = nil; var timestamp: String { Date(timeIntervalSince1970: createdAt).formatted(date: .abbreviated, time: .shortened) } }
 struct TravelLink: Codable { var url: String }
 struct AITravelResponse: Codable { var text: String; var places: [PlaceRecord] }
 private struct APIProblem: Codable { var error: String }
 private struct EmptyReply: Codable { var ok: Bool }
+
+/// Coalesce only requests that are still running. Google prediction content is
+/// not persisted, prefetched or retained as a reusable response cache.
+@MainActor final class GoogleAutocompleteRequests {
+    private var pending: [String: Task<[GooglePlaceSuggestion], Error>] = [:]
+    func fetch(_ query: String, server: String, request: @escaping (String) async throws -> [GooglePlaceSuggestion]) async throws -> [GooglePlaceSuggestion] {
+        let normalized = query.split(whereSeparator: { $0.isWhitespace }).joined(separator: " ")
+        guard (3...200).contains(normalized.count) else { return [] }
+        try Task.checkCancellation()
+        let key = server + "|" + normalized.lowercased()
+        if let task = pending[key] { return try await task.value }
+        let task = Task { try await request(normalized) }
+        pending[key] = task
+        defer { pending[key] = nil }
+        return try await task.value
+    }
+}
 
 @MainActor @Observable final class TravelAPI {
     var baseURL: String { didSet { if oldValue != baseURL { defaults.set(baseURL, forKey: "aurum.backendURL"); account = nil; token = nil; savedFlights = [] } } }
@@ -22,6 +39,7 @@ private struct EmptyReply: Codable { var ok: Bool }
     private(set) var savedFlights: [FlightReservation] = []
     var savedFlightsError: String?
     private var token: String?
+    private let googleAutocomplete = GoogleAutocompleteRequests()
     private let defaults = UserDefaults.standard
     init() {
         let fallback = "https://bwrodcxmdzrpyrshrlfd.supabase.co/functions/v1/travel-api"
@@ -38,6 +56,9 @@ private struct EmptyReply: Codable { var ok: Bool }
         baseURL = configured
         #endif
         token = Self.readToken(for: baseURL)
+        #if DEBUG
+        if FriendsFixtures.enabled { account = FriendsFixtures.owner; token = "friends-fixture-only" }
+        #endif
     }
     var isSignedIn: Bool { account != nil && token != nil }
     func refresh() async throws {
@@ -52,16 +73,59 @@ private struct EmptyReply: Codable { var ok: Bool }
         }
     }
     func authenticate(handle: String, name: String, password: String, register: Bool) async throws {
+        let server = baseURL
         let response: TravelAuthResponse = try await request(register ? "/v1/auth/register" : "/v1/auth/login", method: "POST", body: ["handle": handle, "name": name, "password": password])
-        try Self.writeToken(response.token, for: baseURL)
-        token = response.token; account = response.user
+        try acceptAuthentication(response, server: server)
+    }
+    private func acceptAuthentication(_ response: TravelAuthResponse, server: String) throws {
+        guard baseURL == server else { throw JourneyError.message("The account server changed. Please sign in again.") }
+        try Self.writeToken(response.token, for: server)
+        token = response.token; account = response.user; savedFlights = []; savedFlightsError = nil
+    }
+    func authOptions() async throws -> AccountAuthOptions { try await request("/v1/auth/options") }
+    func signUpEmail(_ email: String, name: String, handle: String, password: String) async throws {
+        let _: PendingEmailAccount = try await request("/v1/auth/email/signup", method: "POST", body: ["email": email, "name": name, "handle": handle, "password": password])
+    }
+    func signInEmail(_ email: String, password: String) async throws {
+        let server = baseURL
+        let response: TravelAuthResponse = try await request("/v1/auth/email/login", method: "POST", body: ["email": email, "password": password])
+        try acceptAuthentication(response, server: server)
+    }
+    func verifyEmail(_ email: String, code: String) async throws {
+        let server = baseURL
+        let response: TravelAuthResponse = try await request("/v1/auth/email/verify", method: "POST", body: ["email": email, "code": code])
+        try acceptAuthentication(response, server: server)
+    }
+    func resendEmail(_ email: String) async throws { let _: EmptyReply = try await request("/v1/auth/email/resend", method: "POST", body: ["email": email]) }
+    func signInApple(idToken: String, nonce: String, name: String) async throws {
+        let server = baseURL
+        let response: TravelAuthResponse = try await request("/v1/auth/apple", method: "POST", body: ["idToken": idToken, "nonce": nonce, "name": name])
+        try acceptAuthentication(response, server: server)
+    }
+    func googleSignInURL(challenge: String) async throws -> URL {
+        let link: TravelLink = try await request("/v1/auth/google/start", method: "POST", body: ["challenge": challenge])
+        guard let url = URL(string: link.url), url.scheme == "https", url.host == URL(string: baseURL)?.host, url.path == "/auth/v1/authorize" else { throw JourneyError.message("Google sign-in returned an invalid address.") }
+        return url
+    }
+    func finishGoogleSignIn(code: String, verifier: String) async throws {
+        let server = baseURL
+        let response: TravelAuthResponse = try await request("/v1/auth/google/exchange", method: "POST", body: ["code": code, "verifier": verifier])
+        try acceptAuthentication(response, server: server)
+    }
+    func updateProfile(name: String, handle: String) async throws {
+        let server = baseURL, sessionToken = token
+        let user: TravelAccount = try await request("/v1/me", method: "PUT", body: ["name": name, "handle": handle])
+        guard baseURL == server && token == sessionToken else { return }
+        account = user
     }
     func deleteAccount() async throws {
         let _: EmptyReply = try await request("/v1/account", method: "DELETE", body: [:])
+        await FlightNotifications.shared.clearLocalActivities()
         Self.deleteToken(for: baseURL); token = nil; account = nil; savedFlights = []; savedFlightsError = nil
     }
-    func logout() async {
-        if token != nil { let _: EmptyReply? = try? await request("/v1/auth/logout", method: "POST", body: [:]) }
+    func logout() async throws {
+        if token != nil { let _: EmptyReply = try await request("/v1/auth/logout", method: "POST", body: [:]) }
+        await FlightNotifications.shared.clearLocalActivities()
         Self.deleteToken(for: baseURL); token = nil; account = nil; savedFlights = []; savedFlightsError = nil
     }
     func loadSavedFlights() async {
@@ -75,6 +139,16 @@ private struct EmptyReply: Codable { var ok: Bool }
             guard account?.id == user else { return }
             savedFlights = values; savedFlightsError = nil
         } catch { if account?.id == user { savedFlightsError = error.localizedDescription } }
+    }
+    func flightWatches(_ installation: String) async throws -> [FlightWatch] {
+        try await request("/v1/flight-notifications", query: ["installationID": installation])
+    }
+    func followFlight(_ body: [String: String], update: Bool = false) async throws -> FlightWatchReply {
+        try await request("/v1/flight-notifications", method: update ? "PUT" : "POST", body: body)
+    }
+    func stopFlightNotifications(_ installation: String, id: String? = nil) async throws {
+        var body = ["installationID": installation]; if let id { body["id"] = id }
+        let _: EmptyReply = try await request("/v1/flight-notifications", method: "DELETE", body: body)
     }
     func saveFlight(_ flight: FlightReservation) async throws {
         let user = account?.id, server = baseURL
@@ -135,29 +209,75 @@ private struct EmptyReply: Codable { var ok: Bool }
         return try await request("/v1/flights/position", query: ["id": id])
     }
     func autocompletePlaces(_ query: String) async throws -> [GooglePlaceSuggestion] {
-        try await perform("/v1/locations/autocomplete", method: "GET", data: nil, query: ["q": query], timeout: 5)
+        guard !PlaceSearchTestPolicy.blocksPaidRequests else { throw JourneyError.message("Live Google Places requests are disabled during automated tests.") }
+        guard isSignedIn, status?.googlePlaces != false else { return [] }
+        return try await googleAutocomplete.fetch(query, server: baseURL) { [self] value in
+            try await perform("/v1/locations/autocomplete", method: "GET", data: nil, query: ["q": value], timeout: 5)
+        }
     }
     func searchPlaces(_ query: String, category: PlaceCategory) async throws -> [PlaceRecord] {
-        try await request("/v1/places/search", query: ["q": query, "category": category == .hotel ? "hotels" : category == .restaurant || category == .bar || category == .cafe ? "restaurants" : "attractions"])
+        try requirePaidProviderAccess()
+        return try await request("/v1/places/search", query: ["q": query, "category": category == .hotel ? "hotels" : category == .restaurant || category == .bar || category == .cafe ? "restaurants" : "attractions"])
     }
-    func placeDetails(_ id: String) async throws -> PlaceRecord { try await request("/v1/places/\(id)") }
-    func recommendations(city: String, interests: String) async throws -> AITravelResponse { try await request("/v1/ai/activities", method: "POST", body: ["city": city, "interests": interests]) }
-    func hotelOverview(_ place: PlaceRecord) async throws -> AITravelResponse { try await request("/v1/ai/hotel", method: "POST", encodable: place) }
+    func placeDetails(_ id: String) async throws -> PlaceRecord { try requirePaidProviderAccess(); return try await request("/v1/places/\(id)") }
+    func recommendations(city: String, interests: String) async throws -> AITravelResponse {
+        try requirePaidProviderAccess()
+        let payload = try await AppleActivityIdeas.prepare(city: city, interests: interests)
+        try Task.checkCancellation()
+        guard !payload.candidates.isEmpty else { return AITravelResponse(text: "No places were found in Apple Maps. Try another destination or different interests.", places: []) }
+        return try await request("/v1/ai/activities", method: "POST", encodable: payload)
+    }
+    func conciergeReply(_ payload: ConciergeRequest) async throws -> ConciergeReply {
+        #if DEBUG
+        if ConciergeFixtures.enabled {
+            try await Task.sleep(for: .milliseconds(80))
+            return ConciergeReply(text: "## A plan shaped around you\n\nHere is a flexible two-day plan for Paris, with time for exploring and a slower afternoon. You can review each activity before saving it.\n\nTell me what you would like to change and I’ll refine the plan.", suggestions: ["Make the pace slower", "Add more restaurant ideas"], searches: [], itinerary: ConciergeFixtures.plan)
+        }
+        #endif
+        try requirePaidProviderAccess()
+        return try await perform("/v1/ai/concierge", method: "POST", data: JSONEncoder().encode(payload), timeout: 90)
+    }
+    func conciergeSearch(_ query: ConciergeSearch) async throws -> [PlaceRecord] {
+        try Task.checkCancellation()
+        let destinations = try await ApplePlaceSearch.search(query.city, citiesOnly: true)
+        guard let destination = destinations.first(where: \.hasCoordinate) else { return [] }
+        let city = ExploreCity(name: query.city, country: "", latitude: destination.latitude!, longitude: destination.longitude!)
+        let results = try await CityExploreSearch.search(city: city, interest: .highlights, term: query.query, wider: false)
+        try Task.checkCancellation()
+        return Array(results.prefix(8).map(\.record))
+    }
+    private func requirePaidProviderAccess() throws {
+        guard !PlaceSearchTestPolicy.blocksPaidRequests else { throw JourneyError.message("Live paid place and AI requests are disabled during automated tests.") }
+        guard isSignedIn else { throw JourneyError.message("Sign in to your travel account to use this feature.") }
+    }
+    func hotelOverview(_ place: PlaceRecord) async throws -> AITravelResponse { try requirePaidProviderAccess(); return try await request("/v1/ai/hotel", method: "POST", encodable: place) }
     func friends() async throws -> [TravelFriend] { try await request("/v1/friends") }
     func requestFriend(_ handle: String) async throws { let _: EmptyReply = try await request("/v1/friends", method: "POST", body: ["handle": handle]) }
     func respondFriend(_ id: String, accept: Bool) async throws { let _: EmptyReply = try await request("/v1/friends/\(id)", method: accept ? "PUT" : "DELETE", body: [:]) }
+    func templates(city: String = "", tags: String = "") async throws -> [RemoteJourney] { try await request("/v1/templates", query: ["city": city, "tags": tags]) }
+    func template(_ id: UUID) async throws -> RemoteJourney { try await request("/v1/templates/\(id.uuidString)") }
+    func recordTemplateUse(_ id: UUID, clone: UUID) async throws { let _: EmptyReply = try await request("/v1/templates/\(id.uuidString)/uses", method: "POST", body: ["cloneID": clone.uuidString]) }
     func documents(feed: Bool = false) async throws -> [RemoteJourney] { try await request(feed ? "/v1/feed" : "/v1/documents") }
     func document(_ id: String) async throws -> RemoteJourney { try await request("/v1/documents/\(id)") }
     func upload(_ document: JourneyDocument) async throws -> RemoteJourney { try await request("/v1/documents/\(document.id.uuidString)", method: "PUT", encodable: document) }
     func deleteDocument(_ id: String) async throws { let _: EmptyReply = try await request("/v1/documents/\(id)", method: "DELETE") }
+    func recapLink(_ payload: RecapShareRequest) async throws -> TravelLink { try await perform("/v1/recaps", method: "POST", data: JSONEncoder().encode(payload), timeout: 90) }
+    func revokeRecaps(_ id: UUID) async throws { let _: EmptyReply = try await request("/v1/recaps/" + id.uuidString, method: "DELETE") }
     func link(_ id: UUID) async throws -> TravelLink { try await request("/v1/documents/\(id.uuidString)/link", method: "POST", body: [:]) }
     func revoke(_ id: UUID) async throws { let _: EmptyReply = try await request("/v1/documents/\(id.uuidString)/revoke", method: "POST", body: [:]) }
     func conversations() async throws -> [TravelConversation] { try await request("/v1/conversations") }
     func createConversation(name: String, members: [String]) async throws -> TravelConversation { try await request("/v1/conversations", method: "POST", body: ["name": name, "members": members]) }
     func messages(_ conversation: String) async throws -> [TravelChatMessage] { try await request("/v1/conversations/\(conversation)/messages") }
-    func send(_ conversation: String, text: String, documentID: String?) async throws -> TravelChatMessage {
+    func send(_ conversation: String, text: String, documentID: String?, replyTo: String? = nil) async throws -> TravelChatMessage {
         var body: [String: Any] = ["text": text]; if let documentID { body["documentID"] = documentID }
+        if let replyTo { body["replyTo"] = replyTo }
         return try await request("/v1/conversations/\(conversation)/messages", method: "POST", body: body)
+    }
+    func requestTrip(_ conversation: String, intent: TripRequestIntent, note: String) async throws -> TravelChatMessage {
+        try await request("/v1/conversations/\(conversation)/messages", method: "POST", body: [
+            "text": note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? intent.prompt : note,
+            "tripRequest": ["city": intent.city, "month": intent.month]
+        ])
     }
     private func request<T: Decodable, Body: Encodable>(_ path: String, method: String, encodable: Body) async throws -> T {
         try await perform(path, method: method, data: JSONEncoder().encode(encodable))
@@ -166,6 +286,9 @@ private struct EmptyReply: Codable { var ok: Bool }
         try await perform(path, method: method, data: body.map { try JSONSerialization.data(withJSONObject: $0) }, query: query)
     }
     private func perform<T: Decodable>(_ path: String, method: String, data: Data?, query: [String: String] = [:], timeout: TimeInterval = 40) async throws -> T {
+        #if DEBUG
+        if FriendsFixtures.enabled { return try JSONDecoder().decode(T.self, from: FriendsFixtures.response(path, method: method)) }
+        #endif
         guard var url = URLComponents(string: baseURL.trimmingCharacters(in: .whitespacesAndNewlines)), let host = url.host,
               url.scheme == "https" || (url.scheme == "http" && ["localhost", "127.0.0.1", "::1"].contains(host)) else { throw JourneyError.message("The cloud service address is invalid. Check the server setting in Travel → Account.") }
         url.path = url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/")); url.path = (url.path.isEmpty ? "" : "/" + url.path) + path
@@ -208,5 +331,39 @@ private struct EmptyReply: Codable { var ok: Bool }
     }
     static func record(_ item: MKMapItem, fallbackName: String, category: PlaceCategory = .other) -> PlaceRecord {
         PlaceRecord(id: item.identifier?.rawValue ?? UUID().uuidString, name: item.name ?? fallbackName, category: category, city: item.addressRepresentations?.cityName ?? "", address: item.address?.fullAddress ?? item.addressRepresentations?.fullAddress(includingRegion: true, singleLine: true) ?? "", phone: item.phoneNumber ?? "", website: item.url?.absoluteString ?? "", latitude: item.location.coordinate.latitude, longitude: item.location.coordinate.longitude, source: "Apple Maps")
+    }
+}
+
+
+struct ActivityIdeasRequest: Encodable {
+    let city: String
+    let interests: String
+    let candidates: [PlaceRecord]
+}
+
+@MainActor enum AppleActivityIdeas {
+    typealias Search = (String, String) async throws -> [PlaceRecord]
+    static func prepare(city: String, interests: String, search: Search = findPlaces) async throws -> ActivityIdeasRequest {
+        let city = city.trimmingCharacters(in: .whitespacesAndNewlines)
+        let interests = interests.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard (2...100).contains(city.count), interests.count <= 1000 else { throw JourneyError.message("Enter a destination and up to 1,000 characters of interests.") }
+        try Task.checkCancellation()
+        let found = try await search(city, interests)
+        try Task.checkCancellation()
+        var seen = Set<String>()
+        let candidates = found.filter { $0.source == "Apple Maps" && $0.hasCoordinate && !$0.name.isEmpty && seen.insert($0.id).inserted }.prefix(8)
+        return ActivityIdeasRequest(city: city, interests: interests, candidates: Array(candidates))
+    }
+    private static func findPlaces(city: String, interests: String) async throws -> [PlaceRecord] {
+        let destinations = try await ApplePlaceSearch.search(city, citiesOnly: true)
+        try Task.checkCancellation()
+        guard let destination = destinations.first(where: \.hasCoordinate) else { return [] }
+        let region = ExploreCity(name: city, country: "", latitude: destination.latitude!, longitude: destination.longitude!)
+        // At most two regional searches; no search-per-keystroke or paid fallback.
+        let preferred = try await CityExploreSearch.search(city: region, interest: .attractions, term: interests.isEmpty ? "attractions" : interests, wider: false)
+        try Task.checkCancellation()
+        if preferred.count >= 8 || interests.isEmpty { return preferred.map(\.record) }
+        let highlights = try await CityExploreSearch.search(city: region, interest: .attractions, term: "", wider: false)
+        return (preferred + highlights).map(\.record)
     }
 }

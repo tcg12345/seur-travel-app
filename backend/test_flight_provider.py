@@ -24,6 +24,11 @@ class FlightProviderTests(unittest.TestCase):
         self.assertEqual(mapped['arrivalDelay'],2100)
         self.assertNotIn('gateOrigin',mapped)
         self.assertEqual(mapped['origin'],'JFK')
+    def test_runway_estimates_are_preserved(self):
+        mapped = f.normalized(self.row(estimated_off='2026-09-08T01:27:00Z', estimated_on='2026-09-08T08:40:00Z'))
+        self.assertEqual(mapped['estimatedOff'], '2026-09-08T01:27:00Z')
+        self.assertEqual(mapped['estimatedOn'], '2026-09-08T08:40:00Z')
+        self.assertNotIn('estimatedOff', f.normalized(self.row()))
     def test_cache_secret_and_exact_day(self):
         with patch.dict(os.environ, {'FLIGHTAWARE_API_KEY':'test-secret'}), patch.object(f,'request_json', return_value={'flights':[self.row(),self.row(scheduled_out='2020-01-01T12:00:00Z')]}) as request:
             a=f.status(' BA 178 ',self.day.isoformat()); b=f.status('BA178',self.day.isoformat())

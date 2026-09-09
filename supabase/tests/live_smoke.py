@@ -43,6 +43,7 @@ try:
  req=urllib.request.Request(ROOT+'/auth/v1/token?grant_type=password',headers={'apikey':PUB,'Content-Type':'application/json'},data=json.dumps({'email':a['user']['handle']+'@accounts.seur.invalid','password':password}).encode())
  with urllib.request.urlopen(req,timeout=20) as r:jwt=json.load(r)['access_token']
  check_denied('travel_documents?select=*',jwt);check_denied('travel_sessions?select=*',jwt)
+ check_denied('rpc/travel_social_feed',body={'actor':aid});check_denied('rpc/travel_social_feed',jwt,body={'actor':aid})
  d=make_document();path='/v1/documents/'+d['id'];saved=call('PUT',path,d,at);assert saved['revision']==1
  restored=call('GET',path,token=at)['document'];assert restored==d,'Document/photo roundtrip changed data'
  listing=call('GET','/v1/documents',token=at);assert listing[0]['isSummary'] and listing[0]['document']['places'][0]['photos']==[]
@@ -63,10 +64,19 @@ try:
  chat='/v1/conversations/'+group['id']+'/messages'
  call('GET',chat,token=ct,expected=403);call('POST',chat,{'text':'Temporary test share','documentID':d['id']},at)
  assert len(call('GET',chat,token=bt))==1
+ # Directly shared private itineraries belong in the Friends trip feed too.
+ d['visibility']='private';d['updatedAt']+=1;call('PUT',path,d,at)
+ assert call('GET','/v1/feed',token=bt)==[]
+ call('POST',chat,{'text':'Private test itinerary','documentID':d['id']},at)
+ private_feed=call('GET','/v1/feed',token=bt)
+ assert len(private_feed)==1 and private_feed[0]['id'].lower()==d['id'].lower()
+ assert private_feed[0]['document']['hotels'][0]['confirmation']==''
+ assert call('GET','/v1/feed',token=ct)==[]
  link=call('POST',path+'/link',{},at)['url'];doc=call('GET',link+'?format=json')['document'];assert doc['hotels'][0]['confirmation']==''
  pdf=call('GET',link,raw=True);assert pdf.startswith(b'%PDF');Path('/tmp/seur-shared-trip.pdf').write_bytes(pdf)
  txt=call('GET',link+'?format=txt',raw=True).decode();assert 'Evening review' in txt and 'PRIVATE-' not in txt
  call('DELETE','/v1/friends/'+bid,{},at);call('GET',path,token=bt,expected=403)
+ assert call('GET','/v1/feed',token=bt)==[]
  call('POST',chat,{'text':'Cannot restore grant','documentID':d['id']},at,expected=403)
  call('POST',path+'/revoke',{},at);call('GET',link,expected=404)
  d['visibility']='public';d['updatedAt']+=1;call('PUT',path,d,at);assert call('GET',path,token=ct)['document']['title']==d['title']

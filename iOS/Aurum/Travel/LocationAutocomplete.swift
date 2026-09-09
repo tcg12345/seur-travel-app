@@ -2,6 +2,17 @@ import SwiftUI
 import MapKit
 import Observation
 
+enum PlaceSearchTestPolicy {
+    static var blocksPaidRequests: Bool {
+        let process = ProcessInfo.processInfo
+        return process.arguments.contains("--ui-testing") || process.environment["XCTestConfigurationFilePath"] != nil || process.environment["XCTestBundlePath"] != nil || NSClassFromString("XCTestCase") != nil
+    }
+    static var usesFixtures: Bool {
+        let args = ProcessInfo.processInfo.arguments
+        return args.contains("--ui-testing") && !args.contains("--live-apple-places")
+    }
+}
+
 enum LocationSearchKind: Equatable {
     case destination, city, airport, place, address, country, timeZone
     var symbol: String {
@@ -15,6 +26,7 @@ struct LocationSelection {
     var place: PlaceRecord
     var country = ""
     var timeZone = ""
+    var countryCode: String?
 }
 
 struct LocationSuggestion: Identifiable {
@@ -39,16 +51,31 @@ struct LocationSuggestion: Identifiable {
     private var revision = UUID()
     private(set) var query = ""
     private let fixtures: Bool
-    init(fixtures: Bool = false) { self.fixtures = fixtures; super.init() }
+    private let appleSearch: ((String, LocationSearchKind) async throws -> [LocationSuggestion])?
+    private var kind: LocationSearchKind = .destination
+    private var context = ""
+    private var requestedGoogle = false
+    var canRequestGoogle: Bool { (kind == .place || kind == .address) && query.count >= 3 && !loading && !resolving && !requestedGoogle }
+    init(fixtures: Bool = false, appleSearch: ((String, LocationSearchKind) async throws -> [LocationSuggestion])? = nil) {
+        self.fixtures = fixtures; self.appleSearch = appleSearch; super.init()
+    }
+    private var contextualQuery: String {
+        context.isEmpty || query.split(whereSeparator: { $0.isWhitespace }).count > 1 || query.localizedCaseInsensitiveContains(context) ? query : query + " " + context
+    }
 
-    func update(_ value: String, kind: LocationSearchKind, context: String = "", googleSearch: ((String) async throws -> [GooglePlaceSuggestion])? = nil) {
+    func update(_ value: String, kind: LocationSearchKind, context: String = "") {
+        let next = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        let area = context.trimmingCharacters(in: .whitespacesAndNewlines)
+        let unchanged = query == next && self.kind == kind && self.context == area
+        if unchanged && (loading || resolving || !suggestions.isEmpty) { return }
         stop()
-        query = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !unchanged { requestedGoogle = false }
+        query = next; self.kind = kind; self.context = area
         guard query.count >= 2 else { return }
         if kind.isLocal { suggestions = Self.localSuggestions(query, kind: kind); return }
         loading = true
         let current = revision; let fragment = query
-        let contextual = context.isEmpty || query.split(whereSeparator: { $0.isWhitespace }).count > 1 || query.localizedCaseInsensitiveContains(context) ? query : query + " " + context
+        let contextual = contextualQuery
         work = Task { [weak self] in
             do { try await Task.sleep(for: .milliseconds(350)) } catch { return }
             guard let self, !Task.isCancelled, self.revision == current else { return }
@@ -57,17 +84,16 @@ struct LocationSuggestion: Identifiable {
                 self.suggestions = Self.testSuggestions(fragment, kind: kind); self.loading = false; return
             }
             #endif
-            if (kind == .place || kind == .address), let googleSearch {
+            if let appleSearch = self.appleSearch {
                 do {
-                    let matches = try await googleSearch(contextual)
+                    let matches = try await appleSearch(contextual, kind)
                     guard !Task.isCancelled, self.revision == current else { return }
-                    if !matches.isEmpty {
-                        self.suggestions = matches.map { LocationSuggestion(title: $0.title, subtitle: $0.subtitle, google: $0) }
-                        self.loading = false
-                        return
-                    }
-                } catch { /* Apple Maps remains available when the server is offline or unconfigured. */ }
-                guard !Task.isCancelled, self.revision == current else { return }
+                    self.suggestions = matches; self.loading = false
+                } catch {
+                    guard !Task.isCancelled, self.revision == current else { return }
+                    self.loading = false; self.message = "Suggestions are unavailable. You can still enter a location."
+                }
+                return
             }
             let engine = MKLocalSearchCompleter()
             engine.region = MKCoordinateRegion(.world)
@@ -82,6 +108,28 @@ struct LocationSuggestion: Identifiable {
             default: engine.resultTypes = [.pointOfInterest, .address]
             }
             self.completer = engine; engine.delegate = self; engine.queryFragment = contextual
+        }
+    }
+    // Paid suggestions are requested only by an explicit tap, never by typing,
+    // focus changes, automatic retries or an empty Apple response.
+    func requestGoogle(search: @escaping (String) async throws -> [GooglePlaceSuggestion]) {
+        guard canRequestGoogle else { return }
+        let fallback = suggestions
+        let contextual = contextualQuery
+        stop(); requestedGoogle = true; loading = true
+        let current = revision
+        work = Task { [weak self] in
+            do {
+                let matches = try await search(contextual)
+                guard let self, !Task.isCancelled, self.revision == current else { return }
+                self.loading = false
+                self.suggestions = matches.isEmpty ? fallback : matches.map { LocationSuggestion(title: $0.title, subtitle: $0.subtitle, google: $0) }
+                if matches.isEmpty { self.message = "No additional suggestions. Try a more specific name." }
+            } catch {
+                guard let self, !Task.isCancelled, self.revision == current else { return }
+                self.loading = false; self.suggestions = fallback
+                self.message = "Google suggestions couldn’t load. You can use an existing match or refine your search."
+            }
         }
     }
     func completerDidUpdateResults(_ completer: MKLocalSearchCompleter) {
@@ -126,7 +174,7 @@ struct LocationSuggestion: Identifiable {
                 default: text = place.name
                 }
                 self.resolving = false
-                completion(LocationSelection(text: text, place: place, country: mapItem.addressRepresentations?.regionName ?? "", timeZone: mapItem.timeZone?.identifier ?? ""))
+                completion(LocationSelection(text: text, place: place, country: mapItem.addressRepresentations?.regionName ?? "", timeZone: mapItem.timeZone?.identifier ?? "", countryCode: mapItem.placemark.isoCountryCode))
             } catch {
                 guard let self, !Task.isCancelled, self.revision == current else { return }
                 self.resolving = false; self.message = "Couldn’t open that suggestion. Try again or enter the location manually."
@@ -184,7 +232,7 @@ struct LocationAutocompleteField: View {
         self.title = title; _text = text; self.kind = kind; self.identifier = identifier; self.category = category; self.searchContext = searchContext; self.suggestionSymbol = suggestionSymbol; self.onEdit = onEdit; self.onSelect = onSelect
         #if DEBUG
         let args = ProcessInfo.processInfo.arguments
-        _model = State(initialValue: LocationAutocompleteModel(fixtures: args.contains("--ui-testing") && args.contains("--location-testing")))
+        _model = State(initialValue: LocationAutocompleteModel(fixtures: PlaceSearchTestPolicy.usesFixtures || (args.contains("--ui-testing") && args.contains("--location-testing"))))
         #else
         _model = State(initialValue: LocationAutocompleteModel())
         #endif
@@ -215,13 +263,18 @@ struct LocationAutocompleteField: View {
                         if index < model.suggestions.count - 1 { Divider() }
                     }
                     if let message = model.message { Text(message).font(.caption).foregroundStyle(.secondary).padding(.vertical, 10) }
+                    if model.canRequestGoogle && !PlaceSearchTestPolicy.blocksPaidRequests && api.isSignedIn && api.status?.googlePlaces != false {
+                        Button("Try Google suggestions") { model.requestGoogle { try await api.autocompletePlaces($0) } }
+                            .font(.caption).padding(.vertical, 10).accessibilityIdentifier(identifier + "-google-fallback")
+                    }
                     if !model.suggestions.isEmpty { Text(kind.isLocal ? "Suggested matches" : model.suggestions.contains(where: { $0.google != nil }) ? "Google Maps" : "Apple Maps suggestions").font(.caption).foregroundStyle(.secondary).padding(.bottom, 5) }
                 }.padding(.top, 6)
             }
         }
-        .onChange(of: text) { if focused { model.update(text, kind: kind, context: searchContext, googleSearch: { try await api.autocompletePlaces($0) }) } }
-        .onChange(of: focused) { if focused { model.update(text, kind: kind, context: searchContext, googleSearch: { try await api.autocompletePlaces($0) }) } else { model.stop() } }
-        .onChange(of: kind) { if focused { model.update(text, kind: kind, context: searchContext, googleSearch: { try await api.autocompletePlaces($0) }) } }
+        .onChange(of: text) { if focused { model.update(text, kind: kind, context: searchContext) } }
+        .onChange(of: focused) { if focused { model.update(text, kind: kind, context: searchContext) } else { model.stop() } }
+        .onChange(of: kind) { if focused { model.update(text, kind: kind, context: searchContext) } }
+        .onChange(of: searchContext) { if focused { model.update(text, kind: kind, context: searchContext) } }
         .onDisappear { model.stop() }
     }
 }

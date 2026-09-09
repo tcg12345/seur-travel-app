@@ -5,22 +5,36 @@ struct TravelHubView: View {
     @Environment(TravelAPI.self) private var api
     @Environment(JourneyLibrary.self) private var library
     @Environment(TravelStore.self) private var store
-    @State private var section = "Trips"
     @State private var query = ""
     @State private var grid = false
     @State private var newJourney = false
+    @State private var browsingTemplates = false
     @State private var account = false
     @State private var filter = "All"
+    @State private var section = "Trips"
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private var documents: [JourneyDocument] {
-        library.documents.filter { (query.isEmpty || ($0.title + " " + $0.routeLabel).localizedCaseInsensitiveContains(query)) && (filter == "All" || $0.visibility.title == filter) }.sorted { $0.updatedAt > $1.updatedAt }
+        library.trips.filter { (query.isEmpty || ($0.title + " " + $0.routeLabel).localizedCaseInsensitiveContains(query)) && (filter == "All" || $0.visibility.title == filter) }.sorted { $0.updatedAt > $1.updatedAt }
     }
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
-                Picker("Travel tool", selection: $section) { Text("Trips").tag("Trips"); Text("Friends").tag("Friends") }.pickerStyle(.segmented).accessibilityIdentifier("travel-tool")
-                if section == "Friends" { TravelFriendsView() }
-                else {
-                    if !library.documents.isEmpty { HStack {
+            VStack(alignment: .leading, spacing: 18) {
+                if section == "Trips" && query.isEmpty { TodayHubView() }
+                HStack(spacing: 28) {
+                    ForEach(["Trips", "Wishlist"], id: \.self) { title in
+                        Button { withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) { section = title; query = "" } } label: {
+                            VStack(spacing: 10) {
+                                Text(title).font(.headline).foregroundStyle(section == title ? Color.bronze : .secondary)
+                                Capsule().fill(section == title ? Color.bronze : .clear).frame(height: 3)
+                            }.fixedSize(horizontal: true, vertical: false)
+                        }.buttonStyle(.plain).accessibilityIdentifier("travel-section-" + title).accessibilityAddTraits(section == title ? .isSelected : [])
+                    }
+                    Spacer()
+                }
+                if section == "Wishlist" { WishlistContent(query: query) }
+                else { Group {
+                    if query.isEmpty { TravelStatsPreview(compact: true) }
+                    if !library.trips.isEmpty { HStack {
                         Menu { Picker("Show", selection: $filter) { ForEach(["All", "Private", "Friends", "Public"], id: \.self) { Text($0) } } } label: { Label(filter == "All" ? "All trips" : filter, systemImage: "line.3.horizontal.decrease") }.font(.subheadline)
                         Spacer()
                         Button { withAnimation(.smooth) { grid.toggle() } } label: { Image(systemName: grid ? "list.bullet" : "square.grid.2x2").frame(width: 38, height: 38) }.buttonStyle(.glass).accessibilityLabel(grid ? "List view" : "Grid view")
@@ -34,7 +48,7 @@ struct TravelHubView: View {
                             } else {
                                 Button { newJourney = true } label: { Label("Create trip", systemImage: "plus").padding(.vertical, 10) }.buttonStyle(.glassProminent).accessibilityIdentifier("travel-create")
                             }
-                        }.frame(maxWidth: .infinity).padding(.vertical, 30).padding(.horizontal, 15).background(.background, in: .rect(cornerRadius: 28))
+                        }.frame(maxWidth: .infinity).padding(.vertical, 30).padding(.horizontal, 15).cardSurface(cornerRadius: 28)
                     } else {
                         LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 14), count: grid ? 2 : 1), spacing: 16) {
                             ForEach(documents) { document in
@@ -43,20 +57,27 @@ struct TravelHubView: View {
                         }
                     }
                     if !store.plans.isEmpty {
-                        NavigationLink { TripsView() } label: { Label("Earlier saved plans · \(store.plans.count)", systemImage: "tray.full").font(.subheadline).frame(maxWidth: .infinity).padding(18).background(.background, in: .rect(cornerRadius: 22)) }
+                        NavigationLink { TripsView() } label: { Label("Earlier saved plans · \(store.plans.count)", systemImage: "tray.full").font(.subheadline).frame(maxWidth: .infinity).padding(18).cardSurface(cornerRadius: 22) }
                     }
-                }
+                } }
             }.padding(22)
         }.background(Color.canvas).navigationTitle("Travel").navigationBarTitleDisplayMode(.inline)
-            .searchable(text: $query, prompt: "Search trips or destinations")
+            .searchable(text: $query, prompt: section == "Wishlist" ? "Search ideas, destinations or notes" : "Search trips or destinations")
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) { Button { account = true } label: { if api.isSignedIn { Image(systemName: "person.crop.circle") } else { Text("Sign in").font(.subheadline.weight(.medium)) } }.accessibilityLabel("Travel account") }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button { section = "Trips"; newJourney = true } label: { Image(systemName: "plus") }
+                    Menu {
+                        Button("Create a trip", systemImage: "plus") { newJourney = true }
+                            .accessibilityIdentifier("travel-create-blank")
+                        Button("Use a template", systemImage: "doc.on.doc") {
+                            section = "Trips"; query = ""; browsingTemplates = true
+                        }.accessibilityIdentifier("travel-use-template")
+                    } label: { Image(systemName: "plus") }
                         .accessibilityLabel("New trip").accessibilityIdentifier("travel-new-trip")
                 }
             }
-            .sheet(isPresented: $newJourney) { TripCreationView() }
+            .sheet(isPresented: $newJourney) { TripCreationView(onCreated: { _ in section = "Trips"; query = "" }) }
+            .navigationDestination(isPresented: $browsingTemplates) { TemplateBrowseView() }
             .navigationDestination(isPresented: $account) { TravelAccountPage() }
             .alert("Travel", isPresented: Binding(get: { library.error != nil }, set: { if !$0 { library.error = nil } })) { Button("OK") { library.error = nil } } message: { Text(library.error ?? "") }
     }
@@ -80,10 +101,10 @@ private struct JourneyCard: View {
                 Text("\(document.planCount) plans · \(document.places.count) journal places" + (document.nights > 0 ? " · \(document.nights) nights" : "")).font(.caption).foregroundStyle(.secondary)
                 HStack {
                     Label(document.visibility.title, systemImage: document.visibility == .private ? "lock" : "person.2").font(.caption2).foregroundStyle(.secondary)
-                    Spacer(); Image(systemName: "arrow.up.right").foregroundStyle(Color.bronze)
+                    Spacer()
                 }
             }.padding(19)
-        }.background(.background, in: .rect(cornerRadius: 27)).clipShape(.rect(cornerRadius: 27))
+        }.cardSurface(cornerRadius: 27).clipShape(.rect(cornerRadius: 27))
     }
 }
 
@@ -94,9 +115,12 @@ struct JourneyDetailView: View {
     @Environment(\.dismiss) private var dismiss
     let id: UUID
     @State private var mode = "Agenda"
+    @State private var choseInitialMode = false
     @State private var chapter = "Plan"
     @State private var selectedDay: String?
+    @State private var chooseDates = false
     @State private var editInfo = false
+    @State private var routing = false
     @State private var event: JourneyEvent?
     @State private var addingPlan = false
     @State private var addingDay: JourneyAgendaDay?
@@ -119,11 +143,32 @@ struct JourneyDetailView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 25) {
                         header(document)
+                        if document.isWishlistTrip {
+                            Button { chooseDates = true } label: { Label("Choose dates & move to Trips", systemImage: "calendar.badge.plus").frame(maxWidth: .infinity).padding(.vertical, 8) }.buttonStyle(.glassProminent).accessibilityIdentifier("wishlist-schedule-trip")
+                        }
+                        if chapter == "Plan" && !document.stops.isEmpty {
+                            Button { if document.stops.count > 1 { routing = true } else { editInfo = true } } label: {
+                                HStack(spacing: 13) {
+                                    Image(systemName: "point.topleft.down.to.point.bottomright.curvepath").font(.title2).foregroundStyle(Color.bronze)
+                                    VStack(alignment: .leading, spacing: 5) {
+                                        Text(document.stops.count > 1 ? "Plan your route" : "Add another destination").font(.headline).foregroundStyle(.primary)
+                                        Text(document.stops.count > 1 ? "Compare city order and transfer days" : "Turn this into a multi-city trip").font(.caption).foregroundStyle(.secondary)
+                                    }
+                                    Spacer()
+                                }.padding(16).cardSurface(cornerRadius: 18)
+                            }.buttonStyle(.plain).accessibilityIdentifier("trip-route-planner")
+                        }
+                        if chapter != "Recap" && TripRecap(document: document).hasEnded() {
+                            Button { withAnimation { chapter = "Recap" } } label: {
+                                Label("Your trip recap is ready", systemImage: "sparkles").font(.subheadline.weight(.medium)).frame(maxWidth: .infinity, alignment: .leading).padding(14)
+                            }.buttonStyle(.glass).accessibilityIdentifier("recap-ready")
+                        }
                         tripNavigation
-                        if chapter == "Plan" { itinerary(document) } else { journal(document) }
+                        if chapter == "Plan" { if mode == "Today" { TodayView(document: document) } else { itinerary(document) } } else if chapter == "Recap" { TripRecapView(document: document) { chapter = "Journal"; journalPlanPicker = true } } else { journal(document) }
                     }.padding(22)
                 }.background(Color.canvas)
                     .accessibilityIdentifier("journey-scroll")
+                    .onAppear { if !choseInitialMode { mode = TodayPlanner.isActive(document, now: TodayClock.now()) ? "Today" : "Agenda"; choseInitialMode = true } }
                     .onScrollGeometryChange(for: CGFloat.self) { geometry in
                         max(0, geometry.contentOffset.y + geometry.contentInsets.top)
                     } action: { _, offset in
@@ -152,12 +197,17 @@ struct JourneyDetailView: View {
                     .safeAreaInset(edge: .bottom, spacing: 0) {
                         HStack {
                             Spacer(minLength: 0)
-                            addButton
+                            if chapter != "Recap" { addButton }
                         }
                         .padding(.horizontal, 22)
-                        .frame(height: 70, alignment: .top)
+                        .frame(height: chapter == "Recap" ? 0 : 70, alignment: .top)
                     }
+                    .sheet(isPresented: $routing) { RoutePlannerView(document: document) { updated in
+                        guard library.documents.first(where: { $0.id == id }) == document else { return "This trip changed while you were planning. Close and reopen the route planner to use the latest version." }
+                        return library.save(updated) ? nil : library.error
+                    } }
                     .sheet(isPresented: $editInfo) { JourneyEditor(document: document) }
+                    .sheet(isPresented: $chooseDates) { WishlistScheduleView(documentID: id) }
                     .sheet(isPresented: $addingPlan) { TripAddFlowView(documentID: id, day: addingDay) }
                     .sheet(item: $event) { JourneyEventEditor(documentID: id, event: $0) }
                     .sheet(item: $hotel) { HotelReservationEditor(documentID: id, reservation: $0) }
@@ -175,8 +225,8 @@ struct JourneyDetailView: View {
         }.alert("Travel", isPresented: Binding(get: { error != nil || library.error != nil }, set: { if !$0 { error = nil; library.error = nil } })) { Button("OK") { error = nil; library.error = nil } } message: { Text(error ?? library.error ?? "") }
     }
     private var tripNavigation: some View {
-        HStack(spacing: 24) {
-            ForEach(["Plan", "Journal"], id: \.self) { tab in
+        HStack(spacing: 16) {
+            ForEach(document?.isWishlistTrip == true ? ["Plan"] : ["Plan", "Journal", "Recap"], id: \.self) { tab in
                 let selected = chapter == tab
                 Button {
                     withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) { chapter = tab }
@@ -201,13 +251,14 @@ struct JourneyDetailView: View {
                     Picker("Plan view", selection: Binding(get: { mode }, set: { value in
                         withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) { mode = value }
                     })) {
+                        if document?.isWishlistTrip != true { Label("Today", systemImage: "sun.max").tag("Today") }
                         Label("List", systemImage: "list.bullet").tag("Agenda")
-                        Label("Calendar", systemImage: "calendar").tag("Calendar")
+                        if document?.isWishlistTrip != true { Label("Calendar", systemImage: "calendar").tag("Calendar") }
                         Label("Map", systemImage: "map").tag("Map")
                     }
                 } label: {
                     HStack(spacing: 6) {
-                        Image(systemName: mode == "Agenda" ? "list.bullet" : mode == "Calendar" ? "calendar" : "map")
+                        Image(systemName: mode == "Today" ? "sun.max" : mode == "Agenda" ? "list.bullet" : mode == "Calendar" ? "calendar" : "map")
                         Text(mode == "Agenda" ? "List" : mode)
                         Image(systemName: "chevron.down").font(.system(size: 9, weight: .semibold))
                     }
@@ -249,36 +300,39 @@ struct JourneyDetailView: View {
     }
     private func header(_ d: JourneyDocument) -> some View {
         VStack(alignment: .leading, spacing: 10) {
+            if let source = d.templateMeta?.sourceTitle, d.importedFrom != nil { Text("Based on " + source + (d.templateMeta?.authorHandle.isEmpty == false ? " · @" + d.templateMeta!.authorHandle : "")).font(.caption).foregroundStyle(.secondary) }
             Editorial(d.title, size: 32).accessibilityIdentifier("journey-title")
             Label(d.routeLabel.isEmpty ? "Add your destination" : d.routeLabel, systemImage: "mappin.and.ellipse").font(.subheadline).foregroundStyle(.secondary)
+            if d.isWishlistTrip { Label("Wishlist trip · \(d.nights) nights · Dates flexible", systemImage: "heart").font(.caption).foregroundStyle(Color.bronze) }
             if let start = d.startDate { Text(TravelDay.label(start) + (d.endDate.map { " – " + TravelDay.label($0) } ?? "")).font(.caption).foregroundStyle(Color.bronze) }
             if !d.description.isEmpty { Text(d.description).font(.subheadline).foregroundStyle(.secondary).lineSpacing(4) }
-            HStack(spacing: 0) {
+            if chapter != "Recap" { HStack(spacing: 0) {
                 metric("\(d.nights)", "Nights")
                 Divider().frame(height: 34)
                 metric("\(d.planCount)", "Plans")
                 Divider().frame(height: 34)
                 metric("\(d.places.count)", "Journal entries")
-            }.padding(.top, 8)
+            }.padding(.top, 8) }
         }
     }
     private func metric(_ value: String, _ caption: String) -> some View { VStack(spacing: 6) { Text(value).font(.system(.title2, design: .serif)); Text(caption).font(.caption2).foregroundStyle(.secondary) }.frame(maxWidth: .infinity) }
     private func itinerary(_ d: JourneyDocument) -> some View {
-        VStack(alignment: .leading, spacing: 24) {
+        let conflicts = JourneyConflicts.detect(d)
+        return VStack(alignment: .leading, spacing: 24) {
             if d.stops.isEmpty {
                 VStack(alignment: .leading, spacing: 12) {
                     SectionHeading(title: "Give your plans a place", subtitle: "Add route stops to organise events by day. You can already save bookings and log visits.")
                     Button("Add destinations", systemImage: "mappin.and.ellipse") { editInfo = true }.buttonStyle(.glass).accessibilityIdentifier("trip-add-route")
-                }.padding(20).background(Color.cardSurface, in: .rect(cornerRadius: 24))
+                }.padding(20).cardSurface(cornerRadius: 24)
             }
-            if mode != "Map" && (!d.hotels.isEmpty || !d.flights.isEmpty) { bookingSection(d) }
+            if mode != "Map" && (!d.hotels.isEmpty || !d.flights.isEmpty) { bookingSection(d, conflicts: conflicts) }
             if mode == "Map" { JourneyMapView(places: d.mapPlaces).frame(height: 380).clipShape(.rect(cornerRadius: 26)) }
             else {
                 if mode == "Calendar" {
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 95))], spacing: 10) {
                         ForEach(d.days) { day in
                             Button { selectedDay = selectedDay == day.id ? nil : day.id } label: {
-                                VStack(spacing: 6) { Text(day.label).font(.subheadline.weight(.medium)); Text(day.city).font(.caption2).lineLimit(1); Text("\(d.events.filter { $0.stopID == day.stopID && $0.day == day.localDay }.count) plans").font(.caption2).foregroundStyle(.secondary) }.frame(maxWidth: .infinity).padding(13).background(selectedDay == day.id ? Color.bronze.opacity(0.17) : Color.cardSurface, in: .rect(cornerRadius: 17))
+                                VStack(spacing: 6) { Text(day.label).font(.subheadline.weight(.medium)); Text(day.city).font(.caption2).lineLimit(1); Text("\(d.events.filter { $0.stopID == day.stopID && $0.day == day.localDay }.count) plans").font(.caption2).foregroundStyle(.secondary) }.frame(maxWidth: .infinity).padding(13).cardSurface(cornerRadius: 17, emphasized: selectedDay == day.id)
                             }.buttonStyle(.plain)
                         }
                     }
@@ -286,6 +340,7 @@ struct JourneyDetailView: View {
                 ForEach(d.days.filter { mode != "Calendar" || selectedDay == nil || selectedDay == $0.id }) { day in
                     VStack(alignment: .leading, spacing: 14) {
                         HStack { SectionHeading(title: day.label, subtitle: day.city); Spacer(); Button { addingDay = day; addingPlan = true } label: { Image(systemName: "plus").frame(width: 35, height: 35) }.buttonStyle(.glass).accessibilityLabel("Add event on \(day.label) in \(day.city)") }
+                        DestinationWeatherRow(city: day.city, day: day.date, tripID: d.id, latitude: d.stops.first { $0.id == day.stopID }?.latitude, longitude: d.stops.first { $0.id == day.stopID }?.longitude)
                         let events = d.events.filter { $0.stopID == day.stopID && $0.day == day.localDay }.sorted { $0.sortMinute < $1.sortMinute }
                         if events.isEmpty { Text("No plans yet").font(.subheadline).foregroundStyle(.secondary).padding(.vertical, 10) }
                         ForEach(events) { item in
@@ -294,40 +349,57 @@ struct JourneyDetailView: View {
                                     Text(item.allDay == true ? "All day" : item.timeLabel).font(.caption.weight(.semibold).monospacedDigit()).foregroundStyle(Color.bronze).frame(width: 42).padding(.top, 3)
                                     VStack(alignment: .leading, spacing: 7) { Text(item.displayTitle).font(.system(.headline, design: .serif)).foregroundStyle(.primary); Text(item.categoryTitle + (item.endTimeLabel.map { " · Until " + $0 } ?? "")).font(.caption).foregroundStyle(.secondary); if !item.isPlaceVisit && !item.place.name.isEmpty { Text(item.place.name).font(.caption).foregroundStyle(.secondary) }; if let attendees = item.attendees, !attendees.isEmpty { Text(attendees).font(.caption).foregroundStyle(.secondary) }; if !item.description.isEmpty { Text(item.description).font(.caption).foregroundStyle(.secondary).lineLimit(2) }; if let cost = item.cost { Text(cost.formatted).font(.caption).foregroundStyle(Color.bronze) } }.frame(maxWidth: .infinity, alignment: .leading)
                                     Image(systemName: item.symbol).foregroundStyle(Color.bronze)
-                                }.padding(18).modifier(TripItemSurface(cornerRadius: 22))
+                                }.padding(18).cardSurface(cornerRadius: 22)
                             }.buttonStyle(PressStyle()).accessibilityIdentifier("agenda-event-\(day.localDay)")
                             .contextMenu {
                                 if item.isPlaceVisit {
                                     Button("Log or rate visit", systemImage: "star.bubble") { rated = d.places.first(where: { $0.place.id == item.place.id && $0.place.source == item.place.source }) ?? RatedPlace(place: item.place) }
                                 }
                             }
+                            ForEach(conflicts.filter { $0.eventIDs.contains(item.id) }) { warning in
+                                conflictWarning(warning) { event = item }
+                            }
                         }
                     }
                 }
             }
-            if mode == "Map" || (d.hotels.isEmpty && d.flights.isEmpty) { bookingSection(d) }
+            if mode == "Map" || (d.hotels.isEmpty && d.flights.isEmpty) { bookingSection(d, conflicts: conflicts) }
             VStack(alignment: .leading, spacing: 14) {
                 SectionHeading(title: "Budget")
                 priceRows(d.eventTotals, label: "Events")
                 Divider()
                 priceRows(d.totals, label: "Total planned cost")
                 DisclosureGroup("How totals work") { Text("Repeated events count once per day. Currencies stay separate. Only added prices count.").font(.caption).foregroundStyle(.secondary) }.font(.caption)
-            }.padding(21).modifier(TripItemSurface(cornerRadius: 25))
+            }.padding(21).cardSurface(cornerRadius: 25)
         }
     }
-    private func bookingSection(_ d: JourneyDocument) -> some View {
+    private func bookingSection(_ d: JourneyDocument, conflicts: [JourneyConflicts.Warning]) -> some View {
         VStack(alignment: .leading, spacing: 14) {
             SectionHeading(title: "Bookings")
-            ForEach(d.hotels) { item in Button { hotel = item } label: { bookingRow(item.place.name, subtitle: "\(TravelDay.label(item.checkIn)) – \(TravelDay.label(item.checkOut)) · \(item.rooms) rooms", symbol: "bed.double", cost: item.cost) }.buttonStyle(PressStyle()).contextMenu { Button("Log or rate stay", systemImage: "star.bubble") { rated = d.places.first(where: { $0.place.id == item.place.id && $0.place.source == item.place.source }) ?? RatedPlace(place: item.place) } } }
+            ForEach(d.hotels) { item in Button { hotel = item } label: { bookingRow(item.place.name, subtitle: d.stayLabel(item) + " · \(item.rooms) rooms", symbol: "bed.double", cost: item.cost) }.buttonStyle(PressStyle()).contextMenu { Button("Log or rate stay", systemImage: "star.bubble") { rated = d.places.first(where: { $0.place.id == item.place.id && $0.place.source == item.place.source }) ?? RatedPlace(place: item.place) } }
+                if mode != "Map" { ForEach(conflicts.filter { $0.hotelID == item.id }) { warning in conflictWarning(warning) { hotel = item } } }
+            }
             ForEach(d.flights) { item in Button { flight = item } label: { bookingRow("\(item.departureAirport) → \(item.arrivalAirport)", subtitle: "\(item.airline) \(item.flightNumber) · \(item.departureDay)", symbol: "airplane", cost: item.cost) }.buttonStyle(PressStyle()) }
             if d.hotels.isEmpty && d.flights.isEmpty { Text("Attach a hotel or flight using Add to plan.").font(.subheadline).foregroundStyle(.secondary) }
         }
+    }
+    private func conflictWarning(_ warning: JourneyConflicts.Warning, edit: @escaping () -> Void) -> some View {
+        Button(action: edit) {
+            HStack(alignment: .top, spacing: 9) {
+                Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Color.bronze).padding(.top, 2)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(warning.title).font(.caption.weight(.semibold)).foregroundStyle(Color.bronze)
+                    Text(warning.detail).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    Text("Review timing").font(.caption.weight(.medium)).foregroundStyle(Color.bronze)
+                }.frame(maxWidth: .infinity, alignment: .leading)
+            }.padding(.horizontal, 4).padding(.bottom, 4)
+        }.buttonStyle(.plain).accessibilityIdentifier("agenda-conflict-" + warning.id)
     }
     private func priceRows(_ totals: [String: Decimal], label: String) -> some View {
         VStack(alignment: .leading, spacing: 8) { Text(label).font(.subheadline.weight(.medium)); if totals.isEmpty { Text("No prices added").font(.caption).foregroundStyle(.secondary) }; ForEach(totals.keys.sorted(), id: \.self) { currency in HStack { Text(currency).foregroundStyle(.secondary); Spacer(); Text(TravelMoney(amount: totals[currency]!, currency: currency).formatted) }.font(.subheadline) } }
     }
     private func bookingRow(_ name: String, subtitle: String, symbol: String, cost: TravelMoney?) -> some View {
-        HStack(spacing: 16) { Image(systemName: symbol).font(.title2.weight(.light)).foregroundStyle(Color.bronze); VStack(alignment: .leading, spacing: 7) { Text(name).font(.system(.headline, design: .serif)).foregroundStyle(.primary); Text(subtitle).font(.caption).foregroundStyle(.secondary); if let cost { Text(cost.formatted).font(.caption).foregroundStyle(Color.bronze) } }.frame(maxWidth: .infinity, alignment: .leading); Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary) }.padding(19).modifier(TripItemSurface(cornerRadius: 23))
+        HStack(spacing: 16) { Image(systemName: symbol).font(.title2.weight(.light)).foregroundStyle(Color.bronze); VStack(alignment: .leading, spacing: 7) { Text(name).font(.system(.headline, design: .serif)).foregroundStyle(.primary); Text(subtitle).font(.caption).foregroundStyle(.secondary); if let cost { Text(cost.formatted).font(.caption).foregroundStyle(Color.bronze) } }.frame(maxWidth: .infinity, alignment: .leading) }.padding(19).cardSurface(cornerRadius: 23)
     }
     private func journal(_ d: JourneyDocument) -> some View {
         VStack(alignment: .leading, spacing: 22) {
@@ -351,8 +423,7 @@ struct JourneyDetailView: View {
                             Text("From your plan").font(.subheadline.weight(.semibold)).foregroundStyle(.primary)
                             Text("Choose a place you visited and add its details.").font(.caption).foregroundStyle(.secondary)
                         }.frame(maxWidth: .infinity, alignment: .leading)
-                        Image(systemName: "chevron.right").font(.caption).foregroundStyle(Color.bronze)
-                    }.padding(16).modifier(TripItemSurface(cornerRadius: 20))
+                    }.padding(16).cardSurface(cornerRadius: 20)
                 }.buttonStyle(PressStyle()).accessibilityIdentifier("trip-journal-planned")
             }
             if !d.places.isEmpty { HStack {
@@ -374,9 +445,8 @@ struct JourneyDetailView: View {
                             HStack {
                                 Label(place.overall == 0 && place.notes.isEmpty && place.photos.isEmpty && place.visitedOn == nil ? "Add visit details" : "Edit entry", systemImage: "square.and.pencil")
                                 Spacer(minLength: 0)
-                                Image(systemName: "chevron.right")
                             }.font(.caption.weight(.semibold)).foregroundStyle(Color.bronze)
-                        }.frame(maxWidth: .infinity, alignment: .leading).padding(18).modifier(TripItemSurface(cornerRadius: 23))
+                        }.frame(maxWidth: .infinity, alignment: .leading).padding(18).cardSurface(cornerRadius: 23)
                     }.buttonStyle(PressStyle()).accessibilityIdentifier("journal-entry-" + place.id.uuidString)
                 }
             }
@@ -417,7 +487,6 @@ private struct JournalPlanPlacesView: View {
                                 Text(entry(for: place) == nil ? "Add visit details" : "Edit existing journal entry")
                                     .font(.caption).foregroundStyle(.secondary)
                             }.frame(maxWidth: .infinity, alignment: .leading)
-                            Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary)
                         }.padding(.vertical, 6)
                     }.accessibilityIdentifier("journal-plan-place-" + place.id)
                 }
@@ -431,25 +500,6 @@ private struct JournalPlanPlacesView: View {
                     .environment(\.tripEditorEmbedded, true)
             }
         }
-    }
-}
-
-/// Trip records need a distinct surface over the warm canvas, especially in dark mode.
-private struct TripItemSurface: ViewModifier {
-    @Environment(\.colorScheme) private var colorScheme
-    @Environment(\.colorSchemeContrast) private var contrast
-    var cornerRadius: CGFloat
-    func body(content: Content) -> some View {
-        let dark = colorScheme == .dark
-        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-        content
-            .background(dark ? Color(red: 0.18, green: 0.17, blue: 0.16) : .white, in: shape)
-            .overlay {
-                shape.strokeBorder(
-                    dark ? Color.bronze.opacity(contrast == .increased ? 0.65 : 0.30) : Color.primary.opacity(contrast == .increased ? 0.25 : 0.07),
-                    lineWidth: 1
-                ).allowsHitTesting(false)
-            }
     }
 }
 
@@ -467,7 +517,7 @@ struct JourneyMapView: View {
             else {
                 Map(initialPosition: initialCamera, selection: $selected) { ForEach(plotted) { place in Marker(place.name, systemImage: place.category.symbol, coordinate: CLLocationCoordinate2D(latitude: place.latitude!, longitude: place.longitude!)).tint(Color.bronze).tag(place.id) } }.id(plotted).mapStyle(.standard(elevation: .realistic)).mapControls { MapCompass(); MapScaleView() }
                 if let selected, let place = plotted.first(where: { $0.id == selected }) {
-                    Button { let item = MKMapItem(location: CLLocation(latitude: place.latitude!, longitude: place.longitude!), address: nil); item.name = place.name; item.openInMaps() } label: { Label("\(place.name) · Open in Maps", systemImage: "arrow.up.right").font(.caption) }.padding(.horizontal)
+                    Button { let item = MKMapItem(location: CLLocation(latitude: place.latitude!, longitude: place.longitude!), address: nil); item.name = place.name; item.openInMaps() } label: { Label("\(place.name) · Open in Maps", systemImage: "arrow.up.right").labelStyle(.titleOnly).font(.caption) }.padding(.horizontal)
                 }
             }
             if !plotted.isEmpty { Text("\(plotted.count) \(plotted.count == 1 ? "place" : "places") on your map").font(.caption2).foregroundStyle(.secondary).accessibilityIdentifier("trip-map-count") }
@@ -516,7 +566,7 @@ struct ItineraryItemChooser: View {
             VStack(alignment: .leading, spacing: 14) {
                 Image(systemName: symbol).font(.title3).foregroundStyle(Color.bronze)
                 Text(title).font(.subheadline.weight(.medium)).foregroundStyle(.primary).fixedSize(horizontal: false, vertical: true)
-            }.frame(maxWidth: .infinity, minHeight: 64, alignment: .topLeading).padding(16).background(Color.cardSurface, in: .rect(cornerRadius: 21))
+            }.frame(maxWidth: .infinity, minHeight: 64, alignment: .topLeading).padding(16).cardSurface(cornerRadius: 21)
         }.buttonStyle(PressStyle()).accessibilityIdentifier("add-plan-" + value)
     }
 }
@@ -577,6 +627,10 @@ struct TripAddFlowView: View {
             if hotel.checkOut <= hotel.checkIn { hotel.checkOut = TravelDay.adding(1, to: hotel.checkIn) }
             route = .hotel(hotel)
         case "flight":
+            if document.isWishlistTrip, let stop {
+                route = .event(JourneyEvent(stopID: stop.id, day: day?.localDay ?? 0, place: PlaceRecord(category: .other, city: stop.name), description: "Flight idea · choose a service after setting travel dates.", kind: .custom, title: "Flight to your next destination"))
+                return
+            }
             withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.24)) { addingFlight = true }
         default:
             guard let stop else { pendingChoice = choice; route = .destination; return }
@@ -613,7 +667,7 @@ struct AddTripDestinationView: View {
                         guard var document = library.documents.first(where: { $0.id == documentID }) else { return }
                         guard end > start else { error = "Choose a departure after your arrival."; return }
                         document.dateMode = .dates; document.startDate = start; document.endDate = end; document.destination = destination.trimmingCharacters(in: .whitespacesAndNewlines)
-                        document.stops.append(JourneyStop(name: destination.trimmingCharacters(in: .whitespacesAndNewlines), country: selection?.country ?? "", arrival: start, nights: TravelDay.distance(start, end), latitude: selection?.place.latitude, longitude: selection?.place.longitude))
+                        document.stops.append(JourneyStop(name: destination.trimmingCharacters(in: .whitespacesAndNewlines), country: selection?.country ?? "", arrival: start, nights: TravelDay.distance(start, end), latitude: selection?.place.latitude, longitude: selection?.place.longitude, timeZone: selection?.timeZone))
                         if library.save(document) { if let onContinue { onContinue() } else { dismiss() } } else { error = library.error }
                     }.disabled(destination.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty).accessibilityIdentifier("add-trip-continue") }
                 }

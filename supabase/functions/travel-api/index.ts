@@ -1,3 +1,4 @@
+import { accountAuth, authOptions } from "./account-auth.ts";
 import {
   decodePhoto,
   object,
@@ -36,6 +37,10 @@ import {
   historyEnabled,
   nearbyFlightAirport,
 } from "./flights.ts";
+import { recapSnapshot } from "./recaps.ts";
+import { sanitizedTemplate, templateSummary } from "./templates.ts";
+import { concierge } from "./concierge.ts";
+import { notificationWorker, pushConfigured, watches } from "./notifications.ts";
 import { sharedLines, sharePDF } from "./shared.ts";
 const headers = {
   "Cache-Control": "no-store",
@@ -128,7 +133,24 @@ export async function handler(req: Request): Promise<Response> {
         "This link is unavailable.",
         404,
       );
-      await limit("share:" + network, 30);
+      await limit((q.has("asset") ? "recap-media:" : "share:") + network, q.has("asset") ? 180 : 30);
+      const recapHash = await digest(value);
+      const recaps = await platform("/rest/v1/travel_recaps?select=body&token_hash=eq." + recapHash);
+      // A recap capability never falls through to the full-document/PDF endpoint,
+      // regardless of format/view parameters. Unselected photos have no media row.
+      if (recaps.length) {
+        if (q.has("asset")) {
+          const id = q.get("asset")!;
+          requireValue(id === "map" || uuid(id), "Image unavailable.", 404);
+          const rows = await platform("/rest/v1/travel_recap_media?select=jpeg&token_hash=eq." + recapHash + "&image_id=eq." + id.toLowerCase());
+          requireValue(rows[0], "Image unavailable.", 404);
+          return new Response(new Uint8Array(decodePhoto(rows[0].jpeg)), { headers: {...headers,"Content-Type":"image/jpeg"} });
+        }
+        if (q.get("format") === "json") return json(recaps[0].body);
+        const host = Deno.env.get("RECAP_WEB_URL");
+        requireValue(host && /^https:\/\//.test(host), "Recap web sharing is being configured. Please try again shortly.", 503);
+        return new Response(null, {status:302,headers:{...headers,Location:host + "#" + value}});
+      }
       const links = await platform(
         "/rest/v1/travel_links?select=document_id&token_hash=eq." +
           await digest(value),
@@ -172,6 +194,15 @@ export async function handler(req: Request): Promise<Response> {
         },
       });
     }
+    const templateMatch = path.match(/^\/v1\/templates(?:\/([a-fA-F0-9-]{36}))?$/);
+    if (templateMatch && method === "GET") {
+      await limit("template-read:" + network, 90);
+      const city = q.get("city") ?? "", tags = (q.get("tags") ?? "").split(",").map(t => t.trim().toLowerCase()).filter(Boolean);
+      requireValue(city.length <= 100 && tags.length <= 8 && tags.every(t => /^[a-z0-9 -]{1,30}$/.test(t)), "Invalid template filters.");
+      const values = await rpc("travel_templates", { city, tags, target: templateMatch[1] ?? null });
+      if (templateMatch[1]) { requireValue(values.length > 0, "This template is no longer public.", 404); return json(values[0]); }
+      return json(values.map(templateSummary));
+    }
     if (path === "/v1/status" && method === "GET") {
       return json({
         backend: "supabase",
@@ -180,6 +211,7 @@ export async function handler(req: Request): Promise<Response> {
         googlePlaces: configured("GOOGLE_PLACES_API_KEY"),
         tripadvisor: configured("TRIPADVISOR_API_KEY"),
         ai: configured("OPENAI_API_KEY"),
+        flightNotifications: pushConfigured(),
         publicSharing: true,
       });
     }
@@ -218,6 +250,16 @@ export async function handler(req: Request): Promise<Response> {
         requireValue(object(body), "JSON body must be an object.");
       }
     }
+    if (path === "/v1/auth/options" && method === "GET") return json(await authOptions());
+    const modernAuth = path.match(/^\/v1\/auth\/(email\/(signup|login|verify|resend)|apple|google\/(start|exchange))$/);
+    if (modernAuth && method === "POST") {
+      await limit("auth:" + network, 20, 300);
+      if (body.email) await limit("auth-email:" + await digest(String(body.email).trim().toLowerCase()), 10, 300);
+      if (["email/signup", "email/resend"].includes(modernAuth[1])) {
+        await limit("auth-mail:" + await digest(String(body.email).trim().toLowerCase()), 1, 60);
+      }
+      return json(await accountAuth(modernAuth[1], body));
+    }
     if (
       ["/v1/auth/register", "/v1/auth/login"].includes(path) &&
       method === "POST"
@@ -234,14 +276,38 @@ export async function handler(req: Request): Promise<Response> {
       await rpc("travel_maintenance", {});
       return json(await auth(body, path.endsWith("/register")));
     }
-    const uid = await account(req);
+    if (path === "/internal/flight-notifications" && method === "POST") return json(await notificationWorker(body.ticket));
     if (path === "/v1/auth/logout" && method === "POST") {
-      await platform(
-        "/rest/v1/travel_sessions?token_hash=eq." +
-          await digest(req.headers.get("Authorization")!.slice(7)),
-        "DELETE",
-      );
+      const bearer = req.headers.get("Authorization")?.match(/^Bearer ([a-f0-9]{80})$/)?.[1];
+      requireValue(bearer, "Invalid session.", 401);
+      // Possession permits revoking this session even after expiration. Linked
+      // flight watches are removed by the foreign key in the same transaction.
+      await platform("/rest/v1/travel_sessions?token_hash=eq." + await digest(bearer), "DELETE");
       return json({ ok: true });
+    }
+    const uid = await account(req);
+    if (path === "/v1/me" && method === "PUT") {
+      requireValue(typeof body.name === "string" && body.name.trim().length > 0 && body.name.length <= 100, "Enter your name.");
+      requireValue(typeof body.handle === "string" && /^[a-z0-9_]{3,32}$/.test(body.handle), "Choose a username with 3–32 letters, numbers or underscores.");
+      await platform("/rest/v1/travel_profiles?id=eq." + uid, "PATCH", {name:body.name.trim(),handle:body.handle});
+      return json(await rpc("travel_user", {x:uid}));
+    }
+    if (path === "/v1/recaps" && method === "POST") {
+      await limit("recap-publish:" + uid, 10);
+      requireValue(Deno.env.get("RECAP_WEB_URL"), "Recap web sharing is being configured. Please try again shortly.", 503);
+      const {snapshot,images,documentID,visibility} = recapSnapshot(body), value = token();
+      await rpc("travel_save_recap", {actor:uid,hash:await digest(value),doc:documentID,audience:visibility,snapshot,images});
+      return json({url:apiURL + "/s/" + value + "?view=recap"});
+    }
+    const recapDelete = path.match(/^\/v1\/recaps\/([a-fA-F0-9-]{36})$/);
+    if (recapDelete && method === "DELETE") {
+      await platform("/rest/v1/travel_recaps?owner_id=eq." + uid + "&document_id=eq." + recapDelete[1], "DELETE");
+      return json({ok:true});
+    }
+
+    if (path === "/v1/flight-notifications" && ["GET", "POST", "PUT", "DELETE"].includes(method)) {
+      await limit("push-settings:" + uid, 30);
+      return json(await watches(uid, method, method === "GET" ? { installationID: q.get("installationID") } : body, await digest(req.headers.get("Authorization")!.slice(7))));
     }
     if (path === "/v1/account" && method === "DELETE") {
       const docs = await platform(
@@ -344,6 +410,11 @@ export async function handler(req: Request): Promise<Response> {
       await limit("places:" + uid, 30);
       return json(await placeDetails(path.split("/").pop()!));
     }
+    if (path === "/v1/ai/concierge" && method === "POST") {
+      await limit("concierge:" + uid, 40, 3600);
+      await limit("concierge-global", 1000, 3600);
+      return json(await concierge(body));
+    }
     if (
       ["/v1/ai/activities", "/v1/ai/hotel"].includes(path) && method === "POST"
     ) {
@@ -351,8 +422,14 @@ export async function handler(req: Request): Promise<Response> {
       return json(
         path.endsWith("hotel")
           ? await overview(body)
-          : await recommend(body.city, body.interests),
+          : await recommend(body.city, body.interests, body.candidates),
       );
+    }
+    const templateUse = path.match(/^\/v1\/templates\/([a-fA-F0-9-]{36})\/uses$/);
+    if (templateUse && method === "POST") {
+      requireValue(uuid(body.cloneID), "Invalid new trip identifier.");
+      await limit("template-clone:" + uid, 30, 3600);
+      return json(await rpc("travel_template_used", { actor: uid, template: templateUse[1], clone: body.cloneID }));
     }
     const match = path.match(
       /^\/v1\/documents\/([a-fA-F0-9-]{36})(?:\/(link|revoke))?$/,
@@ -361,6 +438,7 @@ export async function handler(req: Request): Promise<Response> {
       requireValue(uuid(match[1]), "Invalid journey identifier.");
       if (method === "PUT" && !match[2]) {
         validateDocument(body);
+        if (body.isTemplate === true) { const owner = await rpc("travel_user", { x: uid }); body = sanitizedTemplate(body, owner.handle); }
         requireValue(
           body.id.toLowerCase() === match[1].toLowerCase(),
           "Document ID does not match path.",
@@ -393,6 +471,7 @@ export async function handler(req: Request): Promise<Response> {
       if (method === "DELETE" && !match[2]) {
         const old = await dispatch(uid, "GET", path);
         const r = await dispatch(uid, method, path);
+        await platform("/rest/v1/travel_recaps?owner_id=eq." + uid + "&document_id=eq." + match[1], "DELETE");
         await removePhotos(paths(old.document)).catch(() => {});
         return json(r);
       }
@@ -402,7 +481,12 @@ export async function handler(req: Request): Promise<Response> {
         return json({ url: apiURL + "/s/" + value });
       }
     }
-    const value = await dispatch(uid, method, path, body);
+    const messagePath = path.match(/^\/v1\/conversations\/([a-fA-F0-9-]{36})\/messages$/);
+    if (method === "POST" && messagePath) {
+      return json(await rpc("travel_send_message", { actor: uid, cid: messagePath[1], body }));
+    }
+    const value = path === "/v1/feed" && method === "GET" ? await rpc("travel_social_feed", { actor: uid }) : await dispatch(uid, method, path, body);
+    if (method === "POST" && match?.[2] === "revoke") { await platform("/rest/v1/travel_recaps?owner_id=eq." + uid + "&document_id=eq." + match[1], "DELETE"); }
     if (Array.isArray(value) && ["/v1/documents", "/v1/feed"].includes(path)) {
       return json(await Promise.all(value.map((v) => hydrate(v, true))));
     }

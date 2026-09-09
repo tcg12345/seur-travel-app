@@ -59,6 +59,7 @@ struct PlaceRecord: Codable, Hashable, Identifiable {
     var sourceURL: String?
     var source = "Manual entry"
     var overview = ""
+    var brand: String?
     var hasCoordinate: Bool { if let latitude, let longitude { return latitude.isFinite && longitude.isFinite && (-90...90).contains(latitude) && (-180...180).contains(longitude) }; return false }
 }
 struct JourneyStop: Codable, Hashable, Identifiable {
@@ -70,6 +71,8 @@ struct JourneyStop: Codable, Hashable, Identifiable {
     var nights = 3
     var latitude: Double?
     var longitude: Double?
+    var timeZone: String?
+    var countryCode: String?
     var departure: String { TravelDay.adding(nights, to: arrival) }
 }
 enum ItineraryItemKind: String, Codable, CaseIterable, Identifiable {
@@ -125,10 +128,12 @@ struct JourneyEvent: Codable, Hashable, Identifiable {
     var allDay: Bool?
     var durationMinutes: Int?
     var attendees: String?
+    var routeLegID: String?
+    var routeMode: RouteMode?
     var isPlaceVisit: Bool { kind == nil || kind == .place }
     var displayTitle: String { isPlaceVisit ? place.name : (title ?? "") }
-    var categoryTitle: String { isPlaceVisit ? place.category.title : (kind?.title ?? "Event") }
-    var symbol: String { isPlaceVisit ? place.category.symbol : (kind?.symbol ?? "calendar") }
+    var categoryTitle: String { if let routeMode, routeLegID != nil { return routeMode.title + " · Planning allowance" }; return isPlaceVisit ? place.category.title : (kind?.title ?? "Event") }
+    var symbol: String { if let routeMode, routeLegID != nil { return routeMode.symbol }; return isPlaceVisit ? place.category.symbol : (kind?.symbol ?? "calendar") }
     var sortMinute: Int { allDay == true ? -1 : minute }
     var endTimeLabel: String? {
         guard allDay != true, let durationMinutes else { return nil }
@@ -150,6 +155,7 @@ struct HotelReservation: Codable, Hashable, Identifiable {
     var cost: TravelMoney?
     var notes = ""
     var overview = ""
+    var checkOutTime: String?
 }
 struct FlightReservation: Codable, Hashable, Identifiable {
     var id = UUID()
@@ -200,6 +206,9 @@ struct JourneyDocument: Codable, Hashable, Identifiable {
     var places: [RatedPlace] = []
     var updatedAt: Double = Date.now.timeIntervalSince1970
     var importedFrom: String?
+    var routePlan: JourneyRoutePlan?
+    var isTemplate: Bool?
+    var templateMeta: TemplateMeta?
     /// Older trips stored a destination and dates without a route. Reuse those choices.
     @discardableResult mutating func preparePlanningRoute() -> Bool {
         guard stops.isEmpty, !destination.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
@@ -209,6 +218,7 @@ struct JourneyDocument: Codable, Hashable, Identifiable {
         dateMode = .dates
         return true
     }
+    var isWishlistTrip: Bool { dateMode == .nights && isTemplate != true }
     var routeLabel: String { stops.isEmpty ? destination : stops.map(\.name).joined(separator: " → ") }
     var nights: Int { stops.reduce(0) { $0 + $1.nights } }
     var planCount: Int { events.count + hotels.count + flights.count }
@@ -273,6 +283,8 @@ struct JourneyDocument: Codable, Hashable, Identifiable {
         return trip
     }
     func validationError() -> String? {
+        if let meta = templateMeta, meta.tagline.count > 250 || meta.tags.count > 8 || meta.tags.contains(where: { $0.count > 30 }) || meta.suggestedSeason.count > 120 { return "Shorten the template description or tags." }
+        if routePlan?.valid == false { return "Check the saved route planning choices." }
         if title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return "Give your journey a title." }
         if title.count > 200 || description.count > 20000 { return "Shorten the title or description." }
         if stops.count > 40 || events.count > 2000 || places.count > 500 { return "This journey exceeds the supported size." }
@@ -294,6 +306,7 @@ struct JourneyDocument: Codable, Hashable, Identifiable {
             if e.links.contains(where: { validatedURL($0) == nil }) { return "Event links must start with https:// or http://." }
         }
         for h in hotels {
+            if let time = h.checkOutTime, JourneyConflicts.minute(time) == nil { return "Use a valid hotel checkout time." }
             if h.place.name.isEmpty || TravelDay.date(h.checkIn) == nil || TravelDay.date(h.checkOut) == nil || h.checkOut <= h.checkIn || !(1...99).contains(h.guests) || !(1...50).contains(h.rooms) { return "Check hotel names, dates, guests and rooms." }
         }
         for f in flights {
@@ -307,6 +320,7 @@ struct JourneyDocument: Codable, Hashable, Identifiable {
             if p.photos.count > 6 || p.photos.contains(where: { $0.jpeg.count > 1_500_000 }) { return "Use up to six photos, each smaller than 1.5 MB." }
         }
         let allPlaces = events.map(\.place) + hotels.map(\.place) + places.map(\.place)
+        if allPlaces.contains(where: { ($0.brand?.count ?? 0) > 200 }) { return "Keep hotel brands under 200 characters." }
         if allPlaces.contains(where: { ($0.latitude != nil || $0.longitude != nil) && !$0.hasCoordinate }) { return "Enter valid latitude and longitude together." }
         for money in events.compactMap(\.cost) + hotels.compactMap(\.cost) + flights.compactMap(\.cost) {
             if money.amount.isNaN || money.amount < 0 || money.amount > 1_000_000_000 || money.currency.count != 3 { return "Enter a valid nonnegative price and three-letter currency." }
@@ -328,6 +342,8 @@ struct JourneyArchive: Codable { var version = 1; var document: JourneyDocument 
 struct JourneyLibraryArchive: Codable { var version = 1; var documents: [JourneyDocument] }
 
 @MainActor @Observable final class JourneyLibrary {
+    var trips: [JourneyDocument] { documents.filter { $0.isTemplate != true && !$0.isWishlistTrip } }
+    var wishlistTrips: [JourneyDocument] { documents.filter(\.isWishlistTrip) }
     private(set) var documents: [JourneyDocument] = []
     var error: String?
     private let url: URL
@@ -337,6 +353,8 @@ struct JourneyLibraryArchive: Codable { var version = 1; var documents: [Journey
         self.url = url ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent(testing ? "AurumUITestTravel/library.json" : "AurumTravel/library.json")
         if url == nil && testing && !ProcessInfo.processInfo.arguments.contains("--preserve-state") { try? FileManager.default.removeItem(at: self.url) }
         #if DEBUG
+        if url == nil && testing && ProcessInfo.processInfo.arguments.contains("--today-testing") && !ProcessInfo.processInfo.arguments.contains("--preserve-state") { documents = [TodayFixtures.trip]; return }
+        if url == nil && testing && ProcessInfo.processInfo.arguments.contains("--routing-testing") && !ProcessInfo.processInfo.arguments.contains("--preserve-state") { documents = [MultiCityRouteFixtures.trip]; return }
         if url == nil && FlightMapFixtures.enabled && !ProcessInfo.processInfo.arguments.contains("--preserve-state") { documents = [FlightMapFixtures.trip]; return }
         #endif
         guard FileManager.default.fileExists(atPath: self.url.path) else { return }
@@ -349,6 +367,7 @@ struct JourneyLibraryArchive: Codable { var version = 1; var documents: [Journey
     @discardableResult func save(_ input: JourneyDocument) -> Bool {
         if let validation = input.validationError() { error = validation; return false }
         var document = input; document.kind = .journey; document.updatedAt = Date.now.timeIntervalSince1970
+        for i in document.stops.indices { document.stops[i].countryCode = TravelStatistics.countryCode(document.stops[i].countryCode) ?? TravelStatistics.countryCode(document.stops[i].country) }
         var next = documents
         if let i = next.firstIndex(where: { $0.id == document.id }) { next[i] = document } else { next.insert(document, at: 0) }
         return persist(next)

@@ -2,8 +2,13 @@ import SwiftUI
 import PhotosUI
 
 struct TripCreationView: View {
+    var wishlist = false
+    var initialDestination = ""
+    var initialCity: ExploreCity? = nil
+    var onCreated: (UUID) -> Void = { _ in }
     @Environment(JourneyLibrary.self) private var library
     @Environment(\.dismiss) private var dismiss
+    @State private var nights = 3
     @State private var destination = ""
     @State private var selectedLocation: LocationSelection?
     @State private var departure = Calendar.current.startOfDay(for: .now)
@@ -17,13 +22,14 @@ struct TripCreationView: View {
                 Section {
                     LocationAutocompleteField("Where are you going?", text: $destination, kind: .destination, identifier: "trip-destination", onEdit: { selectedLocation = nil }) { selectedLocation = $0 }
                 } header: { Text("Location") }
-                Section("Travel dates") {
+                if wishlist { Section("Length of stay") { Stepper("\(nights) nights", value: $nights, in: 1...365).accessibilityIdentifier("wishlist-trip-nights"); Text("Plan each day now. Choose travel dates when you’re ready.").font(.caption).foregroundStyle(.secondary) } } else { Section("Travel dates") {
                     DatePicker("Departure", selection: $departure, displayedComponents: .date).accessibilityIdentifier("trip-departure-date")
                     DatePicker("Return", selection: $returnDate, in: earliestReturn...latestReturn, displayedComponents: .date).accessibilityIdentifier("trip-return-date")
                 }
+                }
                 if let error { Section { Text(error).foregroundStyle(.red) } }
             }.scrollDismissesKeyboard(.interactively).scrollContentBackground(.hidden).background(Color.canvas)
-                .navigationTitle("Create a trip").navigationBarTitleDisplayMode(.inline)
+                .navigationTitle(wishlist ? "Plan a wishlist trip" : "Create a trip").navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                     ToolbarItem(placement: .confirmationAction) {
@@ -31,15 +37,22 @@ struct TripCreationView: View {
                     }
                 }
                 .onChange(of: departure) { returnDate = min(max(returnDate, earliestReturn), latestReturn) }
+                .onAppear {
+                    guard destination.isEmpty else { return }; destination = initialDestination
+                    if let city = initialCity {
+                        destination = city.name
+                        selectedLocation = LocationSelection(text: city.name, place: PlaceRecord(name: city.name, city: city.name, latitude: city.latitude, longitude: city.longitude), country: city.country)
+                    }
+                }
         }
     }
     private func create() {
         let location = destination.trimmingCharacters(in: .whitespacesAndNewlines)
-        let start = TravelDay.key(departure), end = TravelDay.key(returnDate)
+        let start = wishlist ? "2000-01-01" : TravelDay.key(departure), end = wishlist ? TravelDay.adding(nights, to: "2000-01-01") : TravelDay.key(returnDate)
         guard !location.isEmpty else { return }
-        let stop = JourneyStop(name: location, country: selectedLocation?.country ?? "", arrival: start, nights: TravelDay.distance(start, end), latitude: selectedLocation?.place.latitude, longitude: selectedLocation?.place.longitude)
-        let trip = JourneyDocument(title: "Trip to " + location, destination: location, startDate: start, endDate: end, stops: [stop])
-        if library.save(trip) { dismiss() } else { error = library.error }
+        let stop = JourneyStop(name: location, country: selectedLocation?.country ?? "", arrival: start, nights: TravelDay.distance(start, end), latitude: selectedLocation?.place.latitude, longitude: selectedLocation?.place.longitude, timeZone: selectedLocation?.timeZone, countryCode: TravelStatistics.countryCode(selectedLocation?.countryCode) ?? TravelStatistics.countryCode(selectedLocation?.country))
+        let trip = JourneyDocument(title: "Trip to " + location, destination: location, dateMode: wishlist ? .nights : .dates, startDate: wishlist ? nil : start, endDate: wishlist ? nil : end, stops: [stop])
+        if library.save(trip) { onCreated(trip.id); dismiss() } else { error = library.error }
     }
 }
 
@@ -50,15 +63,15 @@ struct JourneyEditor: View {
     @State private var stop: JourneyStop?
     @State private var error: String?
     @State private var hasDates = false
+    @State private var routing = false
     var body: some View {
         NavigationStack {
             Form {
                 Section { TextField("Journey title", text: $document.title).font(.system(.title2, design: .serif)).accessibilityIdentifier("journey-name"); TextField("A few words about this journey", text: $document.description, axis: .vertical).lineLimit(3...6) } header: { Text("Your journey") }
                 if document.stops.isEmpty {
-                    Section("Destination & optional dates") {
+                    Section("Destination") {
                         LocationAutocompleteField("Destination", text: $document.destination, identifier: "trip-destination")
-                        Toggle("Add travel dates", isOn: $hasDates)
-                        if hasDates {
+                        if document.dateMode == .dates {
                             DayField(title: "From", value: Binding(get: { document.startDate ?? TravelDay.key(.now) }, set: { document.startDate = $0 }))
                             DayField(title: "To", value: Binding(get: { document.endDate ?? TravelDay.key(.now) }, set: { document.endDate = $0 }))
                         }
@@ -67,9 +80,8 @@ struct JourneyEditor: View {
                 }
                 Group {
                     Section("Timing") {
-                        Picker("Plan with", selection: $document.dateMode) { ForEach(JourneyDateMode.allCases, id: \.self) { Text($0.title).tag($0) } }.pickerStyle(.segmented)
                         Text(document.dateMode == .dates ? "Each destination has its own arrival and departure dates. Your overall dates follow the route." : "Choose nights in each destination. Days stay relative until you choose exact dates.").font(.caption).foregroundStyle(.secondary)
-                        LabeledContent("Length of stay", value: "\(document.nights) nights")
+                        LabeledContent(document.dateMode == .dates ? "Total nights" : "Length of stay", value: "\(document.nights) nights")
                     }
                     Section {
                         ForEach(document.stops) { destination in
@@ -79,10 +91,13 @@ struct JourneyEditor: View {
                         }.onDelete { offsets in
                             let ids = Set(offsets.map { document.stops[$0].id })
                             if document.events.contains(where: { ids.contains($0.stopID) }) { error = "Remove or move this destination’s events before deleting it." }
-                            else { document.stops.remove(atOffsets: offsets) }
-                        }.onMove { source, target in document.stops.move(fromOffsets: source, toOffset: target); if document.dateMode == .dates { reflowDates() } }
+                            else { document.stops.remove(atOffsets: offsets); clearRoutePlan() }
+                        }.onMove { source, target in let start = document.stops.first?.arrival; document.stops.move(fromOffsets: source, toOffset: target); clearRoutePlan(); if document.dateMode == .dates { if let start { document.stops[0].arrival = start }; reflowDates() } }
                         Button { var next = JourneyStop(); if let last = document.stops.last { next.arrival = last.departure } else { next.name = document.destination; if let start = document.startDate { next.arrival = start }; if let start = document.startDate, let end = document.endDate { next.nights = max(1, TravelDay.distance(start, end)) } }; stop = next } label: { Label("Add destination", systemImage: "plus") }.accessibilityIdentifier("journey-add-stop")
-                    } header: { HStack { Text("Your route"); Spacer(); EditButton().font(.caption) } } footer: { Text("Stops follow the order shown. In exact-date mode, reordering keeps the nights and recalculates arrivals.") }
+                    } header: { HStack { Text("Your route"); Spacer(); EditButton().font(.caption) } } footer: { Text("Stops follow the order shown. Reordering a dated trip recalculates arrival and departure dates.") }
+                }
+                if document.stops.count > 1 {
+                    Section { Button("Plan multi-city route", systemImage: "point.topleft.down.to.point.bottomright.curvepath") { routing = true }.accessibilityIdentifier("editor-route-planner") }
                 }
                 Section { Label("Private until you choose to share", systemImage: "lock").font(.subheadline); Text("Visibility and sharing are managed from the journey’s Share button.").font(.caption).foregroundStyle(.secondary) }
                 if let error { Section { Text(error).foregroundStyle(.red) } }
@@ -91,16 +106,22 @@ struct JourneyEditor: View {
                     ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                     ToolbarItem(placement: .confirmationAction) { Button("Save") { save() }.accessibilityIdentifier("journey-save") }
                 }
-                .onAppear { hasDates = document.startDate != nil }
+                .sheet(isPresented: $routing) { RoutePlannerView(document: document) { updated in document = updated; return nil } }
+                .onAppear { hasDates = document.dateMode == .dates; if document.stops.isEmpty && hasDates { document.startDate = document.startDate ?? TravelDay.key(.now); document.endDate = document.endDate ?? TravelDay.adding(3, to: document.startDate!) } }
                 .onChange(of: hasDates) { if hasDates { document.startDate = document.startDate ?? TravelDay.key(.now); document.endDate = document.endDate ?? document.startDate } }
-                .navigationDestination(item: $stop) { value in StopEditor(stop: value, mode: document.dateMode) { edited in if let i = document.stops.firstIndex(where: { $0.id == edited.id }) { document.stops[i] = edited } else { document.stops.append(edited) } }.environment(\.tripEditorEmbedded, true) }
+                .navigationDestination(item: $stop) { value in StopEditor(stop: value, mode: document.dateMode) { edited in if let i = document.stops.firstIndex(where: { $0.id == edited.id }) { document.stops[i] = edited } else { document.stops.append(edited) }; clearRoutePlan() }.environment(\.tripEditorEmbedded, true) }
         }
     }
+    private func clearRoutePlan() { document.routePlan = nil; document.events.removeAll { $0.routeLegID != nil } }
     private func reflowDates() { guard !document.stops.isEmpty else { return }; for i in document.stops.indices.dropFirst() { document.stops[i].arrival = document.stops[i - 1].departure } }
     private func save() {
         document.title = document.title.trimmingCharacters(in: .whitespacesAndNewlines)
         if !document.stops.isEmpty { document.startDate = document.dateMode == .dates ? document.stops.first?.arrival : nil; document.endDate = document.dateMode == .dates ? document.stops.last?.departure : nil }
         else if !hasDates { document.startDate = nil; document.endDate = nil }
+        if document.isWishlistTrip {
+            do { try document.scheduleWishlist(from: library.documents.first(where: { $0.id == document.id })?.stops ?? document.stops, departure: "2000-01-01") }
+            catch { self.error = error.localizedDescription; return }
+        }
         if library.save(document) { dismiss() } else { error = library.error }
     }
 }
@@ -114,18 +135,19 @@ private struct StopEditor: View {
         TripEditorNavigation {
             Form {
                 Section {
-                    LocationAutocompleteField("City or destination", text: $stop.name, kind: .city, identifier: "stop-name", onEdit: { stop.latitude = nil; stop.longitude = nil; stop.country = ""; stop.code = "" }) { selected in
-                        stop.code = ""; stop.country = selected.country; stop.latitude = selected.place.latitude; stop.longitude = selected.place.longitude
+                    LocationAutocompleteField("City or destination", text: $stop.name, kind: .city, identifier: "stop-name", onEdit: { stop.latitude = nil; stop.longitude = nil; stop.timeZone = nil; stop.country = ""; stop.countryCode = nil; stop.code = "" }) { selected in
+                        stop.code = ""; stop.country = selected.country; stop.countryCode = TravelStatistics.countryCode(selected.countryCode) ?? TravelStatistics.countryCode(selected.country); stop.latitude = selected.place.latitude; stop.longitude = selected.place.longitude; stop.timeZone = selected.timeZone
                     }
                     LocationAutocompleteField("City / airport code or name (optional)", text: $stop.code, kind: .airport, identifier: "stop-airport")
-                    LocationAutocompleteField("Country (optional)", text: $stop.country, kind: .country, identifier: "stop-country", onEdit: { stop.latitude = nil; stop.longitude = nil }, onSelect: { _ in stop.latitude = nil; stop.longitude = nil })
+                    LocationAutocompleteField("Country (optional)", text: $stop.country, kind: .country, identifier: "stop-country", onEdit: { stop.countryCode = nil; stop.latitude = nil; stop.longitude = nil; stop.timeZone = nil }, onSelect: { selection in stop.countryCode = TravelStatistics.countryCode(selection.country); stop.latitude = nil; stop.longitude = nil; stop.timeZone = nil })
                 }
-                Section("Length of stay") {
+                Section(mode == .dates ? "Travel dates" : "Length of stay") {
                     if mode == .dates {
                         DayField(title: "Arrival", value: $stop.arrival)
                         DayField(title: "Departure", value: Binding(get: { stop.departure }, set: { stop.nights = max(1, TravelDay.distance(stop.arrival, $0)) }))
+                    } else {
+                        Stepper("\(stop.nights) nights", value: $stop.nights, in: 1...365).accessibilityIdentifier("stop-nights")
                     }
-                    Stepper("\(stop.nights) nights", value: $stop.nights, in: 1...365).accessibilityIdentifier("stop-nights")
                 }
             }.scrollDismissesKeyboard(.interactively).scrollContentBackground(.hidden).background(Color.canvas).navigationTitle("A place to linger").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .cancellationAction) { TripEditorBackButton() }; ToolbarItem(placement: .confirmationAction) { Button("Add to route") { save(stop); dismiss() }.disabled(stop.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty).accessibilityIdentifier("stop-save") } }
@@ -219,8 +241,11 @@ struct HotelReservationEditor: View {
     @Environment(JourneyLibrary.self) private var library
     @Environment(TravelAPI.self) private var api
     @Environment(\.dismiss) private var dismiss
+    private var wishlistDocument: JourneyDocument? { library.wishlistTrips.first { $0.id == documentID } }
+    private var wishlistStop: JourneyStop? { wishlistDocument?.stops.first { $0.arrival <= reservation.checkIn && reservation.checkIn < $0.departure } }
     let documentID: UUID
     @State var reservation: HotelReservation
+    @Environment(TravelStore.self) private var catalog
     var onSaved: () -> Void = {}
     @State private var error: String?
     @State private var loading = false
@@ -230,9 +255,34 @@ struct HotelReservationEditor: View {
         TripEditorNavigation {
             Form {
                 PlaceFields(place: $reservation.place, fixedCategory: .hotel, context: reservation.place.city)
+                Section("Hotel brand") {
+                    TextField("Brand or collection (optional)", text: Binding(get: { reservation.place.brand ?? "" }, set: { reservation.place.brand = $0 })).accessibilityIdentifier("hotel-brand")
+                }
                 Section("Your stay") {
-                    DayField(title: "Check-in", value: $reservation.checkIn)
-                    DayField(title: "Check-out", value: $reservation.checkOut)
+                    if let document = wishlistDocument {
+                        Picker("Check-in day", selection: $reservation.checkIn) {
+                            ForEach(document.stops) { stop in
+                                ForEach(0..<stop.nights, id: \.self) { day in
+                                    Text("\(stop.name) · Day \(TravelDay.distance(document.stops[0].arrival, stop.arrival) + day + 1)").tag(TravelDay.adding(day, to: stop.arrival))
+                                }
+                            }
+                        }.accessibilityIdentifier("wishlist-hotel-checkin")
+                        if let stop = wishlistStop {
+                            Picker("Check-out day", selection: $reservation.checkOut) {
+                                ForEach((TravelDay.distance(stop.arrival, reservation.checkIn) + 1)...stop.nights, id: \.self) { day in
+                                    Text("Day \(TravelDay.distance(document.stops[0].arrival, stop.arrival) + day + 1)").tag(TravelDay.adding(day, to: stop.arrival))
+                                }
+                            }.accessibilityIdentifier("wishlist-hotel-checkout")
+                        }
+                    } else {
+                        DayField(title: "Check-in", value: $reservation.checkIn)
+                        DayField(title: "Check-out", value: $reservation.checkOut)
+                    }
+                    Toggle("Set planned checkout time", isOn: Binding(get: { reservation.checkOutTime != nil }, set: { reservation.checkOutTime = $0 ? "11:00" : nil }))
+                    if reservation.checkOutTime != nil {
+                        DatePicker("Leave hotel at", selection: Binding(get: { TodayPlanner.date("2000-01-01", minute: JourneyConflicts.minute(reservation.checkOutTime) ?? 660, zone: .current) ?? .now }, set: { reservation.checkOutTime = TodayPlanner.clock($0, zone: .current) }), displayedComponents: .hourAndMinute)
+                        Text("Your planned departure from the hotel, in local time. Used to check your flight timing.").font(.caption).foregroundStyle(.secondary)
+                    }
                     Stepper("\(reservation.guests) \(reservation.guests == 1 ? "guest" : "guests")", value: $reservation.guests, in: 1...99)
                     Stepper("\(reservation.rooms) \(reservation.rooms == 1 ? "room" : "rooms")", value: $reservation.rooms, in: 1...50)
                 }
@@ -257,8 +307,9 @@ struct HotelReservationEditor: View {
             }.scrollDismissesKeyboard(.interactively).scrollContentBackground(.hidden).background(Color.canvas).navigationTitle("Your stay").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .cancellationAction) { TripEditorBackButton() }; ToolbarItem(placement: .confirmationAction) { Button("Save") { save() }.accessibilityIdentifier("hotel-record-save") } }
                 .confirmationDialog("Remove this hotel record?", isPresented: $delete, titleVisibility: .visible) { Button("Remove record", role: .destructive) { save(remove: true) } }
-            .onAppear { bookingDetails = !reservation.roomType.isEmpty || !reservation.confirmation.isEmpty || !reservation.notes.isEmpty || reservation.cost != nil }
-            .onChange(of: reservation.checkIn) { if reservation.checkOut <= reservation.checkIn { reservation.checkOut = TravelDay.adding(1, to: reservation.checkIn) } }
+            .onAppear { if reservation.place.brand == nil { reservation.place.brand = TravelStatistics.brand(for: reservation.place, catalog: catalog.hotels) }; bookingDetails = !reservation.roomType.isEmpty || !reservation.confirmation.isEmpty || !reservation.notes.isEmpty || reservation.cost != nil }
+            .onChange(of: reservation.place.id) { _, _ in if reservation.place.brand == nil { reservation.place.brand = TravelStatistics.brand(for: reservation.place, catalog: catalog.hotels) } }
+            .onChange(of: reservation.checkIn) { if reservation.checkOut <= reservation.checkIn || (wishlistStop.map { reservation.checkOut > $0.departure } ?? false) { reservation.checkOut = TravelDay.adding(1, to: reservation.checkIn) } }
         }
     }
     private func save(remove: Bool = false) { guard var d = library.documents.first(where: { $0.id == documentID }) else { return }; d.hotels.removeAll { $0.id == reservation.id }; if !remove { d.hotels.append(reservation) }; if library.save(d) { onSaved(); dismiss() } else { error = library.error } }

@@ -1,4 +1,4 @@
-import { Problem, requireValue, safeURL } from './validation.ts';
+import { Problem, requireValue, safeURL, place as validatePlace } from './validation.ts';
 export const configured = (key: string) => !!Deno.env.get(key);
 export async function upstream(
   url: string,
@@ -59,10 +59,20 @@ async function tripadvisor(path: string, params: Record<string, string> = {}) {
     'Tripadvisor is not connected yet. Apple Maps search remains available.',
     503,
   );
-  return await upstream(
-    'https://api.content.tripadvisor.com/api/v1/location/' + path + '?' +
-      new URLSearchParams({ key: Deno.env.get('TRIPADVISOR_API_KEY')!, language: 'en', ...params }),
-  );
+  const referer = Deno.env.get('TRIPADVISOR_REFERER')?.trim();
+  requireValue(!referer || safeURL(referer), 'Tripadvisor server configuration needs a valid referring URL.', 503);
+  try {
+    return await upstream(
+      'https://api.content.tripadvisor.com/api/v1/location/' + path + '?' +
+        new URLSearchParams({ key: Deno.env.get('TRIPADVISOR_API_KEY')!.trim(), language: 'en', ...params }),
+      referer ? { Referer: referer } : {},
+    );
+  } catch (error) {
+    if (error instanceof Problem && error.message.includes('HTTP 403')) {
+      throw new Problem('Tripadvisor has denied access. Its API key restrictions need checking. Apple Maps details remain available.', 502);
+    }
+    throw error;
+  }
 }
 function record(v: any, category = 'attraction') {
   const a = v.address_obj ?? {},
@@ -157,25 +167,46 @@ async function ai(instructions: string, context: unknown) {
     throw new Problem('The AI response could not be read. Please try again.', 502);
   }
 }
-export async function recommend(city: string, interests: string) {
+// Client candidates are bounded, untrusted map data. Never perform paid place
+// searches or fetch client-supplied URLs as part of an AI recommendation.
+export function recommendationCandidates(value: unknown) {
+  requireValue(Array.isArray(value), 'Update Seur to search Apple Maps before requesting ideas.', 409);
+  requireValue(value.length <= 8 && JSON.stringify(value).length <= 24000, 'Send up to eight places.');
+  const seen = new Set<string>();
+  return value.flatMap((p: any) => {
+    validatePlace(p);
+    requireValue(p.source === 'Apple Maps' && Number.isFinite(p.latitude) && Number.isFinite(p.longitude), 'Choose places from Apple Maps.');
+    if (seen.has(p.id)) return [];
+    seen.add(p.id);
+    // Strip arbitrary fields, ratings and long-form content before forwarding.
+    return [{
+      id: p.id, name: p.name, category: p.category,
+      city: (p.city ?? '').slice(0, 200), address: (p.address ?? '').slice(0, 1000),
+      phone: (p.phone ?? '').slice(0, 100), website: safeURL(p.website) ? p.website : '',
+      latitude: p.latitude, longitude: p.longitude, source: 'Apple Maps', overview: '',
+    }];
+  });
+}
+export async function recommend(city: string, interests: string, supplied?: unknown) {
   requireValue(
     typeof city === 'string' && city.trim().length >= 2 && city.length <= 100 &&
       typeof interests === 'string' && interests.length <= 1000,
     'Enter a destination and up to 1,000 characters of interests.',
   );
-  const candidates = await searchPlaces(city + ' attractions');
-  const detailed = await Promise.all(candidates.slice(0, 5).map((v: any) => placeDetails(v.id)));
-  if (!detailed.length) {
-    return {
-      text: 'No attraction results were found. Try a nearby city or a more specific location.',
-      places: [],
-    };
+  const candidates = recommendationCandidates(supplied);
+  if (!candidates.length) {
+    return { text: 'No places were found in Apple Maps. Try a nearby city or different interests.', places: [] };
   }
   const d = await ai(
-    'Suggest a thoughtful day from these candidate places, tailored to the interests. Select up to four candidate IDs only. Do not invent opening times or prices.',
-    { city, interests, candidates: detailed },
+    'Suggest a short, thoughtful day from these client-supplied Apple Maps candidates, tailored to the interests. Select up to four candidate IDs in visiting order only. Use only the supplied facts; do not invent opening times, prices, reviews, descriptions or travel times. These are unverified map listings.',
+    { city, interests, candidates },
   );
-  return { text: d.text, places: detailed.filter((v) => d.place_ids.includes(v.id)).slice(0, 4) };
+  const selected = [...new Set(d.place_ids)].flatMap((id) => {
+    const candidate = candidates.find((p) => p.id === id);
+    return candidate ? [candidate] : [];
+  }).slice(0, 4);
+  requireValue(selected.length, 'No suitable places were selected. Try different interests.', 502);
+  return { text: d.text, places: selected };
 }
 export async function overview(p: any) {
   requireValue(typeof p.name === 'string' && p.name.trim(), 'Select a hotel first.');

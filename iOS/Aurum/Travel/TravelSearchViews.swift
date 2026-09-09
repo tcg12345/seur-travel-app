@@ -78,29 +78,31 @@ struct ActivityIdeasView: View {
     @State private var error: String?
     @State private var loading = false
     @State private var event: JourneyEvent?
+    @State private var work: Task<Void, Never>?
     var body: some View {
         TripEditorNavigation {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     Eyebrow(text: "Your AI travel editor")
                     Editorial("A little inspiration.\nA very personal day.", size: 33)
-                    LocationAutocompleteField("Destination", text: $city, identifier: "ideas-destination").padding(16).background(.background, in: .rect(cornerRadius: 18))
-                    TextField("What do you love?", text: $interests, axis: .vertical).lineLimit(3...6).padding(15).background(.background, in: .rect(cornerRadius: 18))
-                    Button { Task { loading = true; error = nil; defer { loading = false }; do { response = try await api.recommendations(city: city, interests: interests) } catch { self.error = error.localizedDescription } } } label: { Label(loading ? "Gathering ideas…" : "Find my inspiration", systemImage: "sparkles").frame(maxWidth: .infinity).padding(.vertical, 11) }.buttonStyle(.glassProminent).disabled(loading || city.isEmpty)
+                    LocationAutocompleteField("Destination", text: $city, identifier: "ideas-destination").disabled(loading).padding(16).cardSurface(cornerRadius: 18)
+                    TextField("What do you love?", text: $interests, axis: .vertical).lineLimit(3...6).disabled(loading).padding(15).cardSurface(cornerRadius: 18)
+                    Button { work = Task { loading = true; error = nil; response = nil; defer { loading = false }; do { let result = try await api.recommendations(city: city, interests: interests); try Task.checkCancellation(); response = result } catch { if !Task.isCancelled { self.error = error.localizedDescription } } } } label: { Label(loading ? "Gathering ideas…" : "Find my inspiration", systemImage: "sparkles").frame(maxWidth: .infinity).padding(.vertical, 11) }.buttonStyle(.glassProminent).disabled(loading || city.isEmpty)
                     if let error { Text(error).font(.subheadline).foregroundStyle(.red) }
                     if let response {
                         Text(response.text).font(.body).lineSpacing(5)
                         ForEach(response.places) { place in
                             Button { guard let document = library.documents.first(where: { $0.id == documentID }), let stop = document.stops.first(where: { $0.name.localizedCaseInsensitiveContains(city) }) ?? document.stops.first else { return }; event = JourneyEvent(stopID: stop.id, place: place) } label: {
-                                HStack { VStack(alignment: .leading, spacing: 6) { Text(place.name).font(.system(.headline, design: .serif)); Text(place.address).font(.caption).foregroundStyle(.secondary) }; Spacer(); Image(systemName: "plus.circle") }.padding(18).background(.background, in: .rect(cornerRadius: 22))
+                                HStack { VStack(alignment: .leading, spacing: 6) { Text(place.name).font(.system(.headline, design: .serif)); Text(place.address).font(.caption).foregroundStyle(.secondary) }; Spacer(); Image(systemName: "plus.circle") }.padding(18).cardSurface(cornerRadius: 22)
                             }.buttonStyle(.plain)
                         }
-                        Text("AI suggestions use provider search results. Review the place and choose its day/time before adding. Confirm hours and availability with the venue.").font(.caption).foregroundStyle(.secondary)
+                        Text("Places come from Apple Maps; AI helps arrange your day. Review the place and choose its day/time before adding. Confirm hours and availability with the venue.").font(.caption).foregroundStyle(.secondary)
                     }
                 }.padding(24)
             }.background(Color.canvas).navigationTitle("Ideas for your days").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
-                .onAppear { city = library.documents.first(where: { $0.id == documentID })?.stops.first?.name ?? "" }
+                .onAppear { if city.isEmpty { city = library.documents.first(where: { $0.id == documentID })?.stops.first?.name ?? "" } }
+                .onDisappear { work?.cancel() }
                 .navigationDestination(item: $event) { JourneyEventEditor(documentID: documentID, event: $0, onSaved: onSaved).environment(\.tripEditorEmbedded, true) }
         }
     }
@@ -115,10 +117,10 @@ struct ItineraryIntoTripView: View {
         NavigationStack {
             List {
                 Section { Text("Restaurants and attractions become places to rate. Other events, hotel bookings and flights are skipped. Imported places are unrated and aren’t marked visited.").font(.subheadline).foregroundStyle(.secondary) }
-                ForEach(library.documents.filter { $0.id != tripID && !$0.plannedPlacesToRate.isEmpty }) { itinerary in
+                ForEach(library.trips.filter { $0.id != tripID && !$0.plannedPlacesToRate.isEmpty }) { itinerary in
                     Button { guard var trip = library.documents.first(where: { $0.id == tripID }) else { return }; trip.addPlannedPlacesToJournal(from: itinerary); if library.save(trip) { dismiss() } else { error = library.error } } label: { VStack(alignment: .leading, spacing: 5) { Text(itinerary.title); Text(itinerary.routeLabel).font(.caption).foregroundStyle(.secondary) } }
                 }
-                if library.documents.allSatisfy({ $0.id == tripID || $0.plannedPlacesToRate.isEmpty }) { Text("No other trips have planned restaurants or attractions yet.").foregroundStyle(.secondary) }
+                if library.trips.allSatisfy({ $0.id == tripID || $0.plannedPlacesToRate.isEmpty }) { Text("No other trips have planned restaurants or attractions yet.").foregroundStyle(.secondary) }
                 if let error { Text(error).foregroundStyle(.red) }
             }.navigationTitle("Import planned places").toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
         }
@@ -131,7 +133,7 @@ struct RatedRestaurantImportView: View {
     let tripID: UUID
     private var candidates: [RatedPlace] {
         var seen = Set<String>()
-        var places = library.documents.filter { $0.id != tripID }.flatMap(\.places).filter { $0.place.category == .restaurant && $0.overall > 0 }
+        var places = library.trips.filter { $0.id != tripID }.flatMap(\.places).filter { $0.place.category == .restaurant && $0.overall > 0 }
         for hotel in store.hotels { for venue in hotel.venues {
             let key = RestaurantPlace(hotel: hotel, venue: venue).id
             if let visit = store.restaurantVisits[key], visit.rating > 0 {

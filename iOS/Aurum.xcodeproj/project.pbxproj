@@ -7,6 +7,17 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		A567B87CD3439CA2A9D4E4D8 /* Travel/AccountSignIn.swift in Sources */ = {isa = PBXBuildFile; fileRef = 877C737A49B39E525D305ACB /* Travel/AccountSignIn.swift */; };
+		6A33828825070F146F50CB06 /* Travel/JourneyConflicts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52347DD4A0F1F5A3E21200C6 /* Travel/JourneyConflicts.swift */; };
+		FC6D0ECCAAA2B443691DB8C0 /* Travel/FriendsIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC06565654BD0C3A2D979277 /* Travel/FriendsIntents.swift */; };
+		A1A62CA14D89011881E553CF /* TripTemplates.json in Resources */ = {isa = PBXBuildFile; fileRef = 1F80DB39E010B5FAF788E595 /* TripTemplates.json */; };
+		13212C1DAC8784BC6E6EFA48 /* TemplateViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = C44E11619D8889BE6BB72E5B /* TemplateViews.swift */; };
+		0695E4FD81EFAE4050FA15E6 /* TripTemplates.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76404B64202EEB047BBB7AB9 /* TripTemplates.swift */; };
+		9EE0AEEA75080A55B3732709 /* TodayFlightStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCD464B0936A90046A12E912 /* TodayFlightStatus.swift */; };
+		D61F06E2102E4ECCD90C17CE /* TodayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05D0C395918BA1B3C633DE8F /* TodayView.swift */; };
+		6B1EE5C8B2A2572962E49792 /* TodayModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = AFA4495E18F0E589DA6F2B0E /* TodayModels.swift */; };
+		B7D82862EDC97260E7DE4110 /* RoutePlannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BB83D9302419E585880114D /* RoutePlannerView.swift */; };
+		8AFFDA6BF21475208DEEC9A1 /* MultiCityRouting.swift in Sources */ = {isa = PBXBuildFile; fileRef = C01E6561AC28934707E6C8EE /* MultiCityRouting.swift */; };
 		00194D9641B7405F8697AEBB /* Travel/JourneyEditors.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED71E368AD0C9DF9B974CE5D /* Travel/JourneyEditors.swift */; };
 		09DD320B78932A3F05280890 /* AurumTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A14D818E1437513932C4F421 /* AurumTests.swift */; };
 		0A188AE6033B645CEA0B28AD /* Onboarding/OnboardingState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BD9635E44F55FE5166EA77B /* Onboarding/OnboardingState.swift */; };
@@ -35,6 +46,19 @@
 		F95A3C1621A7EB44D12A6AE3 /* Resources/hotels.json in Resources */ = {isa = PBXBuildFile; fileRef = 1590ED954DF1DC4130655C2D /* Resources/hotels.json */; };
 		FA2000000000000000000001 /* Map/WorldMapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA1000000000000000000001 /* Map/WorldMapView.swift */; };
 		FA2000000000000000000002 /* Map/FlightTracking.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA1000000000000000000002 /* Map/FlightTracking.swift */; };
+		5857C38DBD3DA27DEFDD41E5 = {isa = PBXBuildFile; fileRef = 7F42EC9384585FDEA9D5A827; };
+		CA24950FECCFDA32E435AF61 = {isa = PBXBuildFile; fileRef = A83868A5C4D4A6D4E16A7BAD; };
+		EFDF477D4759FBCA6EC8CDBB = {isa = PBXBuildFile; fileRef = BC54F3EFA3903674332C60B3; };
+		E58B6F7B84D2F0BEB760DE2F = {isa = PBXBuildFile; fileRef = A83868A5C4D4A6D4E16A7BAD; };
+		E00C8144E339AB95024F11CC = {isa = PBXBuildFile; fileRef = 1738930E36556D057A6BA22B; };
+		F0C92F8648BCC2FE9CAE6C13 = {isa = PBXBuildFile; fileRef = F1415C84BDA17552F762D95B; settings = {ATTRIBUTES = (RemoveHeadersOnCopy,); }; };
+		AA7700000000000000000003 /* Travel/WishlistModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA7700000000000000000001; };
+		AA7700000000000000000004 /* Travel/WishlistViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA7700000000000000000002; };
+		0754952EA7DAC12BEA58F085 /* Travel/TripRecap.swift in Sources */ = {isa = PBXBuildFile; fileRef = 429FA0EF01CD2302F400F8AE; };
+		D5940E01B85CE3E9314E867A /* Travel/RecapViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36EA427399F0609B5D9DF68C; };
+		001729A1C8F1F5A809179C27 /* Travel/TravelStatistics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 184388B961B07AB18D42616F; };
+		CA3FA86509C13C5AE308FE17 /* Travel/TravelStatsMetadata.swift in Sources */ = {isa = PBXBuildFile; fileRef = 088D4D5512C46660947DA715; };
+		CA7257E7494B64FB492658B5 /* Travel/TravelStatsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3167B51F33C9897885C1E156; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -52,9 +76,25 @@
 			remoteGlobalIDString = C13732C8E715C9BEE4FA51C9;
 			remoteInfo = Aurum;
 		};
+		1D909FBBFAFE396FF42C52B5 = {isa = PBXContainerItemProxy; containerPortal = 98F54143AB4E86B28C3AFEE0; proxyType = 1; remoteGlobalIDString = 5C17E70EF869878703191D06; remoteInfo = SeurFlightActivity; };
 /* End PBXContainerItemProxy section */
 
+/* Begin PBXCopyFilesBuildPhase section */
+		8B13C2FDFA428F3F05A10AAF = {isa = PBXCopyFilesBuildPhase; buildActionMask = 2147483647; dstPath = ""; dstSubfolderSpec = 13; files = (F0C92F8648BCC2FE9CAE6C13,); name = "Embed App Extensions"; runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
+		877C737A49B39E525D305ACB /* Travel/AccountSignIn.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Travel/AccountSignIn.swift"; sourceTree = "<group>"; };
+		52347DD4A0F1F5A3E21200C6 /* Travel/JourneyConflicts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Travel/JourneyConflicts.swift"; sourceTree = "<group>"; };
+		DC06565654BD0C3A2D979277 /* Travel/FriendsIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Travel/FriendsIntents.swift"; sourceTree = "<group>"; };
+		1F80DB39E010B5FAF788E595 /* TripTemplates.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = Resources/TripTemplates.json; sourceTree = "<group>"; };
+		C44E11619D8889BE6BB72E5B /* TemplateViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Travel/TemplateViews.swift; sourceTree = "<group>"; };
+		76404B64202EEB047BBB7AB9 /* TripTemplates.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Travel/TripTemplates.swift; sourceTree = "<group>"; };
+		FCD464B0936A90046A12E912 /* TodayFlightStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Travel/TodayFlightStatus.swift; sourceTree = "<group>"; };
+		05D0C395918BA1B3C633DE8F /* TodayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Travel/TodayView.swift; sourceTree = "<group>"; };
+		AFA4495E18F0E589DA6F2B0E /* TodayModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Travel/TodayModels.swift; sourceTree = "<group>"; };
+		1BB83D9302419E585880114D /* RoutePlannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Travel/RoutePlannerView.swift; sourceTree = "<group>"; };
+		C01E6561AC28934707E6C8EE /* MultiCityRouting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Travel/MultiCityRouting.swift; sourceTree = "<group>"; };
 		0749CAC36E1330F48EB188EF /* AurumApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AurumApp.swift; sourceTree = "<group>"; };
 		1590ED954DF1DC4130655C2D /* Resources/hotels.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = Resources/hotels.json; sourceTree = "<group>"; };
 		19252540FA5E304E7378258A /* Travel/TravelSocialViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Travel/TravelSocialViews.swift; sourceTree = "<group>"; };
@@ -86,6 +126,18 @@
 		F6A6ABC622C8A615B5E97F17 /* DesignSystem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignSystem.swift; sourceTree = "<group>"; };
 		FA1000000000000000000001 /* Map/WorldMapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Map/WorldMapView.swift; sourceTree = "<group>"; };
 		FA1000000000000000000002 /* Map/FlightTracking.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Map/FlightTracking.swift; sourceTree = "<group>"; };
+		7F42EC9384585FDEA9D5A827 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Map/FlightNotifications.swift; sourceTree = "<group>"; };
+		A83868A5C4D4A6D4E16A7BAD = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Map/FlightActivityAttributes.swift; sourceTree = "<group>"; };
+		BC54F3EFA3903674332C60B3 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Travel/DestinationWeather.swift; sourceTree = "<group>"; };
+		1738930E36556D057A6BA22B = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Map/FlightLiveActivityWidget.swift; sourceTree = "<group>"; };
+		F1415C84BDA17552F762D95B = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; path = SeurFlightActivity.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		AA7700000000000000000001 /* Travel/WishlistModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Travel/WishlistModels.swift; sourceTree = "<group>"; };
+		AA7700000000000000000002 /* Travel/WishlistViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Travel/WishlistViews.swift; sourceTree = "<group>"; };
+		429FA0EF01CD2302F400F8AE /* Travel/TripRecap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Travel/TripRecap.swift; sourceTree = "<group>"; };
+		36EA427399F0609B5D9DF68C /* Travel/RecapViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Travel/RecapViews.swift; sourceTree = "<group>"; };
+		184388B961B07AB18D42616F /* Travel/TravelStatistics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Travel/TravelStatistics.swift; sourceTree = "<group>"; };
+		088D4D5512C46660947DA715 /* Travel/TravelStatsMetadata.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Travel/TravelStatsMetadata.swift; sourceTree = "<group>"; };
+		3167B51F33C9897885C1E156 /* Travel/TravelStatsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Travel/TravelStatsView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -117,6 +169,10 @@
 			isa = PBXGroup;
 			children = (
 				0749CAC36E1330F48EB188EF /* AurumApp.swift */,
+				1738930E36556D057A6BA22B,
+				BC54F3EFA3903674332C60B3,
+				A83868A5C4D4A6D4E16A7BAD,
+				7F42EC9384585FDEA9D5A827,
 				A11C00000000000000000001 /* Travel/LocationAutocomplete.swift */,
 				FA1000000000000000000001 /* Map/WorldMapView.swift */,
 				FA1000000000000000000002 /* Map/FlightTracking.swift */,
@@ -126,6 +182,8 @@
 				22F9BCD5A91D6B8F81C701D5 /* Onboarding/OnboardingView.swift */,
 				1BD9635E44F55FE5166EA77B /* Onboarding/OnboardingState.swift */,
 				F6A6ABC622C8A615B5E97F17 /* DesignSystem.swift */,
+				AA7700000000000000000001 /* Travel/WishlistModels.swift */,
+				AA7700000000000000000002 /* Travel/WishlistViews.swift */,
 				B941FFDDBFA04FFC50847F9C /* DiscoverView.swift */,
 				3B3E0A51725C543883C8532C /* HotelDetailView.swift */,
 				BAE6B937772308D1F0321F01 /* JourneysView.swift */,
@@ -138,6 +196,22 @@
 				35EF526550BED1EC047737E1 /* Travel/TravelServices.swift */,
 				19252540FA5E304E7378258A /* Travel/TravelSocialViews.swift */,
 				836A3CFEC5E2BE5AF3AB29DC /* Travel/TravelViews.swift */,
+				877C737A49B39E525D305ACB /* Travel/AccountSignIn.swift */,
+				52347DD4A0F1F5A3E21200C6 /* Travel/JourneyConflicts.swift */,
+				DC06565654BD0C3A2D979277 /* Travel/FriendsIntents.swift */,
+				3167B51F33C9897885C1E156 /* Travel/TravelStatsView.swift */,
+				088D4D5512C46660947DA715 /* Travel/TravelStatsMetadata.swift */,
+				184388B961B07AB18D42616F /* Travel/TravelStatistics.swift */,
+				36EA427399F0609B5D9DF68C /* Travel/RecapViews.swift */,
+				429FA0EF01CD2302F400F8AE /* Travel/TripRecap.swift */,
+				1F80DB39E010B5FAF788E595 /* TripTemplates.json */,
+				C44E11619D8889BE6BB72E5B /* TemplateViews.swift */,
+				76404B64202EEB047BBB7AB9 /* TripTemplates.swift */,
+				FCD464B0936A90046A12E912 /* TodayFlightStatus.swift */,
+				05D0C395918BA1B3C633DE8F /* TodayView.swift */,
+				AFA4495E18F0E589DA6F2B0E /* TodayModels.swift */,
+				1BB83D9302419E585880114D /* RoutePlannerView.swift */,
+				C01E6561AC28934707E6C8EE /* MultiCityRouting.swift */,
 				ADDD00000000000000000002 /* RestaurantDetailView.swift */,
 				B2B4367B873474FE1C68712A /* Assets.xcassets */,
 				1590ED954DF1DC4130655C2D /* Resources/hotels.json */,
@@ -176,6 +250,7 @@
 			isa = PBXGroup;
 			children = (
 				E6FC57C251E9E1BEC1D3C0D2 /* Seur.app */,
+				F1415C84BDA17552F762D95B,
 				C4095E227B53697430FABAA3 /* AurumTests.xctest */,
 				8A6ED015D34B3A3BEC57D504 /* AurumUITests.xctest */,
 			);
@@ -205,6 +280,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = F37922C48DA5978D02C9E50E /* Build configuration list for PBXNativeTarget "Aurum" */;
 			buildPhases = (
+				8B13C2FDFA428F3F05A10AAF,
 				80714DF7D184E5884375F77C /* Sources */,
 				15A9F8FA58F43C72C1A3F83A /* Resources */,
 				12384B5908BE5FE5B3301CEE /* Frameworks */,
@@ -212,6 +288,7 @@
 			buildRules = (
 			);
 			dependencies = (
+				72CF83F7F5F49696491396E7,
 			);
 			name = Aurum;
 			productName = Aurum;
@@ -235,6 +312,7 @@
 			productReference = 8A6ED015D34B3A3BEC57D504 /* AurumUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
+		5C17E70EF869878703191D06 = {isa = PBXNativeTarget; buildConfigurationList = 4C70997D4640859847E9C01C; buildPhases = (2F16673587464D74C0FC7D70,); buildRules = (); dependencies = (); name = SeurFlightActivity; productName = SeurFlightActivity; productReference = F1415C84BDA17552F762D95B; productType = "com.apple.product-type.app-extension"; };
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -263,6 +341,7 @@
 			projectRoot = "";
 			targets = (
 				C13732C8E715C9BEE4FA51C9 /* Aurum */,
+				5C17E70EF869878703191D06,
 				55F23B82F1EE611D2CFE5E9F /* AurumTests */,
 				CD0C069CCD4D9EE4568BC8B3 /* AurumUITests */,
 			);
@@ -276,6 +355,7 @@
 			files = (
 				289B9CFAF7CB01D447B414AD /* Assets.xcassets in Resources */,
 				F95A3C1621A7EB44D12A6AE3 /* Resources/hotels.json in Resources */,
+				A1A62CA14D89011881E553CF /* TripTemplates.json in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -295,6 +375,9 @@
 			buildActionMask = 2147483647;
 			files = (
 				ADAD5C97CCEB378BCA5DA510 /* AurumApp.swift in Sources */,
+				EFDF477D4759FBCA6EC8CDBB,
+				CA24950FECCFDA32E435AF61,
+				5857C38DBD3DA27DEFDD41E5,
 				A11C00000000000000000002 /* Travel/LocationAutocomplete.swift in Sources */,
 				FA2000000000000000000001 /* Map/WorldMapView.swift in Sources */,
 				FA2000000000000000000002 /* Map/FlightTracking.swift in Sources */,
@@ -304,6 +387,8 @@
 				6E6434C18A018DB4A502A6AE /* Onboarding/OnboardingView.swift in Sources */,
 				0A188AE6033B645CEA0B28AD /* Onboarding/OnboardingState.swift in Sources */,
 				8C6C64A5FA7FCD1367ADBDCB /* DesignSystem.swift in Sources */,
+				AA7700000000000000000003 /* Travel/WishlistModels.swift in Sources */,
+				AA7700000000000000000004 /* Travel/WishlistViews.swift in Sources */,
 				D85A7146F885996C903E05C6 /* DiscoverView.swift in Sources */,
 				5662376140F9D0F8AAB8A7A4 /* HotelDetailView.swift in Sources */,
 				9BA7778106424EA359EA9DC8 /* JourneysView.swift in Sources */,
@@ -316,6 +401,21 @@
 				B9EB3F10090B13AF70D9B66B /* Travel/TravelServices.swift in Sources */,
 				F143A7B751A70AAA3AAE8C26 /* Travel/TravelSocialViews.swift in Sources */,
 				C8A40D988C9FC3F7F1EA24DF /* Travel/TravelViews.swift in Sources */,
+				A567B87CD3439CA2A9D4E4D8 /* Travel/AccountSignIn.swift in Sources */,
+				6A33828825070F146F50CB06 /* Travel/JourneyConflicts.swift in Sources */,
+				FC6D0ECCAAA2B443691DB8C0 /* Travel/FriendsIntents.swift in Sources */,
+				CA7257E7494B64FB492658B5 /* Travel/TravelStatsView.swift in Sources */,
+				CA3FA86509C13C5AE308FE17 /* Travel/TravelStatsMetadata.swift in Sources */,
+				001729A1C8F1F5A809179C27 /* Travel/TravelStatistics.swift in Sources */,
+				D5940E01B85CE3E9314E867A /* Travel/RecapViews.swift in Sources */,
+				0754952EA7DAC12BEA58F085 /* Travel/TripRecap.swift in Sources */,
+				13212C1DAC8784BC6E6EFA48 /* TemplateViews.swift in Sources */,
+				0695E4FD81EFAE4050FA15E6 /* TripTemplates.swift in Sources */,
+				9EE0AEEA75080A55B3732709 /* TodayFlightStatus.swift in Sources */,
+				D61F06E2102E4ECCD90C17CE /* TodayView.swift in Sources */,
+				6B1EE5C8B2A2572962E49792 /* TodayModels.swift in Sources */,
+				B7D82862EDC97260E7DE4110 /* RoutePlannerView.swift in Sources */,
+				8AFFDA6BF21475208DEEC9A1 /* MultiCityRouting.swift in Sources */,
 				ADDD00000000000000000001 /* RestaurantDetailView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -329,6 +429,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		2F16673587464D74C0FC7D70 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (E58B6F7B84D2F0BEB760DE2F, E00C8144E339AB95024F11CC,); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -342,6 +443,7 @@
 			target = C13732C8E715C9BEE4FA51C9 /* Aurum */;
 			targetProxy = 1B275934A11783B80FE65589 /* PBXContainerItemProxy */;
 		};
+		72CF83F7F5F49696491396E7 = {isa = PBXTargetDependency; target = 5C17E70EF869878703191D06; targetProxy = 1D909FBBFAFE396FF42C52B5; };
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
@@ -365,6 +467,10 @@
 		5A8C91857F674E16E2724F47 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = Aurum/Aurum.entitlements;
+				APNS_ENVIRONMENT = production;
+				INFOPLIST_KEY_APNSEnvironment = "$(APNS_ENVIRONMENT)";
+				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
@@ -478,6 +584,10 @@
 		E9B2E96ABC5F6856F2BE79CF /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = Aurum/Aurum.entitlements;
+				APNS_ENVIRONMENT = development;
+				INFOPLIST_KEY_APNSEnvironment = "$(APNS_ENVIRONMENT)";
+				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
@@ -507,6 +617,8 @@
 			};
 			name = Debug;
 		};
+		F4BD9611B6A6CD1BC99715B5 = {isa = XCBuildConfiguration; buildSettings = {APPLICATION_EXTENSION_API_ONLY = YES; CODE_SIGN_STYLE = Automatic; DEVELOPMENT_TEAM = 669SG3MPU7; GENERATE_INFOPLIST_FILE = YES; INFOPLIST_FILE = Aurum/Map/FlightWidgetInfo.plist; INFOPLIST_KEY_CFBundleDisplayName = "Seur Flights"; IPHONEOS_DEPLOYMENT_TARGET = 26.0; CURRENT_PROJECT_VERSION = 1; MARKETING_VERSION = 1.0; PRODUCT_BUNDLE_IDENTIFIER = com.seurapp.travel.FlightActivity; PRODUCT_NAME = "$(TARGET_NAME)"; SDKROOT = iphoneos; SKIP_INSTALL = YES; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2"; SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)"; SWIFT_OPTIMIZATION_LEVEL = "-Onone";}; name = Debug; };
+		165B6C86EC69EA7C95D91BD9 = {isa = XCBuildConfiguration; buildSettings = {APPLICATION_EXTENSION_API_ONLY = YES; CODE_SIGN_STYLE = Automatic; DEVELOPMENT_TEAM = 669SG3MPU7; GENERATE_INFOPLIST_FILE = YES; INFOPLIST_FILE = Aurum/Map/FlightWidgetInfo.plist; INFOPLIST_KEY_CFBundleDisplayName = "Seur Flights"; IPHONEOS_DEPLOYMENT_TARGET = 26.0; CURRENT_PROJECT_VERSION = 1; MARKETING_VERSION = 1.0; PRODUCT_BUNDLE_IDENTIFIER = com.seurapp.travel.FlightActivity; PRODUCT_NAME = "$(TARGET_NAME)"; SDKROOT = iphoneos; SKIP_INSTALL = YES; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2";}; name = Release; };
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -546,6 +658,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		4C70997D4640859847E9C01C = {isa = XCConfigurationList; buildConfigurations = (F4BD9611B6A6CD1BC99715B5, 165B6C86EC69EA7C95D91BD9,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
 /* End XCConfigurationList section */
 	};
 	rootObject = 98F54143AB4E86B28C3AFEE0 /* Project object */;

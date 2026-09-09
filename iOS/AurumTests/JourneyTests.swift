@@ -1,4 +1,5 @@
 import XCTest
+import SwiftUI
 import PDFKit
 import MapKit
 @testable import Aurum
@@ -12,6 +13,282 @@ import MapKit
         var d = JourneyDocument(title: "Paris, thoughtfully", startDate: "2026-10-01", endDate: "2026-10-04", stops: [stop])
         d.events = [JourneyEvent(stopID: stop.id, place: PlaceRecord(id: "dinner", name: "Dinner", category: .restaurant), cost: TravelMoney(amount: Decimal(string: "85.50")!, currency: "EUR"))]
         return d
+    }
+    func testWishlistItineraryPersistsAndMovesToDatedTripsWithoutLosingPlans() throws {
+        let paris = JourneyStop(name: "Paris", arrival: "2000-01-01", nights: 3)
+        let lyon = JourneyStop(name: "Lyon", arrival: "2000-01-04", nights: 2)
+        var draft = JourneyDocument(title: "France someday", dateMode: .nights, stops: [paris, lyon])
+        draft.events = [JourneyEvent(stopID: lyon.id, day: 1, place: PlaceRecord(name: "Dinner", city: "Lyon"), description: "Window table")]
+        draft.hotels = [HotelReservation(place: PlaceRecord(name: "Lyon hotel", category: .hotel, city: "Lyon"), checkIn: "2000-01-04", checkOut: "2000-01-06", notes: "Suite idea")]
+        let url = directory.appendingPathComponent("wishlist.json")
+        let library = JourneyLibrary(url: url)
+        XCTAssertTrue(library.save(draft)); XCTAssertTrue(library.trips.isEmpty)
+        XCTAssertEqual(library.wishlistTrips.count, 1)
+        let reloaded = JourneyLibrary(url: url)
+        let restored = try XCTUnwrap(reloaded.wishlistTrips.first)
+        XCTAssertTrue(restored.days.allSatisfy { $0.date == nil })
+        let trip = try restored.scheduledWishlist(departure: "2027-03-10")
+        XCTAssertEqual(trip.id, draft.id); XCTAssertEqual(trip.stops.map(\.arrival), ["2027-03-10", "2027-03-13"])
+        XCTAssertEqual(trip.hotels[0].checkIn, "2027-03-13"); XCTAssertEqual(trip.hotels[0].checkOut, "2027-03-15")
+        XCTAssertEqual(trip.hotels[0].notes, "Suite idea"); XCTAssertEqual(trip.events, draft.events)
+        XCTAssertEqual(trip.date(for: trip.events[0]), "2027-03-14")
+        XCTAssertTrue(reloaded.save(trip)); XCTAssertTrue(reloaded.wishlistTrips.isEmpty); XCTAssertEqual(reloaded.trips.count, 1)
+        XCTAssertEqual(restored.dateMode, .nights)
+    }
+    func testWishlistReorderKeepsHotelDayOffsetsAndRejectsShortenedStay() throws {
+        let paris = JourneyStop(name: "Paris", arrival: "2000-01-01", nights: 3)
+        let lyon = JourneyStop(name: "Lyon", arrival: "2000-01-04", nights: 2)
+        var draft = JourneyDocument(title: "Route", dateMode: .nights, stops: [lyon, paris])
+        draft.hotels = [HotelReservation(place: PlaceRecord(name: "Paris hotel", category: .hotel, city: "Paris"), checkIn: "2000-01-02", checkOut: "2000-01-04")]
+        try draft.scheduleWishlist(from: [paris, lyon], departure: "2000-01-01")
+        XCTAssertEqual(draft.hotels[0].checkIn, "2000-01-04"); XCTAssertEqual(draft.hotels[0].checkOut, "2000-01-06")
+        XCTAssertEqual(draft.stayLabel(draft.hotels[0]), "Day 4 – Day 6")
+        let old = draft.stops; draft.stops[1].nights = 1
+        let before = draft
+        XCTAssertThrowsError(try draft.scheduleWishlist(from: old, departure: "2000-01-01"))
+        XCTAssertEqual(draft, before)
+    }
+    private var statsNow: Date { ISO8601DateFormatter().date(from: "2026-09-07T16:00:00Z")! }
+    func testStatisticsSeparatesPlannedStopsFromJournaledVisitsAndFlightConnections() {
+        let paris = JourneyStop(name: "Paris", country: "France", arrival: "2026-09-06", nights: 3, countryCode: "FR")
+        let tokyo = JourneyStop(name: "Tokyo", country: "Japan", arrival: "2026-09-10", nights: 3, countryCode: "JP")
+        var d = JourneyDocument(title: "Two cities", startDate: "2026-09-06", endDate: "2026-09-13", stops: [paris,tokyo])
+        d.places = [RatedPlace(place: .init(name: "Dinner", category: .restaurant, city: "Paris"), overall: 9, visitedOn: "2026-09-06", michelinStars: 3)]
+        d.flights = [FlightReservation(departureAirport: "DOH", arrivalAirport: "NRT", departureDay: "2026-09-10", arrivalDay: "2026-09-10", departureLatitude: 25.2, departureLongitude: 51.6, arrivalLatitude: 35.7, arrivalLongitude: 140.3)]
+        let values = TravelStatistics(documents:[d], now:statsNow, deviceZone:TimeZone(secondsFromGMT:0)!).summary()
+        XCTAssertEqual(values.countries,["FR"]); XCTAssertEqual(values.cities,["paris"])
+        XCTAssertEqual(values.planned.map(\.city),["Tokyo"]); XCTAssertEqual(values.upcomingTrips,1)
+        XCTAssertEqual(values.kilometers,0); XCTAssertEqual(values.stars,3); XCTAssertNil(values.longest)
+        var template = d; template.id = UUID(); template.isTemplate = true
+        XCTAssertEqual(TravelStatistics(documents:[template],now:statsNow).summary().stars,0)
+        var future = d; future.startDate = "2026-10-01"; future.endDate = "2026-10-06"; future.stops = [JourneyStop(name: "Tokyo",country:"Japan",arrival:"2026-10-01",nights:5)]
+        XCTAssertTrue(TravelStatistics(documents:[future],now:statsNow).summary().countries.isEmpty)
+    }
+    func testStatisticsUsesHotelDestinationDayRatherThanFutureStopTimeZone() {
+        let ny = JourneyStop(name:"New York",country:"US",arrival:"2026-09-06",nights:3,timeZone:"America/New_York")
+        let tokyo = JourneyStop(name:"Tokyo",country:"JP",arrival:"2026-09-10",nights:3,timeZone:"Asia/Tokyo")
+        var d = JourneyDocument(title:"Across the world",startDate:"2026-09-06",endDate:"2026-09-13",stops:[ny,tokyo])
+        d.places = [RatedPlace(place:.init(name:"Lunch",city:"New York"),overall:8,visitedOn:"2026-09-06")]
+        d.hotels = [HotelReservation(place:.init(name:"Stay",category:.hotel,city:"New York"),checkIn:"2026-09-06",checkOut:"2026-09-09")]
+        let date = ISO8601DateFormatter().date(from:"2026-09-07T23:30:00Z")!
+        XCTAssertEqual(TravelStatistics(documents:[d],now:date).summary().hotelNights,1)
+    }
+    func testStatisticsSplitsHotelNightsByYearAndKeepsCurrenciesSeparate() {
+        let stop = JourneyStop(name:"Paris",country:"france",arrival:"2025-12-30",nights:3)
+        var d = JourneyDocument(title:"New Year",startDate:"2025-12-30",endDate:"2026-01-02",stops:[stop])
+        d.hotels = [HotelReservation(place:.init(name:"Paris stay",category:.hotel),checkIn:"2025-12-30",checkOut:"2026-01-02",cost:.init(amount:900,currency:"EUR"))]
+        d.events = [JourneyEvent(stopID:stop.id,day:2,place:.init(name:"Lunch"),cost:.init(amount:100,currency:"USD"))]
+        let stats = TravelStatistics(documents:[d,d],now:statsNow)
+        XCTAssertEqual(stats.summary(year:2025).hotelNights,2); XCTAssertEqual(stats.summary(year:2026).hotelNights,1)
+        XCTAssertEqual(stats.summary().trips,1); XCTAssertEqual(stats.summary().nightsAway,3)
+        XCTAssertEqual(stats.summary().spend,["EUR":900,"USD":100]); XCTAssertEqual(stats.summary().longest?.nights,3)
+        XCTAssertEqual(stats.summary(year:2025).countries,["FR"]); XCTAssertEqual(stats.summary(year:2026).countries,["FR"])
+        d.hotels = []
+        let fallback = TravelStatistics(documents:[d],now:statsNow).summary()
+        XCTAssertEqual(fallback.hotelNights,0); XCTAssertEqual(fallback.otherNights,3); XCTAssertEqual(fallback.nightsLabel,"Nights away")
+    }
+    func testStatisticsCountryNormalizationStarredRestaurantsAndBrandThreshold() {
+        XCTAssertEqual(TravelStatistics.countryCode("United Kingdom"),"GB"); XCTAssertEqual(TravelStatistics.countryCode("uk"),"GB")
+        XCTAssertEqual(TravelStatistics.countryCode("france"),"FR"); XCTAssertNil(TravelStatistics.countryCode("Imaginary country"))
+        var d = itinerary(); d.startDate = "2026-01-01"; d.endDate = "2026-01-04"; d.stops[0].arrival = "2026-01-01"
+        let place = PlaceRecord(name:"A great table",category:.restaurant,city:"Paris")
+        d.places = [RatedPlace(place:place,overall:9,visitedOn:"2026-01-01",michelinStars:3),RatedPlace(place:place,overall:8,visitedOn:"2026-01-02",michelinStars:3),RatedPlace(place:.init(name:"A hotel",category:.hotel),overall:0,michelinStars:3)]
+        d.hotels = (1...3).map { i in HotelReservation(place:.init(name:"Stay \(i)",category:.hotel,brand:"Seur Hotels"),checkIn:"2026-01-0\(i)",checkOut:"2026-01-0\(i+1)") }
+        let value = TravelStatistics(documents:[d],now:statsNow).summary()
+        XCTAssertEqual(value.favoriteBrands,["Seur Hotels"]); XCTAssertEqual(value.stars,6); XCTAssertEqual(value.starredRestaurants,1)
+        XCTAssertEqual(value.average,8.5)
+        d.hotels.removeLast(); XCTAssertTrue(TravelStatistics(documents:[d],now:statsNow).summary().favoriteBrands.isEmpty)
+    }
+    func testStatisticsLegacyFieldsAndImageAreCompatible() throws {
+        let old = try JSONDecoder().decode(JourneyDocument.self,from:JSONEncoder().encode(itinerary()))
+        XCTAssertNil(old.stops[0].countryCode); XCTAssertNil(old.events[0].place.brand)
+        var d = old; d.stops[0].countryCode = "FR"; d.events[0].place.brand = "A brand"
+        let restored = try JSONDecoder().decode(JourneyDocument.self,from:JSONEncoder().encode(d))
+        XCTAssertEqual(restored.stops[0].countryCode,"FR"); XCTAssertEqual(restored.events[0].place.brand,"A brand")
+        let renderer = ImageRenderer(content:TravelStatsCard(summary:TravelStatistics(documents:[d],now:statsNow).summary(year:2026),year:2026).frame(width:360,height:640))
+        renderer.scale = 3
+        let image = try XCTUnwrap(renderer.uiImage?.cgImage)
+        XCTAssertEqual(image.width,1080); XCTAssertEqual(image.height,1920)
+    }
+    func testStatisticsUndatedJournalOnlyAppearsInLifetimeAndDeduplicatesFlights() {
+        var d = JourneyDocument(title:"Memories",dateMode:.nights,stops:[JourneyStop(name:"London",country:"UK",nights:2)])
+        d.places = [RatedPlace(place:.init(name:"Lunch",city:"London"),overall:8,michelinStars:1)]
+        let flight = FlightReservation(flightNumber:"BA1",departureAirport:"JFK",arrivalAirport:"LHR",departureDay:"2026-01-01",arrivalDay:"2026-01-02",departureLatitude:40.6413,departureLongitude:-73.7781,arrivalLatitude:51.47,arrivalLongitude:-0.4543)
+        d.flights = [flight,flight]
+        let stats = TravelStatistics(documents:[d],now:statsNow)
+        XCTAssertEqual(stats.summary().countries,["GB"]); XCTAssertEqual(stats.summary().stars,1)
+        XCTAssertEqual(stats.summary(year:2026).stars,0); XCTAssertEqual(stats.summary(year:2026).undatedEntries,1)
+        XCTAssertEqual(stats.summary().miles,3451,accuracy:10)
+        XCTAssertEqual(stats.summary().kilometers,stats.summary().miles/0.6213711922,accuracy:0.01)
+    }
+    func testRecapPosterRendersExactVerticalDimensionsWithoutNetwork() throws {
+        let renderer = ImageRenderer(content: RecapPoster(recap: TripRecap(document: itinerary()), map: nil, photos: []).frame(width: 360, height: 640))
+        renderer.scale = 3
+        let image = try XCTUnwrap(renderer.uiImage?.cgImage)
+        XCTAssertEqual(image.width, 1080); XCTAssertEqual(image.height, 1920)
+    }
+    func testRecapCombinesTransferDaysKeepsEmptyDaysAndUndatedMemories() {
+        let paris = JourneyStop(name: "Paris", arrival: "2026-10-01", nights: 2)
+        let lyon = JourneyStop(name: "Lyon", arrival: "2026-10-03", nights: 1)
+        var d = JourneyDocument(title: "France", startDate: "2026-10-01", endDate: "2026-10-04", stops: [paris, lyon])
+        d.places = [RatedPlace(place: .init(name: "A table"), overall: 9, visitedOn: "2026-10-03", michelinStars: 2), RatedPlace(place: .init(name: "Undated"))]
+        d.hotels = [HotelReservation(place: .init(name: "Stay", category: .hotel), checkIn: "2026-10-01", checkOut: "2026-10-03")]
+        let recap = TripRecap(document: d)
+        XCTAssertEqual(recap.days.count, 5)
+        XCTAssertEqual(recap.days[2].cities, ["Paris", "Lyon"])
+        XCTAssertEqual(recap.days[2].places.count, 1)
+        XCTAssertTrue(recap.days[1].places.isEmpty)
+        XCTAssertEqual(recap.days[0].stays.count, 1)
+        XCTAssertEqual(recap.days.last?.id, "undated")
+        XCTAssertEqual(recap.ratedCount, 1); XCTAssertEqual(recap.stars, 2)
+    }
+    func testRecapPhotoSelectionStripsPrivateFieldsWithoutMutatingOriginal() throws {
+        var d = itinerary()
+        let first = JournalPhoto(jpeg: Data([1,2])), second = JournalPhoto(jpeg: Data([3,4]))
+        d.places = [RatedPlace(place: .init(name: "Dinner", phone: "PRIVATE", website: "PRIVATE", overview: "PRIVATE"), overall: 8, notes: "PRIVATE", photos: [first, second])]
+        d.hotels = [HotelReservation(confirmation: "PRIVATE", notes: "PRIVATE")]
+        d.events[0].attendees = "PRIVATE"
+        d.flights = [FlightReservation(bookingLink: "PRIVATE", notes: "PRIVATE")]
+        d.description = "PRIVATE"
+        let copy = TripRecap(document: d).shareDocument(photoIDs: [first.id])
+        let json = String(data: try JSONEncoder().encode(copy), encoding: .utf8)!
+        XCTAssertFalse(json.contains("PRIVATE")); XCTAssertEqual(copy.places[0].photos.map(\.id), [first.id])
+        XCTAssertEqual(d.places[0].photos.count, 2); XCTAssertEqual(d.visibility, copy.visibility)
+        XCTAssertTrue(copy.events.isEmpty)
+    }
+    func testRecapMilesSkipMissingCoordinatesAndMapFitsDateLine() {
+        var d = itinerary()
+        d.flights = [FlightReservation(departureLatitude: 40.6413, departureLongitude: -73.7781, arrivalLatitude: 51.47, arrivalLongitude: -0.4543), FlightReservation()]
+        let recap = TripRecap(document: d)
+        XCTAssertEqual(recap.flightMiles, 3451, accuracy: 10)
+        let region = RecapMapGeometry.region([.init(id: "a", name: "a", latitude: 30, longitude: 179), .init(id: "b", name: "b", latitude: 32, longitude: -179)])
+        XCTAssertLessThan(region.span.longitudeDelta, 4); XCTAssertEqual(abs(region.center.longitude), 180, accuracy: 0.01)
+        var c = d; c.endDate = "2026-10-04"; c.stops[0].timeZone = "Pacific/Honolulu"
+        let now = ISO8601DateFormatter().date(from: "2026-10-05T05:00:00Z")!
+        XCTAssertFalse(TripRecap(document: c).hasEnded(now: now))
+        XCTAssertTrue(TripRecap(document: c).hasEnded(now: now.addingTimeInterval(6*3600)))
+    }
+    func testMultiCitySuggestionMatchesExhaustiveSearchAndPreservesEndpoints() throws {
+        let stops = (0..<6).map { i in JourneyStop(name: "City \(i)", nights: 2, latitude: [48.8,52.3,50.8,55.6,53.5,59.3][i], longitude: [2.3,4.9,4.3,12.5,9.9,18.0][i]) }
+        func permutations(_ items: [JourneyStop]) -> [[JourneyStop]] {
+            if items.isEmpty { return [[]] }
+            return items.indices.flatMap { i in var rest = items; let first = rest.remove(at: i); return permutations(rest).map { [first] + $0 } }
+        }
+        for objective in RouteObjective.allCases {
+            var plan = JourneyRoutePlan(); plan.objective = objective; plan.keepLast = true
+            plan.home = .init(id: "home", name: "London", latitude: 51.5, longitude: -0.1)
+            let suggested = try XCTUnwrap(MultiCityRouting.suggest(stops, plan: plan))
+            XCTAssertEqual(suggested.first?.id, stops.first?.id); XCTAssertEqual(suggested.last?.id, stops.last?.id)
+            let minimum = permutations(Array(stops.dropFirst().dropLast())).map { [stops[0]] + $0 + [stops.last!] }.map { MultiCityRouting.cost($0, plan: plan) }.min()!
+            XCTAssertEqual(MultiCityRouting.cost(suggested, plan: plan), minimum, accuracy: 0.001)
+        }
+        var open = JourneyRoutePlan(); open.keepFirst = false
+        let suggestion = try XCTUnwrap(MultiCityRouting.suggest(stops, plan: open))
+        let minimum = permutations(stops).map { MultiCityRouting.cost($0, plan: open) }.min()!
+        XCTAssertEqual(MultiCityRouting.cost(suggestion, plan: open), minimum, accuracy: 0.001)
+    }
+    func testMultiCityDateReflowRetainsCityPlansAndBookedReservations() throws {
+        var original = MultiCityRouteFixtures.trip
+        original.hotels = [HotelReservation(place: PlaceRecord(name: "Booked hotel", category: .hotel), checkIn: "2026-10-04", checkOut: "2026-10-06")]
+        original.flights = [FlightMapFixtures.trip.flights[0]]
+        let proposed = try XCTUnwrap(MultiCityRouting.suggest(original.stops, plan: .init()))
+        XCTAssertEqual(proposed.map(\.name), ["Paris", "Brussels", "Amsterdam"])
+        let result = try MultiCityRouting.applying(proposed, plan: .init(), to: original)
+        XCTAssertEqual(result.stops.map(\.arrival), ["2026-10-01", "2026-10-04", "2026-10-06"])
+        XCTAssertEqual(result.startDate, original.startDate); XCTAssertEqual(result.endDate, original.endDate)
+        XCTAssertEqual(result.events.first { $0.id == original.events[0].id }, original.events[0])
+        XCTAssertEqual(result.date(for: original.events[0]), "2026-10-07")
+        XCTAssertEqual(result.hotels, original.hotels); XCTAssertEqual(result.flights, original.flights)
+        XCTAssertEqual(Set(result.stops.map(\.id)), Set(original.stops.map(\.id)))
+        XCTAssertNil(result.validationError())
+    }
+    func testMultiCityTransfersPersistWithoutDuplicatesAndCanBeRemoved() throws {
+        let original = MultiCityRouteFixtures.trip, plan = JourneyRoutePlan()
+        let once = try MultiCityRouting.applying(original.stops, plan: plan, to: original)
+        let twice = try MultiCityRouting.applying(once.stops, plan: plan, to: once)
+        XCTAssertEqual(once.events, twice.events)
+        XCTAssertEqual(twice.events.filter { $0.routeLegID != nil }.count, 2)
+        let library = JourneyLibrary(url: directory.appendingPathComponent("route.json"))
+        XCTAssertTrue(library.save(twice))
+        let restored = try XCTUnwrap(JourneyLibrary(url: directory.appendingPathComponent("route.json")).documents.first)
+        XCTAssertEqual(restored.routePlan, plan); XCTAssertEqual(restored.events, twice.events)
+        var noBlocks = plan; noBlocks.reserveTransfers = false
+        let cleared = try MultiCityRouting.applying(restored.stops, plan: noBlocks, to: restored)
+        XCTAssertEqual(cleared.events, original.events)
+        let old = try JSONSerialization.jsonObject(with: JSONEncoder().encode(original)) as! [String: Any]
+        XCTAssertNotNil(try JSONDecoder().decode(JourneyDocument.self, from: JSONSerialization.data(withJSONObject: old)))
+    }
+    func testMultiCityOvernightAndFlexibleDates() throws {
+        let original = MultiCityRouteFixtures.trip
+        let firstLeg = MultiCityRouting.legs(original.stops, plan: .init())[0]
+        var plan = JourneyRoutePlan()
+        plan.choices = [.init(key: firstLeg.id, mode: .train, minutes: 1500, extraDays: 1)]
+        let dated = try MultiCityRouting.applying(original.stops, plan: plan, to: original)
+        XCTAssertEqual(dated.stops[1].arrival, "2026-10-05"); XCTAssertEqual(dated.stops[2].arrival, "2026-10-07")
+        XCTAssertEqual(dated.endDate, "2026-10-09")
+        XCTAssertEqual(dated.events.first { $0.routeLegID == firstLeg.id }?.durationMinutes, 1440)
+        XCTAssertEqual(dated.events.first { $0.routeLegID == firstLeg.id }?.allDay, true)
+        var flexible = original; flexible.dateMode = .nights; flexible.startDate = nil; flexible.endDate = nil
+        let result = try MultiCityRouting.applying(Array(flexible.stops.reversed()), plan: plan, to: flexible)
+        XCTAssertNil(result.startDate); XCTAssertNil(result.endDate)
+        for stop in result.stops { XCTAssertEqual(stop.nights, original.stops.first { $0.id == stop.id }?.nights) }
+    }
+    func testMultiCityRailEstimatesAndHomeLegsAreExplicit() throws {
+        let stops = MultiCityRouteFixtures.trip.stops
+        let paris = try XCTUnwrap(RoutePoint(stops[0])), brussels = try XCTUnwrap(RoutePoint(stops[2]))
+        let rail = try XCTUnwrap(MultiCityRouting.options(paris, brussels).first { $0.mode == .train })
+        XCTAssertEqual(rail.rideMinutes, 82); XCTAssertEqual(rail.bufferMinutes, 45); XCTAssertNotNil(rail.source)
+        let remote = RoutePoint(id: "remote", name: "Remote city", latitude: -33.8, longitude: 151.2)
+        XCTAssertFalse(MultiCityRouting.options(paris, remote).contains { $0.mode == .train })
+        XCTAssertTrue(MultiCityRouting.options(paris, remote)[0].explanation.contains("not verified"))
+        var plan = JourneyRoutePlan(); plan.home = remote
+        let roundTrip = MultiCityRouting.legs(stops, plan: plan)
+        XCTAssertEqual(roundTrip.count, stops.count + 1); XCTAssertEqual(roundTrip.first?.from, remote); XCTAssertEqual(roundTrip.last?.to, remote)
+        plan.returnHome = false
+        XCTAssertEqual(MultiCityRouting.legs(stops, plan: plan).count, stops.count)
+        let cph = RoutePoint(id: "cph", name: "Copenhagen", latitude: 55.6761, longitude: 12.5683)
+        let oslo = RoutePoint(id: "osl", name: "Oslo", latitude: 59.9139, longitude: 10.7522)
+        let connecting = try XCTUnwrap(MultiCityRouting.options(cph, oslo).first { $0.mode == .train })
+        XCTAssertTrue(connecting.explanation.contains("Gothenburg")); XCTAssertGreaterThan(connecting.total, 420)
+    }
+    func testMultiCityOvernightHomeLegsExtendTripWithoutChangingFirstStay() throws {
+        let original = MultiCityRouteFixtures.trip
+        var plan = JourneyRoutePlan(); plan.home = .init(id: "home", name: "Sydney", latitude: -33.8, longitude: 151.2)
+        let legs = MultiCityRouting.legs(original.stops, plan: plan)
+        plan.choices = [.init(key: legs.first!.id, mode: .flight, minutes: 1500, extraDays: 1), .init(key: legs.last!.id, mode: .flight, minutes: 1500, extraDays: 2)]
+        let result = try MultiCityRouting.applying(original.stops, plan: plan, to: original)
+        XCTAssertEqual(result.startDate, "2026-09-30"); XCTAssertEqual(result.endDate, "2026-10-10")
+        XCTAssertEqual(result.stops.first?.arrival, "2026-10-01")
+        XCTAssertEqual(result.events.filter { $0.routeLegID != nil }.count, 4)
+        XCTAssertEqual(result.events.first { $0.routeLegID == legs.first!.id }?.displayTitle, "Arrive in Paris")
+    }
+    func testMultiCityMissingCoordinatesAndInvalidChoicesFailSafely() throws {
+        let original = MultiCityRouteFixtures.trip
+        var missing = original.stops; missing[0].latitude = nil
+        XCTAssertNil(MultiCityRouting.suggest(missing, plan: .init()))
+        XCTAssertThrowsError(try MultiCityRouting.applying(missing, plan: .init(), to: original))
+        var invalid = JourneyRoutePlan(); invalid.home = .init(id: "bad", name: "Invalid", latitude: .nan, longitude: 0)
+        XCTAssertNil(MultiCityRouting.suggest(original.stops, plan: invalid))
+        invalid.home = nil; invalid.choices = [.init(key: "bad", mode: .flight, minutes: 1500, extraDays: 0)]
+        XCTAssertThrowsError(try MultiCityRouting.applying(original.stops, plan: invalid, to: original))
+        invalid.choices = [.init(key: "boundary", mode: .flight, minutes: 1440, extraDays: 0)]
+        XCTAssertFalse(invalid.valid)
+        invalid.choices[0].extraDays = 1; XCTAssertTrue(invalid.valid)
+        invalid.choices = [.init(key: "bad", mode: .flight, minutes: -50)]
+        XCTAssertThrowsError(try MultiCityRouting.applying(original.stops, plan: invalid, to: original))
+        XCTAssertThrowsError(try MultiCityRouting.applying(Array(original.stops.dropFirst()), plan: .init(), to: original))
+    }
+    func testMultiCityLargeRouteNeverRegressesOrDropsStops() throws {
+        let stops: [JourneyStop] = (0..<16).map { i in
+            let latitude = Double((i * 23) % 130 - 65)
+            let longitude = Double((i * 47) % 340 - 170)
+            return JourneyStop(name: "City \(i)", latitude: latitude, longitude: longitude)
+        }
+        var plan = JourneyRoutePlan(); plan.keepLast = true
+        let result = try XCTUnwrap(MultiCityRouting.suggest(stops, plan: plan))
+        XCTAssertEqual(result.first, stops.first); XCTAssertEqual(result.last, stops.last)
+        XCTAssertEqual(Set(result.map(\.id)), Set(stops.map(\.id)))
+        XCTAssertLessThanOrEqual(MultiCityRouting.cost(result, plan: plan), MultiCityRouting.cost(stops, plan: plan))
     }
     func testFlightSearchConversionUsesScheduledAirportLocalTimes() throws {
         var flight = FlightMapFixtures.snapshot
@@ -335,19 +612,97 @@ import MapKit
 
 @MainActor final class LocationAutocompleteTests: XCTestCase {
     func testGoogleAutocompleteAndStaleNetworkResponse() async throws {
-        let model = LocationAutocompleteModel()
-        model.update("Savoy", kind: .place, googleSearch: { _ in
+        var paidCalls = 0
+        var appleCalls = 0
+        let model = LocationAutocompleteModel(appleSearch: { _, _ in appleCalls += 1; return [] })
+        model.update("Savoy", kind: .place)
+        try await Task.sleep(for: .milliseconds(400))
+        XCTAssertEqual(paidCalls, 0)
+        XCTAssertEqual(appleCalls, 1)
+        model.requestGoogle { _ in
+            paidCalls += 1
             // Simulate a provider that finishes after cancellation.
             try? await Task.sleep(for: .milliseconds(300))
             return [GooglePlaceSuggestion(id: "old", title: "Old result", subtitle: "London")]
-        })
+        }
+        model.requestGoogle { _ in paidCalls += 1; return [] }
+        try await Task.sleep(for: .milliseconds(20))
+        XCTAssertEqual(paidCalls, 1, "Repeated taps must not issue another request")
+        model.update("Paris", kind: .place)
         try await Task.sleep(for: .milliseconds(400))
-        model.update("Paris", kind: .place, googleSearch: { _ in [GooglePlaceSuggestion(id: "new", title: "Paris venue", subtitle: "France")] })
-        try await Task.sleep(for: .milliseconds(450))
+        XCTAssertTrue(model.suggestions.isEmpty, "Old Google response cannot replace new Apple search")
+        model.requestGoogle { _ in paidCalls += 1; return [GooglePlaceSuggestion(id: "new", title: "Paris venue", subtitle: "France")] }
+        try await Task.sleep(for: .milliseconds(20))
         XCTAssertEqual(model.suggestions.first?.google?.id, "new")
-        XCTAssertEqual(model.suggestions.count, 1)
+        XCTAssertEqual(paidCalls, 2)
         model.stop()
         XCTAssertTrue(model.suggestions.isEmpty)
+    }
+    func testTypingDebouncesAndDuplicateUpdatesDoNotRestartSearch() async throws {
+        var calls: [String] = []
+        let model = LocationAutocompleteModel(appleSearch: { query, _ in
+            calls.append(query)
+            return [LocationSuggestion(title: "The Savoy", subtitle: "London")]
+        })
+        model.update("Sa", kind: .place, context: "London")
+        model.update("Sav", kind: .place, context: "London")
+        model.update("Savoy", kind: .place, context: "London")
+        try await Task.sleep(for: .milliseconds(400))
+        model.update("Savoy", kind: .place, context: "London")
+        try await Task.sleep(for: .milliseconds(400))
+        XCTAssertEqual(calls, ["Savoy London"])
+        XCTAssertTrue(model.canRequestGoogle)
+        XCTAssertNil(model.suggestions.first?.google)
+        model.stop()
+    }
+    func testGoogleFailureKeepsAppleMatchesWithoutAutomaticRetry() async throws {
+        var calls = 0
+        let model = LocationAutocompleteModel(appleSearch: { _, _ in [LocationSuggestion(title: "Apple result", subtitle: "London")] })
+        model.update("Savoy", kind: .place)
+        try await Task.sleep(for: .milliseconds(400))
+        model.requestGoogle { _ in calls += 1; throw JourneyError.message("Offline") }
+        try await Task.sleep(for: .milliseconds(20))
+        XCTAssertEqual(model.suggestions.first?.title, "Apple result")
+        XCTAssertFalse(model.canRequestGoogle)
+        model.requestGoogle { _ in calls += 1; return [] }
+        XCTAssertEqual(calls, 1)
+    }
+    func testShortAndNonPlaceQueriesCannotRequestGoogle() async throws {
+        var calls = 0
+        let model = LocationAutocompleteModel(appleSearch: { _, _ in [] })
+        for (query, kind) in [("Sa", LocationSearchKind.place), ("Paris", .city), ("CDG", .airport)] {
+            model.update(query, kind: kind)
+            try await Task.sleep(for: .milliseconds(400))
+            model.requestGoogle { _ in calls += 1; return [] }
+        }
+        XCTAssertEqual(calls, 0)
+    }
+    func testConcurrentGoogleRequestsCoalesceWithoutRetainingResults() async throws {
+        let gate = GoogleAutocompleteRequests()
+        var calls = 0
+        let request: (String) async throws -> [GooglePlaceSuggestion] = { query in
+            calls += 1
+            try await Task.sleep(for: .milliseconds(50))
+            return [GooglePlaceSuggestion(id: query, title: query, subtitle: "Test")]
+        }
+        let first = Task { try await gate.fetch(" Savoy   London ", server: "test", request: request) }
+        let second = Task { try await gate.fetch("savoy London", server: "test", request: request) }
+        let a = try await first.value, b = try await second.value
+        XCTAssertEqual(a.first?.id, b.first?.id)
+        XCTAssertEqual(calls, 1)
+        _ = try await gate.fetch("Savoy London", server: "test", request: request)
+        XCTAssertEqual(calls, 2, "Completed prediction content is not cached")
+        _ = try await gate.fetch("Sa", server: "test", request: request)
+        XCTAssertEqual(calls, 2)
+    }
+    func testAutomatedTestsBlockGoogleAtTheAPIServiceBoundary() async {
+        XCTAssertTrue(PlaceSearchTestPolicy.blocksPaidRequests)
+        do {
+            _ = try await TravelAPI().autocompletePlaces("Savoy London")
+            XCTFail("Automated tests must never call the live Google endpoint")
+        } catch {
+            XCTAssertTrue(error.localizedDescription.contains("disabled during automated tests"))
+        }
     }
     func testCountriesAndTimeZonesMatchPartialInput() {
         XCTAssertTrue(LocationAutocompleteModel.localSuggestions("Fran", kind: .country).contains { $0.localValue == "France" })
@@ -458,6 +813,26 @@ import MapKit
         loaded.toggleRestaurantSave(oldBookmark); XCTAssertTrue(loaded.isDiscoverySaved(restaurant))
         XCTAssertEqual(loaded.savedDiscoveries.filter { $0.id == restaurant.id }.count, 1)
     }
+    func testGuideResultsSeedSeparateSearchWithoutExtraRequests() async {
+        var calls = 0
+        let model = CityExploreModel { [self] _, interest, _, _ in
+            calls += 1
+            return [sample("fresh", category: interest.category)]
+        }
+        model.seed(city: lisbon, sections: [
+            ExploreSection(interest: .restaurants, places: [sample("cached", category: .restaurant)]),
+            ExploreSection(interest: .museums, places: [], error: "Offline")
+        ])
+        await model.load(city: lisbon, interest: .restaurants, term: "", wider: false)
+        XCTAssertEqual(calls, 0)
+        XCTAssertEqual(model.places.first?.record.name, sample("cached").record.name)
+        await model.load(city: lisbon, interest: .restaurants, term: "Italian", wider: false)
+        XCTAssertEqual(calls, 1, "Changed filters must perform their own search")
+        await model.load(city: lisbon, interest: .museums, term: "", wider: false)
+        XCTAssertEqual(calls, 2, "A failed preview must not prevent retrying")
+        await model.load(city: lisbon, interest: .restaurants, term: "", wider: true)
+        XCTAssertEqual(calls, 3, "A wider area must not reuse the city-center preview")
+    }
     func testPartialSearchFailuresAndCache() async {
         var calls = 0
         let model = CityExploreModel { [self] _, interest, _, _ in
@@ -503,6 +878,29 @@ import MapKit
 }
 
 @MainActor final class FlightMapTests: XCTestCase {
+    func testPositionPollingOnlyForDepartedUnfinishedFlights() {
+        var flight = FlightMapFixtures.snapshot
+        XCTAssertFalse(flight.canTrackPosition)
+        flight.actualOut = flight.scheduledOut; XCTAssertTrue(flight.canTrackPosition)
+        flight.actualOn = flight.scheduledIn; XCTAssertFalse(flight.canTrackPosition)
+        flight.actualOn = nil; flight.cancelled = true; XCTAssertFalse(flight.canTrackPosition)
+    }
+    func testPositionFreshnessRequiresRecentProviderTimestamp() {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        var position = FlightPosition(latitude: 40, longitude: -30)
+        XCTAssertFalse(position.isRecent(at: now))
+        position.timestamp = ISO8601DateFormatter().string(from: now.addingTimeInterval(-120)); XCTAssertTrue(position.isRecent(at: now))
+        position.timestamp = ISO8601DateFormatter().string(from: now.addingTimeInterval(-600)); XCTAssertFalse(position.isRecent(at: now))
+    }
+    func testPositionRequestsAreThrottledAndOldSelectionCannotOverwriteNewOne() async {
+        let tracker = FlightTracker(); tracker.choose("first")
+        let now = Date.now; var calls = 0
+        await tracker.locate(now: now) { _ in calls += 1; return FlightPosition(latitude: 40, longitude: -30) }
+        await tracker.locate(now: now.addingTimeInterval(10)) { _ in calls += 1; return FlightPosition(latitude: 41, longitude: -30) }
+        XCTAssertEqual(calls, 1); XCTAssertEqual(tracker.position?.latitude, 40)
+        await tracker.locate(now: now.addingTimeInterval(90)) { _ in tracker.choose("second"); return FlightPosition(latitude: 42, longitude: -30) }
+        XCTAssertNil(tracker.position); XCTAssertEqual(tracker.selectedID, "second"); XCTAssertFalse(tracker.positionLoading)
+    }
     func testRoutesUseValidCoordinatesAndCrossDateLine() {
         var reservation = FlightReservation(departureLatitude: 35.5, departureLongitude: 139.7, arrivalLatitude: 37.6, arrivalLongitude: -122.4)
         var flight = MapFlight(tripID: UUID(), tripTitle: "Across the Pacific", flight: reservation)
@@ -510,6 +908,78 @@ import MapKit
         reservation.departureLatitude = .nan; flight.flight = reservation
         XCTAssertNil(flight.route); XCTAssertNil(flight.distance)
         XCTAssertNil(MapFlight.coordinate(91, 20)); XCTAssertNil(MapFlight.coordinate(20, nil))
+    }
+    func testMapPanelSurfaceExpandsContinuouslyWithoutChangingItsContentHeight() {
+        for flightDetail in [false, true] {
+            let layout = MapPanelLayout(availableHeight: 760, flightDetail: flightDetail)
+            XCTAssertEqual(layout.surfaceInset(for: layout.compact), 12)
+            XCTAssertEqual(layout.surfaceInset(for: layout.maximum), 0)
+            XCTAssertEqual(layout.surfaceInset(for: (layout.maximum + layout.compact) / 2), 6, accuracy: 0.001)
+            XCTAssertEqual(layout.surfaceInset(for: layout.maximum + 100), 0)
+            XCTAssertEqual(layout.surfaceInset(for: layout.compact - 100), 12)
+            XCTAssertGreaterThan(layout.medium, layout.compact)
+            XCTAssertLessThan(layout.medium, layout.maximum)
+        }
+    }
+    func testMapPanelDragRebasesInterruptedSettlingAndOvershoot() {
+        var drag = MapPanelDrag()
+        // The old target can be 752 while its visible spring is still at 510.
+        drag.update(distance: 12, presentedHeight: 510, bounds: 260...752)
+        XCTAssertEqual(drag.height, 498)
+        drag.update(distance: 32, presentedHeight: 498, bounds: 260...752)
+        XCTAssertEqual(drag.height, 478)
+        drag.update(distance: -500, presentedHeight: 478, bounds: 260...752)
+        XCTAssertEqual(drag.height, 752)
+        drag.update(distance: -490, presentedHeight: 752, bounds: 260...752)
+        XCTAssertEqual(drag.height, 742, "Reversal must respond without crossing the overshoot again")
+        drag.update(distance: 600, presentedHeight: 742, bounds: 260...752)
+        XCTAssertEqual(drag.height, 260)
+        drag.update(distance: 590, presentedHeight: 260, bounds: 260...752)
+        XCTAssertEqual(drag.height, 270)
+        drag.finish()
+        XCTAssertNil(drag.height); XCTAssertNil(drag.origin)
+        drag.update(distance: -20, presentedHeight: 340, bounds: 260...752)
+        XCTAssertEqual(drag.height, 360)
+    }
+    func testDetailedFlightTimetableUsesRealStagesAndSafeTaxiDurations() throws {
+        var flight = FlightMapFixtures.snapshot
+        flight.scheduledOff = "2026-09-06T22:10:00Z"; flight.estimatedOff = "2026-09-06T22:57:00Z"
+        flight.scheduledOn = "2026-09-07T04:50:00Z"; flight.estimatedOn = "2026-09-07T05:25:00Z"
+        flight.actualOut = "2026-09-06T22:31:00Z"; flight.actualOff = "2026-09-06T22:51:00Z"
+        let rows = FlightTimetableRow.rows(flight)
+        XCTAssertEqual(rows.map(\.id), ["gate-out", "taxi-out", "takeoff", "landing", "taxi-in", "gate-in"])
+        XCTAssertEqual(rows[1].scheduled, .duration(600)); XCTAssertEqual(rows[1].estimated, .duration(1620)); XCTAssertEqual(rows[1].actual, .duration(1200))
+        XCTAssertEqual(rows[4].scheduled, .duration(600)); XCTAssertEqual(rows[4].estimated, .duration(600)); XCTAssertNil(rows[4].actual)
+        XCTAssertEqual(rows[2].estimated?.text(zone: flight.originZone), "18:57")
+        XCTAssertEqual(rows[3].estimated?.text(zone: flight.destinationZone), "06:25")
+        let roundTrip = try JSONDecoder().decode(FlightSnapshot.self, from: JSONEncoder().encode(flight))
+        XCTAssertEqual(roundTrip.estimatedOff, flight.estimatedOff); XCTAssertEqual(roundTrip.estimatedOn, flight.estimatedOn)
+        flight.actualOff = "2026-09-06T22:00:00Z"
+        XCTAssertNil(FlightTimetableRow.rows(flight)[1].actual)
+        flight.estimatedOff = nil
+        XCTAssertNil(FlightTimetableRow.rows(flight)[1].estimated)
+    }
+    func testFlightDetailPunctualitySeparatesDepartureAndArrival() {
+        var flight = FlightMapFixtures.snapshot
+        XCTAssertEqual(flight.timing(departure: true), .late(30))
+        XCTAssertEqual(flight.timing(departure: false), .late(35))
+        flight.estimatedIn = "2026-09-07T04:50:00Z"
+        XCTAssertEqual(flight.timing(departure: false), .early(10))
+        XCTAssertEqual(flight.summaryTiming, .late(30))
+        flight.actualOut = flight.estimatedOut
+        XCTAssertEqual(flight.summaryTiming, .early(10))
+        flight.actualIn = flight.scheduledIn
+        XCTAssertEqual(flight.timing(departure: false), .onTime)
+        flight.cancelled = true
+        XCTAssertEqual(flight.timing(departure: false), .cancelled)
+        flight.cancelled = false; flight.diverted = true
+        XCTAssertEqual(flight.summaryTiming, .diverted)
+        flight.diverted = false; flight.actualIn = nil; flight.estimatedIn = nil; flight.arrivalDelay = nil
+        XCTAssertEqual(flight.timing(departure: false), .unknown)
+        flight.arrivalDelay = -300
+        XCTAssertEqual(flight.timing(departure: false), .early(5))
+        flight.arrivalDelay = 0
+        XCTAssertEqual(flight.timing(departure: false), .onTime)
     }
     func testFlightTimesUseAirportZonesAndUnknownDelayStaysUnknown() throws {
         let date = "2026-09-07T01:00:00Z"
@@ -527,5 +997,549 @@ import MapKit
         tracker.position = FlightPosition(latitude: 40, longitude: -30)
         tracker.choose("another-leg")
         XCTAssertNil(tracker.position); XCTAssertNil(tracker.history); XCTAssertNil(tracker.selected)
+    }
+}
+
+@MainActor final class AppleActivityIdeasTests: XCTestCase {
+    func testShortlistDeduplicatesBoundsAndRetainsAppleCoordinates() async throws {
+        let places = (0..<12).map { PlaceRecord(id: "apple-\($0)", name: "Museum \($0)", category: .museum, latitude: 48.85, longitude: 2.35, source: "Apple Maps") }
+        var searches = 0
+        let payload = try await AppleActivityIdeas.prepare(city: " Paris ", interests: " Art ") { city, interests in
+            searches += 1; XCTAssertEqual(city, "Paris"); XCTAssertEqual(interests, "Art")
+            return [places[0], places[0], PlaceRecord(name: "Unmapped")] + places
+        }
+        XCTAssertEqual(searches, 1); XCTAssertEqual(payload.candidates.count, 8)
+        XCTAssertEqual(Set(payload.candidates.map(\.id)).count, 8)
+        XCTAssertTrue(payload.candidates.allSatisfy { $0.hasCoordinate && $0.source == "Apple Maps" })
+    }
+    func testInvalidInputDoesNotSearchAndEmptySearchStaysEmpty() async throws {
+        do {
+            _ = try await AppleActivityIdeas.prepare(city: "x", interests: "") { _, _ in XCTFail("Invalid input searched"); return [] }
+            XCTFail("Invalid city accepted")
+        } catch {}
+        let payload = try await AppleActivityIdeas.prepare(city: "Paris", interests: "") { _, _ in [] }
+        XCTAssertTrue(payload.candidates.isEmpty)
+    }
+    func testPaidPlacesAndAIBlockedInAutomatedTests() async {
+        let api = TravelAPI()
+        do { _ = try await api.searchPlaces("Museum Paris", category: .museum); XCTFail("Tripadvisor should be blocked") } catch { XCTAssertTrue(error.localizedDescription.contains("automated tests")) }
+        do { _ = try await api.placeDetails("123"); XCTFail("Tripadvisor details should be blocked") } catch { XCTAssertTrue(error.localizedDescription.contains("automated tests")) }
+        do { _ = try await api.recommendations(city: "Paris", interests: "Art"); XCTFail("AI should be blocked") } catch { XCTAssertTrue(error.localizedDescription.contains("automated tests")) }
+        do { _ = try await api.hotelOverview(PlaceRecord(name: "Hotel")); XCTFail("Hotel AI should be blocked") } catch { XCTAssertTrue(error.localizedDescription.contains("automated tests")) }
+    }
+}
+
+@MainActor final class AppleTravelFeatureTests: XCTestCase {
+    func testActivityUsesAirportTimeZonesAndActualState() {
+        var flight = FlightMapFixtures.snapshot
+        flight.scheduledOut = "2026-10-01T22:00:00Z"; flight.originZone = "America/New_York"
+        flight.actualOut = nil; flight.estimatedOut = nil; flight.actualIn = nil; flight.cancelled = false
+        let state = FlightNotifications.state(flight, now: Date(timeIntervalSince1970: 123))
+        XCTAssertEqual(state.departureTime, "18:00"); XCTAssertEqual(state.phase, "scheduled"); XCTAssertEqual(state.updatedAt, 123)
+        flight.actualOut = flight.scheduledOut
+        XCTAssertEqual(FlightNotifications.state(flight).phase, "departed")
+        flight.cancelled = true
+        XCTAssertEqual(FlightNotifications.state(flight).phase, "cancelled")
+    }
+    func testWeatherTemperaturesAreRoundedAndUseLocalUnits() {
+        let value = Measurement(value: 76.160895, unit: UnitTemperature.fahrenheit)
+        let us = WeatherDisplay.temperature(value, locale: Locale(identifier: "en_US"))
+        let uk = WeatherDisplay.temperature(value, locale: Locale(identifier: "en_GB"))
+        XCTAssertTrue(us.contains("76")); XCTAssertTrue(us.contains("F")); XCTAssertFalse(us.contains("160895"))
+        XCTAssertTrue(uk.contains("25")); XCTAssertTrue(uk.contains("C")); XCTAssertFalse(uk.contains("."))
+    }
+    func testWeatherPreferenceDefaultsOnAndPersistsOff() {
+        let name = "seur.weather.tests." + UUID().uuidString
+        let defaults = UserDefaults(suiteName: name)!
+        defer { defaults.removePersistentDomain(forName: name) }
+        XCTAssertTrue(WeatherPreferences.isEnabled(in: defaults))
+        defaults.set(false, forKey: WeatherPreferences.key)
+        XCTAssertFalse(WeatherPreferences.isEnabled(in: UserDefaults(suiteName: name)!))
+        defaults.set(true, forKey: WeatherPreferences.key)
+        XCTAssertTrue(WeatherPreferences.isEnabled(in: defaults))
+    }
+    func testWeatherAvoidsRequestsForFlexibleAndDistantDates() {
+        let now = TravelDay.date("2026-09-07")!
+        XCTAssertFalse(DestinationWeatherService.canForecast(day: nil, now: now))
+        XCTAssertFalse(DestinationWeatherService.canForecast(day: "2026-12-01", now: now))
+        XCTAssertFalse(DestinationWeatherService.canForecast(day: "2025-09-07", now: now))
+        XCTAssertTrue(DestinationWeatherService.canForecast(day: "2026-09-08", now: now))
+    }
+}
+
+@MainActor final class ConciergeLiveTests: XCTestCase {
+    private var reply: ConciergeReply { .init(text: "A detailed and thoughtful plan.", suggestions: ["Refine it"], searches: [], itinerary: ConciergeFixtures.plan) }
+    func testTripContextOmitsBookingReferencesJournalNotesAndPrivateFields() {
+        var trip = JourneyDocument(title: "Paris", destination: "Paris")
+        trip.hotels = [HotelReservation(place: PlaceRecord(name: "Hotel"), confirmation: "PRIVATE-CODE", notes: "PRIVATE-NOTES")]
+        trip.places = [RatedPlace(place: PlaceRecord(name: "Journal"), notes: "PRIVATE-JOURNAL")]
+        trip.flights = [FlightReservation(flightNumber: "BA178", notes: "PRIVATE-FLIGHT")]
+        let context = ConciergeContext.tripSummary(trip)
+        XCTAssertTrue(context.contains("Hotel")); XCTAssertTrue(context.contains("BA178")); XCTAssertFalse(context.contains("PRIVATE"))
+    }
+    func testDraftCreatesValidTripAndDuplicateSaveDoesNotDuplicateActivities() throws {
+        let draft = ConciergeFixtures.plan
+        let trip = try draft.applying(to: nil, places: [], startDate: "2026-10-01")
+        XCTAssertNil(trip.validationError()); XCTAssertEqual(trip.events.count, 2)
+        XCTAssertEqual(trip.startDate, "2026-10-01"); XCTAssertEqual(trip.endDate, "2026-10-02")
+        XCTAssertThrowsError(try draft.applying(to: trip, places: [], startDate: nil))
+        XCTAssertEqual(trip.events.count, 2)
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString).appendingPathComponent("library.json")
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+        let library = JourneyLibrary(url: url); XCTAssertTrue(library.save(trip)); XCTAssertEqual(JourneyLibrary(url: url).documents.first?.events.count, 2)
+    }
+    func testDraftRouteMismatchNeverOverwritesExistingPlans() throws {
+        let original = JourneyDocument(title: "Tokyo", stops: [JourneyStop(name: "Tokyo", nights: 3)])
+        XCTAssertThrowsError(try ConciergeFixtures.plan.applying(to: original, places: [], startDate: nil))
+        XCTAssertTrue(original.events.isEmpty); XCTAssertEqual(original.stops.first?.name, "Tokyo")
+    }
+    func testMultiCityDraftPreservesDatesAndMappedPlaces() throws {
+        var draft = ConciergeFixtures.plan; draft.days[1].city = "London"; draft.days[0].items[0].placeID = "mapped"
+        let place = PlaceRecord(id: "mapped", name: "Museum", category: .museum, latitude: 48.8, longitude: 2.3, source: "Apple Maps")
+        let trip = try draft.applying(to: nil, places: [place], startDate: "2026-10-01")
+        XCTAssertNil(trip.validationError()); XCTAssertEqual(trip.stops.count, 2)
+        XCTAssertEqual(trip.date(for: trip.events[1]), "2026-10-02")
+        XCTAssertEqual(trip.events[0].place.id, "mapped"); XCTAssertTrue(trip.events[0].place.hasCoordinate)
+    }
+    func testSearchPhaseIsBoundedAndFollowupReceivesHistory() async throws {
+        let chat = ConciergeConversation(); var calls = 0, searches = 0
+        let response = reply
+        let respond: ConciergeConversation.Respond = { request in
+            calls += 1
+            if calls == 1 { return .init(text: "Searching", suggestions: [], searches: Array(repeating: .init(city: "Paris", query: "museums"), count: 5), itinerary: nil) }
+            if calls == 2 { XCTAssertFalse(request.allowSearch); XCTAssertEqual(request.places.count, 1) }
+            if calls == 3 {
+                XCTAssertEqual(request.messages.count, 3); XCTAssertEqual(request.messages.last?.text, "Slower please")
+                XCTAssertTrue(request.messages[1].text.contains("Previously proposed draft"))
+                XCTAssertTrue(request.messages[1].text.contains(response.itinerary!.days[0].items[0].title))
+            }
+            return response
+        }
+        let search: ConciergeConversation.Search = { _ in searches += 1; return [.init(id: "map", name: "Museum", latitude: 48.8, longitude: 2.3, source: "Apple Maps")] }
+        chat.send("Plan Paris", context: .init(), respond: respond, search: search)
+        for _ in 0..<100 where chat.isReplying { try await Task.sleep(for: .milliseconds(5)) }
+        XCTAssertEqual(calls, 2); XCTAssertEqual(searches, 2); XCTAssertEqual(chat.messages.count, 2)
+        chat.send("Slower please", context: .init(), respond: respond, search: search)
+        for _ in 0..<100 where chat.isReplying { try await Task.sleep(for: .milliseconds(5)) }
+        XCTAssertEqual(calls, 3); XCTAssertEqual(chat.messages.count, 4)
+    }
+    func testFailureRetryAndResetNeverInsertFakeOrLateReplies() async throws {
+        let chat = ConciergeConversation(); let response = reply
+        chat.send("Paris", context: .init(), respond: { _ in throw JourneyError.message("Offline") }, search: { _ in [] })
+        for _ in 0..<100 where chat.isReplying { try await Task.sleep(for: .milliseconds(5)) }
+        XCTAssertEqual(chat.messages.count, 1); XCTAssertEqual(chat.error, "Offline")
+        chat.retry(context: .init(), respond: { _ in response }, search: { _ in [] })
+        for _ in 0..<100 where chat.isReplying { try await Task.sleep(for: .milliseconds(5)) }
+        XCTAssertEqual(chat.messages.count, 2)
+        chat.send("London", context: .init(), respond: { _ in try? await Task.sleep(for: .milliseconds(80)); return response }, search: { _ in [] })
+        chat.reset(); try await Task.sleep(for: .milliseconds(100))
+        XCTAssertTrue(chat.messages.isEmpty); XCTAssertFalse(chat.isReplying)
+    }
+}
+
+@MainActor final class FriendsFeatureTests: XCTestCase {
+    func testTripPeriodsAndFlexibleDates() {
+        var trip = FriendsFixtures.trip
+        trip.stops[0].arrival = "2026-09-10"
+        XCTAssertEqual(FriendsTravel.phase(trip, today: "2026-09-07"), .upcoming)
+        XCTAssertEqual(FriendsTravel.phase(trip, today: "2026-09-11"), .traveling)
+        XCTAssertEqual(FriendsTravel.phase(trip, today: "2026-09-14"), .past)
+        trip.dateMode = .nights
+        XCTAssertNil(FriendsTravel.phase(trip)); XCTAssertEqual(FriendsTravel.dates(trip), "Dates flexible")
+    }
+    func testSharedTripSearchAndSavedFilter() {
+        let remote = FriendsFixtures.remote
+        XCTAssertTrue(FriendsTravel.matches(remote, query: "maya", filter: .all, saved: []))
+        XCTAssertFalse(FriendsTravel.matches(remote, query: "Tokyo", filter: .all, saved: []))
+        XCTAssertFalse(FriendsTravel.matches(remote, query: "", filter: .saved, saved: []))
+        XCTAssertTrue(FriendsTravel.matches(remote, query: "Paris", filter: .saved, saved: [remote.id]))
+    }
+    func testOverlapRequiresSameDestinationCountryAndMatchingDates() {
+        var other = FriendsFixtures.trip; other.stops[0].arrival = "2026-09-10"
+        var own = other; own.id = UUID(); own.stops[0].arrival = "2026-09-12"
+        XCTAssertNotNil(FriendsTravel.overlap(other, with: [own], today: "2026-09-07"))
+        own.stops[0].country = "United States"; XCTAssertNil(FriendsTravel.overlap(other, with: [own], today: "2026-09-07"))
+        own.stops[0].country = "France"; own.stops[0].arrival = "2026-09-20"; XCTAssertNil(FriendsTravel.overlap(other, with: [own], today: "2026-09-07"))
+        own.dateMode = .nights; XCTAssertNil(FriendsTravel.overlap(other, with: [own]))
+    }
+    func testOverlapNormalizesCountriesAndAccentsWithoutGuessingUnknownCities() {
+        var a = JourneyStop(name: "  Montréal ", country: "Canada", arrival: "2026-09-10", nights: 4)
+        var b = JourneyStop(name: "Montreal", country: "CA", arrival: "2026-09-12", nights: 4)
+        XCTAssertTrue(FriendOverlaps.sameCity(a,b))
+        b.country = "France"; XCTAssertFalse(FriendOverlaps.sameCity(a,b))
+        a.country = ""; b.country = ""; XCTAssertFalse(FriendOverlaps.sameCity(a,b))
+        a.latitude = 45.5; a.longitude = -73.57; b.latitude = 45.51; b.longitude = -73.56
+        XCTAssertTrue(FriendOverlaps.sameCity(a,b))
+        b.latitude = 48.8; b.longitude = 2.3; XCTAssertFalse(FriendOverlaps.sameCity(a,b))
+    }
+    func testOverlapIncludesCheckoutDayAndKeepsDismissalIdentityAsTodayAdvances() {
+        var remote = FriendsFixtures.remote
+        remote.document.stops = [.init(name: "Paris", country: "France", arrival: "2026-09-10", nights: 4)]
+        let own = JourneyDocument(title: "My Paris", stops: [.init(name: "Paris", country: "FR", arrival: "2026-09-12", nights: 4)])
+        let first = FriendOverlaps.matches(remote: [remote], local: [own], friendIDs: [remote.owner.id], today: "2026-09-07")
+        XCTAssertEqual(first.count,1); XCTAssertEqual(first.first?.start,"2026-09-12"); XCTAssertEqual(first.first?.end,"2026-09-14")
+        let last = FriendOverlaps.matches(remote: [remote], local: [own], friendIDs: [remote.owner.id], today: "2026-09-14")
+        XCTAssertEqual(last.first?.start,"2026-09-14"); XCTAssertEqual(first.first?.id,last.first?.id)
+        XCTAssertTrue(FriendOverlaps.matches(remote: [remote], local: [own], friendIDs: [remote.owner.id], today: "2026-09-15").isEmpty)
+        remote.document.stops[0].nights += 1
+        XCTAssertNotEqual(first.first?.id,FriendOverlaps.matches(remote: [remote], local: [own], friendIDs: [remote.owner.id], today: "2026-09-07").first?.id)
+    }
+    func testOverlapRequiresAcceptedFriendAndExcludesTemplatesAndFlexibleDates() {
+        var remote = FriendsFixtures.remote
+        var own = remote.document; own.id = UUID()
+        let today = remote.document.stops[0].arrival
+        XCTAssertTrue(FriendOverlaps.matches(remote: [remote], local: [own], friendIDs: [], today: today).isEmpty)
+        own.isTemplate = true
+        XCTAssertTrue(FriendOverlaps.matches(remote: [remote], local: [own], friendIDs: [remote.owner.id], today: today).isEmpty)
+        own.isTemplate = false; remote.document.isTemplate = true
+        XCTAssertTrue(FriendOverlaps.matches(remote: [remote], local: [own], friendIDs: [remote.owner.id], today: today).isEmpty)
+        remote.document.isTemplate = false; own.dateMode = .nights
+        XCTAssertTrue(FriendOverlaps.matches(remote: [remote], local: [own], friendIDs: [remote.owner.id], today: today).isEmpty)
+    }
+    func testOverlapDeduplicatesEquivalentSharedAndLocalCopies() {
+        let remote = FriendsFixtures.remote
+        var own = remote.document; own.id = UUID()
+        var another = own; another.id = UUID()
+        XCTAssertEqual(FriendOverlaps.matches(remote: [remote,remote], local: [own,another], friendIDs: [remote.owner.id], today: remote.document.stops[0].arrival).count,1)
+    }
+    func testTripRequestAndReplyMetadataPreserveLegacyMessageDecoding() throws {
+        let legacy = #"{"id":"message","sender":{"id":"person","handle":"maya","name":"Maya"},"text":"Hello","createdAt":0}"#.data(using: .utf8)!
+        var message = try JSONDecoder().decode(TravelChatMessage.self,from:legacy)
+        XCTAssertNil(message.tripRequest); XCTAssertNil(message.replyTo); XCTAssertNil(message.documentIsTemplate)
+        message.tripRequest = .init(city:"Tokyo",month:"2027-03")
+        let restored = try JSONDecoder().decode(TravelChatMessage.self,from:JSONEncoder().encode(message))
+        XCTAssertEqual(restored.tripRequest?.city,"Tokyo"); XCTAssertTrue(restored.tripRequest?.prompt.contains("2027") == true)
+        message.tripRequest = nil; message.replyTo = "request"; message.documentID = "trip"; message.documentIsTemplate = true
+        let reply = try JSONDecoder().decode(TravelChatMessage.self,from:JSONEncoder().encode(message))
+        XCTAssertEqual(reply.replyTo,"request"); XCTAssertEqual(reply.documentIsTemplate,true)
+        let chat = try JSONDecoder().decode(TravelConversation.self,from:#"{"id":"chat","name":"Friends","members":[]}"#.data(using:.utf8)!)
+        XCTAssertNil(chat.pendingRequests)
+    }
+    func testDirectConversationDoesNotReuseLargerGroup() {
+        let owner = FriendsFixtures.owner, friend = FriendsFixtures.maya
+        var group = FriendsFixtures.chat; group.members.append(.init(id: "third", handle: "third", name: "Third"))
+        XCTAssertNil(FriendsTravel.directConversation(friend: friend.id, owner: owner.id, chats: [group]))
+        XCTAssertNotNil(FriendsTravel.directConversation(friend: friend.id, owner: owner.id, chats: [group, FriendsFixtures.chat]))
+    }
+    func testAccountResetClearsPersonalSocialData() {
+        let model = FriendsHomeModel(); model.friends = FriendsFixtures.friends; model.trips = [FriendsFixtures.remote]; model.chats = [FriendsFixtures.chat]; model.saved = [FriendsFixtures.remote.id]; model.dismissedOverlaps = ["private"]; model.overlapsEnabled = false
+        model.reset(); XCTAssertTrue(model.friends.isEmpty); XCTAssertTrue(model.trips.isEmpty); XCTAssertTrue(model.chats.isEmpty); XCTAssertTrue(model.saved.isEmpty); XCTAssertTrue(model.dismissedOverlaps.isEmpty); XCTAssertTrue(model.overlapsEnabled)
+    }
+}
+
+@MainActor final class TodayTests: XCTestCase {
+    private let paris = TimeZone(identifier: "Europe/Paris")!
+    private func instant(_ value: String) -> Date { FlightSnapshot.date(value)! }
+    func testActiveTripUsesDestinationDateAndIncludesLastDay() {
+        var trip = TodayFixtures.trip
+        let la = TimeZone(identifier: "America/Los_Angeles")!
+        XCTAssertTrue(TodayPlanner.isActive(trip, now: instant("2026-09-05T23:00:00Z"), fallback: la))
+        XCTAssertTrue(TodayPlanner.isActive(trip, now: instant("2026-09-09T21:59:00Z"), fallback: la))
+        XCTAssertFalse(TodayPlanner.isActive(trip, now: instant("2026-09-09T22:01:00Z"), fallback: la))
+        trip.dateMode = .nights
+        XCTAssertFalse(TodayPlanner.isActive(trip, now: instant("2026-09-07T07:00:00Z")))
+        XCTAssertTrue(TodayPlanner.items(trip, day: "2026-09-07", zone: paris).isEmpty)
+    }
+    func testCalendarDaysSurviveBothDaylightSavingChanges() {
+        let ny = TimeZone(identifier: "America/New_York")!
+        let spring = TodayPlanner.date("2026-03-08", minute: 0, zone: ny)!
+        let next = TodayPlanner.date("2026-03-09", minute: 0, zone: ny)!
+        XCTAssertEqual(next.timeIntervalSince(spring), 23 * 3600)
+        let autumn = TodayPlanner.date("2026-11-01", minute: 0, zone: ny)!
+        XCTAssertEqual(TodayPlanner.date("2026-11-02", minute: 0, zone: ny)!.timeIntervalSince(autumn), 25 * 3600)
+    }
+    func testTransferDayRetainsBothCitiesAndSortsReminders() {
+        var trip = TodayFixtures.trip
+        trip.stops[0].nights = 1
+        let nextStop = JourneyStop(name: "Lyon", arrival: "2026-09-07", nights: 2, timeZone: "Europe/Paris")
+        trip.stops.append(nextStop)
+        trip.events.append(JourneyEvent(stopID: nextStop.id, day: 0, minute: 1200, place: PlaceRecord(name: "Lyon dinner")))
+        trip.events.append(JourneyEvent(stopID: nextStop.id, day: 0, place: PlaceRecord(name: "Anytime walk"), allDay: true))
+        trip.hotels[0].checkOut = "2026-09-07"
+        trip.hotels.append(HotelReservation(place: PlaceRecord(name: "Lyon hotel"), checkIn: "2026-09-07", checkOut: "2026-09-09"))
+        let context = TodayPlanner.context(trip, now: instant("2026-09-07T07:00:00Z"))
+        XCTAssertEqual(context.stop?.id, nextStop.id)
+        XCTAssertEqual(context.agendaDays.count, 2)
+        let items = TodayPlanner.items(trip, day: context.day, zone: context.zone)
+        XCTAssertEqual(items.map(\.sortMinute), [-1, 660, 780, 900, 1200])
+        XCTAssertNil(items.first { $0.kind == .hotel }?.start)
+        XCTAssertEqual(TodayPlanner.nextItem(items, now: instant("2026-09-07T07:00:00Z"))?.title, "Lunch by the river")
+        XCTAssertEqual(TodayPlanner.nextItem(items, now: instant("2026-09-07T11:30:00Z"))?.title, "Lunch by the river")
+        XCTAssertEqual(TodayPlanner.nextItem(items, now: instant("2026-09-07T12:31:00Z"))?.title, "Lyon dinner")
+        XCTAssertNil(TodayPlanner.nextItem(items, now: instant("2026-09-07T21:00:00Z")))
+    }
+    func testOvernightFlightArrivalAndTimezoneFallback() {
+        var trip = TodayFixtures.trip
+        trip.stops[0].timeZone = nil
+        var flight = FlightReservation(flightNumber: "AF1", departureAirport: "JFK", arrivalAirport: "CDG", departureDay: "2026-09-05", arrivalDay: "2026-09-06", departureTime: "22:00", arrivalTime: "11:00", arrivalLatitude: 49.0097, arrivalLongitude: 2.5479, departureZone: "America/New_York", arrivalZone: "Europe/Paris")
+        trip.flights = [flight]
+        XCTAssertEqual(TodayPlanner.zone(for: trip.stops[0], in: trip, fallback: .gmt).identifier, "Europe/Paris")
+        let items = TodayPlanner.items(trip, day: "2026-09-06", zone: paris).filter { $0.kind == .flight }
+        XCTAssertEqual(items.count, 2) // 22:00 JFK is 04:00 on the destination's next day.
+        XCTAssertEqual(items.map(\.schedule), ["22:00", "11:00"])
+        flight.arrivalLatitude = 35.6; flight.arrivalLongitude = 139.7; trip.flights = [flight]
+        XCTAssertEqual(TodayPlanner.zone(for: trip.stops[0], in: trip, fallback: .gmt), .gmt)
+    }
+    func testDelayedFlightStaysAtEndOfOriginalDayAndCancelledIsNotNext() {
+        var trip = TodayFixtures.trip
+        var flight = FlightMapFixtures.trip.flights[0]
+        flight.departureDay = "2026-09-07"; flight.departureTime = "23:30"; flight.departureZone = "Europe/Paris"
+        flight.arrivalDay = "2026-09-08"; flight.arrivalTime = "02:00"; flight.arrivalZone = "Europe/Paris"
+        trip.flights = [flight]
+        var live = FlightMapFixtures.snapshot
+        live.scheduledOut = "2026-09-07T21:30:00Z"; live.estimatedOut = "2026-09-07T22:30:00Z"
+        live.estimatedIn = "2026-09-08T00:00:00Z"
+        let items = TodayPlanner.items(trip, day: "2026-09-07", zone: paris, snapshots: [flight.id: live])
+        XCTAssertEqual(items.last?.sortMinute, 1470)
+        XCTAssertEqual(TodayPlanner.nextItem(items, now: instant("2026-09-07T21:00:00Z"))?.kind, .flight)
+        live.cancelled = true
+        XCTAssertNil(TodayPlanner.nextItem(TodayPlanner.items(trip, day: "2026-09-07", zone: paris, snapshots: [flight.id: live]), now: instant("2026-09-07T21:00:00Z")))
+    }
+    func testActiveChoiceIsStableAndEmptyDaysStillResolve() {
+        let trip = TodayFixtures.trip
+        var later = trip; later.id = UUID(); later.startDate = "2026-09-07"
+        let now = instant("2026-09-07T07:00:00Z")
+        XCTAssertEqual(TodayPlanner.activeTrip([trip, later], now: now)?.id, later.id)
+        XCTAssertEqual(TodayPlanner.activeTrip([later, trip], now: now)?.id, later.id)
+        XCTAssertTrue(TodayPlanner.items(trip, day: "2026-09-10", zone: paris).isEmpty)
+        var noStops = trip; noStops.stops = []; noStops.events = []
+        XCTAssertTrue(TodayPlanner.isActive(noStops, now: now, fallback: paris))
+        XCTAssertNil(TodayPlanner.context(noStops, now: now).stop)
+    }
+    func testStopTimezoneArchiveCompatibilityAndSafeActions() throws {
+        let legacy = Data("{\"id\":\"00000000-0000-0000-0000-000000000001\",\"name\":\"Paris\",\"code\":\"\",\"country\":\"France\",\"arrival\":\"2026-09-07\",\"nights\":3}".utf8)
+        XCTAssertNil(try JSONDecoder().decode(JourneyStop.self, from: legacy).timeZone)
+        let encoded = try JSONEncoder().encode(TodayFixtures.trip)
+        XCTAssertEqual(try JSONDecoder().decode(JourneyDocument.self, from: encoded).stops[0].timeZone, paris.identifier)
+        let place = PlaceRecord(name: "A & B", address: "1 Rue + Paris", latitude: 48.85, longitude: 2.35)
+        let url = try XCTUnwrap(TravelPlaceActions.directions(place))
+        XCTAssertEqual(url.scheme, "maps")
+        XCTAssertEqual(URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first?.value, "48.85,2.35")
+        XCTAssertEqual(TravelPlaceActions.phone("+33 (1) 23-45-67-89")?.absoluteString, "tel:+33123456789")
+        XCTAssertNil(TravelPlaceActions.phone("Unavailable"))
+        XCTAssertNil(TravelPlaceActions.booking("javascript:alert(1)"))
+        XCTAssertNil(TravelPlaceActions.directions(PlaceRecord()))
+    }
+    func testFlightCachePersistsOfflineAndThrottlesRequests() async throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".json")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let now = Date.now
+        var feed = FlightMapFixtures.feed
+        var flight = FlightMapFixtures.trip.flights[0]
+        let snapshot = feed.flights[0]
+        flight.departureAirport = snapshot.origin; flight.arrivalAirport = snapshot.destination
+        flight.departureDay = TodayPlanner.key(FlightSnapshot.date(snapshot.scheduledOut)!, zone: TimeZone(identifier: snapshot.originZone)!)
+        feed.fetchedAt = now.timeIntervalSince1970
+        let cache = TodayFlightStatusStore(url: url)
+        var calls = 0
+        await cache.refresh(flight, server: "test", now: now) { calls += 1; return feed }
+        await cache.refresh(flight, server: "test", now: now.addingTimeInterval(60)) { calls += 1; return feed }
+        XCTAssertEqual(calls, 1)
+        let offline = TodayFlightStatusStore(url: url)
+        XCTAssertNotNil(offline.snapshot(flight, server: "test"))
+        XCTAssertNil(offline.snapshot(flight, server: "different-server"))
+        await offline.refresh(flight, server: "test", now: now.addingTimeInterval(600)) { calls += 1; throw URLError(.notConnectedToInternet) }
+        XCTAssertNotNil(offline.snapshot(flight, server: "test"))
+        XCTAssertTrue(offline.label(flight, server: "test", now: now.addingTimeInterval(600)).contains("Last known status"))
+        var ambiguous = feed; ambiguous.flights.append(snapshot)
+        XCTAssertNil(TodayFlightStatusStore.match(ambiguous, flight: flight))
+        var wrongRoute = flight; wrongRoute.arrivalAirport = "ZZZ"
+        XCTAssertNil(TodayFlightStatusStore.match(feed, flight: wrongRoute))
+    }
+}
+
+@MainActor final class TripTemplateTests: XCTestCase {
+    func testTemplateRemovesPersonalDetailsWithoutChangingSource() throws {
+        var trip = TodayFixtures.trip
+        trip.description = "Private journey note"
+        trip.events[0].attendees = "Private guests"; trip.events[0].description = "Private event note"
+        trip.events[0].links = ["https://example.com/private-booking"]
+        trip.events[0].cost = TravelMoney(amount: 250, currency: "EUR")
+        trip.hotels[0].notes = "Private room instructions"
+        trip.flights = FlightMapFixtures.trip.flights
+        trip.places = [RatedPlace(place: trip.events[0].place, overall: 4.5, notes: "Private journal", photos: [JournalPhoto(jpeg: Data([1,2,3]))])]
+        let template = try trip.templated(meta: TemplateMeta(tagline: "A lovely weekend", tags: ["food"]))
+        XCTAssertTrue(template.isTemplate == true); XCTAssertEqual(template.dateMode, .nights)
+        XCTAssertNil(template.startDate); XCTAssertNil(template.endDate); XCTAssertEqual(template.stops[0].arrival, "2000-01-01")
+        XCTAssertEqual(template.hotels[0].confirmation, ""); XCTAssertEqual(template.hotels[0].notes, "")
+        XCTAssertNil(template.events[0].attendees); XCTAssertNil(template.events[0].cost); XCTAssertTrue(template.events[0].links.isEmpty)
+        XCTAssertTrue(template.places.isEmpty); XCTAssertTrue(template.flights.isEmpty)
+        XCTAssertFalse(String(decoding: try JSONEncoder().encode(template), as: UTF8.self).contains("Private"))
+        XCTAssertEqual(trip.hotels[0].confirmation, "SEUR-DEMO-123")
+        XCTAssertEqual(trip.places[0].photos.count, 1)
+        let withRatings = try trip.templated(meta: TemplateMeta(), includeCosts: true, includeRatings: true)
+        XCTAssertEqual(withRatings.places[0].overall, 4.5); XCTAssertTrue(withRatings.places[0].photos.isEmpty)
+        XCTAssertEqual(withRatings.places[0].notes, ""); XCTAssertNotNil(withRatings.events[0].cost)
+    }
+    func testAllTenSeedsCloneAcrossLeapDayWithHotelsAndStableEventReferences() throws {
+        XCTAssertEqual(TemplateCatalog.bundled.count, 10)
+        for template in TemplateCatalog.bundled {
+            XCTAssertNil(template.validationError(), template.title)
+            let trip = try template.usingTemplate(departure: "2028-02-28")
+            XCTAssertNil(trip.validationError(), template.title)
+            XCTAssertEqual(trip.startDate, "2028-02-28"); XCTAssertEqual(trip.endDate, TravelDay.adding(template.nights, to: "2028-02-28"))
+            XCTAssertEqual(trip.visibility, .private); XCTAssertFalse(trip.isTemplate == true)
+            XCTAssertNotEqual(trip.id, template.id); XCTAssertEqual(trip.importedFrom, template.id.uuidString)
+            XCTAssertEqual(trip.events.map(\.stopID), template.events.map(\.stopID)); XCTAssertEqual(trip.events.map(\.day), template.events.map(\.day))
+            XCTAssertEqual(trip.templateMeta?.sourceTitle, template.title)
+            for hotel in trip.hotels {
+                XCTAssertTrue(trip.stops.contains { $0.arrival == hotel.checkIn && $0.departure == hotel.checkOut })
+                XCTAssertTrue(hotel.confirmation.isEmpty)
+            }
+        }
+    }
+    func testGapDatesNormalizeAndPartialHotelStayKeepsItsNightOffsets() throws {
+        var trip = TodayFixtures.trip
+        trip.hotels[0].checkIn = "2026-09-07"; trip.hotels[0].checkOut = "2026-09-08"
+        let stop = JourneyStop(name: "Lyon", arrival: "2026-09-12", nights: 2)
+        trip.stops.append(stop); trip.endDate = stop.departure
+        let template = try trip.templated(meta: TemplateMeta())
+        XCTAssertEqual(template.stops[1].arrival, "2000-01-04")
+        let clone = try template.usingTemplate(departure: "2027-12-30")
+        XCTAssertEqual(clone.stops[1].arrival, "2028-01-02")
+        XCTAssertEqual(clone.hotels[0].checkIn, "2027-12-31")
+        XCTAssertEqual(clone.hotels[0].checkOut, "2028-01-01")
+    }
+    func testUnmatchedHotelRequiresCorrectionAndBadDateCannotClone() throws {
+        var trip = TodayFixtures.trip; trip.hotels[0].checkIn = "2026-10-01"; trip.hotels[0].checkOut = "2026-10-03"
+        XCTAssertThrowsError(try trip.templated(meta: TemplateMeta()))
+        XCTAssertThrowsError(try TemplateCatalog.bundled[0].usingTemplate(departure: "2026-02-30"))
+    }
+    func testTemplatesRemainSeparateFromActiveTripsAndPersistOffline() throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString+".json")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let library = JourneyLibrary(url: url)
+        let template = try TodayFixtures.trip.templated(meta: TemplateMeta())
+        XCTAssertTrue(library.save(template))
+        XCTAssertTrue(library.trips.isEmpty)
+        let restored = JourneyLibrary(url: url).documents[0]
+        XCTAssertTrue(restored.isTemplate == true)
+        XCTAssertFalse(TodayPlanner.isActive(restored, now: TodayClock.now()))
+        XCTAssertTrue(TemplateCatalog.matches(TemplateCatalog.bundled[0], city: "Antibes", tag: "beach"))
+        XCTAssertFalse(TemplateCatalog.matches(TemplateCatalog.bundled[0], city: "Paris", tag: "art"))
+    }
+}
+
+@MainActor final class JourneyConflictTests: XCTestCase {
+    private func trip() -> JourneyDocument {
+        JourneyDocument(title: "Paris", startDate: "2026-09-10", endDate: "2026-09-14", stops: [.init(name: "Paris", country: "France", arrival: "2026-09-10", nights: 4, latitude: 48.85, longitude: 2.35, timeZone: "Europe/Paris")])
+    }
+    private func event(_ d: JourneyDocument, _ minute: Int, duration: Int? = nil, day: Int = 0) -> JourneyEvent {
+        .init(stopID: d.stops[0].id, day: day, minute: minute, place: .init(name: "Dinner"), durationMinutes: duration)
+    }
+    private func arrival() -> FlightReservation {
+        .init(flightNumber: "AF1", departureAirport: "JFK", arrivalAirport: "CDG", departureDay: "2026-09-10", arrivalDay: "2026-09-10", departureTime: "09:00", arrivalTime: "20:00", departureLatitude: 40.64, departureLongitude: -73.78, arrivalLatitude: 49.0, arrivalLongitude: 2.55, departureZone: "America/New_York", arrivalZone: "Europe/Paris")
+    }
+    private func departure(_ day: String = "2026-09-14", time: String = "10:00") -> FlightReservation {
+        .init(flightNumber: "AF2", departureAirport: "CDG", arrivalAirport: "JFK", departureDay: day, arrivalDay: day, departureTime: time, arrivalTime: "12:00", departureLatitude: 49.0, departureLongitude: 2.55, arrivalLatitude: 40.64, arrivalLongitude: -73.78, departureZone: "Europe/Paris", arrivalZone: "America/New_York")
+    }
+    private func hotel() -> HotelReservation {
+        .init(place: .init(name: "Paris hotel", category: .hotel, city: "Paris"), checkIn: "2026-09-10", checkOut: "2026-09-14")
+    }
+    func testOverlapUsesKnownDurationsAndAllowsBackToBackPlans() {
+        var d = trip(); d.events = [event(d,600,duration:60),event(d,630)]
+        XCTAssertEqual(JourneyConflicts.detect(d).filter { $0.kind == .overlappingEvents }.count,1)
+        d.events[1].minute=660; XCTAssertTrue(JourneyConflicts.detect(d).isEmpty)
+        d.events[0].durationMinutes=nil; d.events[1].minute=610; XCTAssertTrue(JourneyConflicts.detect(d).isEmpty)
+        d.events[1].minute=600; XCTAssertEqual(JourneyConflicts.detect(d).count,1)
+        d.events[0].allDay=true; XCTAssertTrue(JourneyConflicts.detect(d).isEmpty)
+    }
+    func testOvernightOverlapAndResolutionAfterEdit() {
+        var d = trip(); d.events=[event(d,1410,duration:90),event(d,30,day:1)]
+        XCTAssertEqual(JourneyConflicts.detect(d).count,1)
+        let warning = JourneyConflicts.detect(d)[0]; d.events.reverse()
+        XCTAssertEqual(JourneyConflicts.detect(d)[0].id,warning.id)
+        d.events[0].minute=60; XCTAssertTrue(JourneyConflicts.detect(d).isEmpty)
+        d.events.removeAll(); XCTAssertTrue(JourneyConflicts.detect(d).isEmpty)
+    }
+    func testEventsInDifferentDestinationsCompareInstantsNotClockLabels() {
+        var d=trip(); d.stops.append(.init(name:"New York",arrival:"2026-09-10",nights:2,timeZone:"America/New_York"))
+        d.events=[event(d,15*60,duration:60),.init(stopID:d.stops[1].id,minute:9*60,kind:.meeting,title:"New York meeting",durationMinutes:60)]
+        XCTAssertEqual(JourneyConflicts.detect(d).count,1)
+        d.events[1].minute=15*60; XCTAssertTrue(JourneyConflicts.detect(d).isEmpty)
+        d.stops[1].timeZone=nil; d.events[1].minute=9*60; XCTAssertTrue(JourneyConflicts.detect(d).isEmpty)
+    }
+    func testDinnerBeforeArrivalAndDifferentAirportExclusion() {
+        var d=trip(); d.flights=[arrival()]; d.events=[event(d,19*60)]
+        XCTAssertEqual(JourneyConflicts.detect(d).first?.kind,.beforeArrival)
+        d.events[0].minute=20*60; XCTAssertTrue(JourneyConflicts.detect(d).isEmpty)
+        d.events[0].minute=19*60; d.flights[0].arrivalLatitude=35.55; d.flights[0].arrivalLongitude=139.78
+        XCTAssertTrue(JourneyConflicts.detect(d).isEmpty)
+    }
+    func testArrivalConversionAcrossMidnightAndMissingZones() {
+        var d=trip(); d.flights=[arrival()]; d.flights[0].arrivalZone="UTC"; d.flights[0].arrivalTime="23:30"
+        d.events=[event(d,60,day:1)]
+        XCTAssertEqual(JourneyConflicts.detect(d).first?.kind,.beforeArrival)
+        d.events[0].minute=90; XCTAssertTrue(JourneyConflicts.detect(d).isEmpty)
+        d.stops[0].timeZone=nil; d.flights[0].arrivalZone=""; d.flights[0].arrivalTime="20:00"; d.events=[event(d,19*60)]
+        XCTAssertEqual(JourneyConflicts.detect(d).first?.kind,.beforeArrival)
+    }
+    func testArrivalAfterMidnightFlagsPreviousEveningPlan() {
+        var d=trip(); d.flights=[arrival()]; d.flights[0].arrivalDay="2026-09-11"; d.flights[0].arrivalTime="01:00"
+        d.events=[event(d,19*60)]
+        XCTAssertEqual(JourneyConflicts.detect(d).first?.kind,.beforeArrival)
+    }
+    func testLaterReturnFlightDoesNotInvalidatePlansAfterFirstArrival() {
+        var d=trip(); var first=arrival(); first.arrivalTime="10:00"; d.flights=[first,arrival()]
+        d.events=[event(d,19*60)]
+        XCTAssertTrue(JourneyConflicts.detect(d).isEmpty)
+    }
+    func testHotelCheckoutDateAndExplicitTimeWithoutAssumedDeadline() {
+        var d=trip(); d.hotels=[hotel()]; d.flights=[departure()]
+        XCTAssertTrue(JourneyConflicts.detect(d).isEmpty) // No checkout hour has been recorded.
+        d.hotels[0].checkOutTime="11:00"; XCTAssertEqual(JourneyConflicts.detect(d).first?.kind,.checkoutAfterFlight)
+        d.hotels[0].checkOutTime="10:00"; XCTAssertTrue(JourneyConflicts.detect(d).isEmpty)
+        d.hotels[0].checkOutTime=nil; d.flights=[departure("2026-09-13")]
+        XCTAssertEqual(JourneyConflicts.detect(d).first?.kind,.checkoutAfterFlight)
+        d.flights=[departure("2026-09-09")]; XCTAssertTrue(JourneyConflicts.detect(d).isEmpty)
+        d.flights=[departure()]; d.hotels[0].checkOutTime="11:00"; d.flights[0].departureLatitude=40.64; d.flights[0].departureLongitude = -73.78
+        XCTAssertTrue(JourneyConflicts.detect(d).isEmpty)
+    }
+    func testLocatedHotelDoesNotRequireAnAgendaStop() {
+        var d=trip(); d.stops=[]; d.hotels=[hotel()]; d.hotels[0].place.latitude=48.85; d.hotels[0].place.longitude=2.35
+        d.flights=[departure("2026-09-13")]
+        XCTAssertEqual(JourneyConflicts.detect(d).first?.kind,.checkoutAfterFlight)
+    }
+    func testUnknownHotelLocationDoesNotAttachItToWrongFlight() {
+        var d=trip(); d.hotels=[hotel()]; d.hotels[0].place.city="London"; d.hotels[0].checkOutTime="11:00"; d.flights=[departure()]
+        XCTAssertTrue(JourneyConflicts.detect(d).isEmpty)
+    }
+    func testFlexiblePlansOnlyCompareRelativeEventsWithinOneStop() {
+        var d=trip(); d.dateMode = .nights; d.flights=[arrival()]; d.hotels=[hotel()]; d.events=[event(d,600,duration:60),event(d,630)]
+        XCTAssertEqual(JourneyConflicts.detect(d).map(\.kind),[.overlappingEvents])
+        d.events[1].day=1; XCTAssertTrue(JourneyConflicts.detect(d).isEmpty)
+    }
+    func testInvalidClockAndDSTGapDoNotCreateWarnings() {
+        XCTAssertNil(JourneyConflicts.minute("24:00")); XCTAssertNil(JourneyConflicts.minute("12:60")); XCTAssertEqual(JourneyConflicts.minute("9:30"),570)
+        var d=trip(); d.stops[0].arrival="2026-03-29"; d.events=[event(d,150,duration:60),event(d,180)]
+        XCTAssertTrue(JourneyConflicts.detect(d).isEmpty) // 02:30 does not exist in Paris that day.
+        d.events[0].minute = -1; XCTAssertTrue(JourneyConflicts.detect(d).isEmpty)
+    }
+    func testCheckoutTimeLegacyRoundTripAndTemplatePrivacy() throws {
+        var d=trip(); d.hotels=[hotel()]
+        let old=try JSONDecoder().decode(JourneyDocument.self,from:JSONEncoder().encode(d)); XCTAssertNil(old.hotels[0].checkOutTime)
+        d.hotels[0].checkOutTime="11:30"
+        let restored=try JSONDecoder().decode(JourneyDocument.self,from:JSONEncoder().encode(d)); XCTAssertEqual(restored.hotels[0].checkOutTime,"11:30")
+        XCTAssertNil(try d.templated(meta:.init()).hotels[0].checkOutTime)
+        d.hotels[0].checkOutTime="25:00"; XCTAssertNotNil(d.validationError())
+    }
+}
+
+@MainActor final class AccountSignInTests: XCTestCase {
+    func testPKCEVerifierEntropyAndStandardChallengeVector() throws {
+        let a=try AccountSignIn.randomToken(),b=try AccountSignIn.randomToken()
+        XCTAssertEqual(a.count,43);XCTAssertNotEqual(a,b)
+        XCTAssertNil(a.range(of:"[^A-Za-z0-9_-]",options:.regularExpression))
+        XCTAssertEqual(AccountSignIn.challenge("dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"),"E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM")
+        XCTAssertEqual(AccountSignIn.nonceHash("abc"),"ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")
+    }
+    func testCallbackRequiresExactRegisteredAppRouteAndSuccessfulCode() throws {
+        XCTAssertEqual(try AccountSignIn.code(from:URL(string:"seur://auth/callback?code=hello")!),"hello")
+        for value in ["https://auth/callback?code=hello","seur://evil/callback?code=hello","seur://auth/other?code=hello","seur://auth/callback?error=denied&code=hello","seur://auth/callback"] { XCTAssertThrowsError(try AccountSignIn.code(from:URL(string:value)!)) }
+    }
+    func testEmailAndProviderConfigurationDecoding() throws {
+        XCTAssertTrue(AccountSignIn.validEmail("me@example.com"));XCTAssertFalse(AccountSignIn.validEmail("me@"));XCTAssertFalse(AccountSignIn.validEmail("me @example.com"))
+        let options=try JSONDecoder().decode(AccountAuthOptions.self,from:Data(#"{"apple":true,"google":false,"email":true,"minimumPasswordLength":8}"#.utf8))
+        XCTAssertEqual(options.minimumPasswordLength,8);XCTAssertFalse(options.google)
     }
 }

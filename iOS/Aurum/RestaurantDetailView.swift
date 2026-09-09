@@ -41,6 +41,7 @@ struct RestaurantDetailView: View {
                             .font(.body).foregroundStyle(.secondary).lineSpacing(5)
                     }
                     essentials
+                    TripadvisorDetailsLink(place: PlaceRecord(name: venue.name, category: .restaurant, city: hotel.city, address: hotel.address))
                     conciergeCard
                     visitCard
                     location
@@ -131,7 +132,7 @@ struct RestaurantDetailView: View {
             detailRow("The setting", value: available(venue.location) ? venue.location : "Inside \(hotel.shortName)", icon: "door.left.hand.open")
             Divider()
             detailRow("Opening hours", value: "Confirm with the hotel", icon: "clock")
-        }.padding(21).background(.background, in: .rect(cornerRadius: 24))
+        }.padding(21).cardSurface(cornerRadius: 24)
     }
     private func detailRow(_ title: String, value: String, icon: String) -> some View {
         HStack(alignment: .top, spacing: 14) {
@@ -142,17 +143,17 @@ struct RestaurantDetailView: View {
     }
     private var conciergeCard: some View {
         Button {
-            store.concierge.send("Tell me about \(venue.name) at \(hotel.name)", store: store)
+            store.concierge.reference = String("Selected restaurant: \(venue.name), at \(hotel.name), \(hotel.city). Cuisine: \(venue.cuisine). Supplied description: \(venue.description). These collection details are not live availability.".prefix(12000))
+            store.concierge.pendingInput = "Help me plan a visit to \(venue.name) at \(hotel.name). What should I know, and how could it fit into my trip?"
             concierge = true
         } label: {
             HStack(spacing: 15) {
                 Image(systemName: "sparkles").font(.title2.weight(.light)).foregroundStyle(Color.bronze)
                 VStack(alignment: .leading, spacing: 5) {
                     Text("A little inside knowledge").font(.system(.headline, design: .serif)).foregroundStyle(.primary)
-                    Text("Ask your concierge · Demo").font(.caption).foregroundStyle(.secondary)
+                    Text("Ask your concierge").font(.caption).foregroundStyle(.secondary)
                 }.frame(maxWidth: .infinity, alignment: .leading)
-                Image(systemName: "arrow.up.right").foregroundStyle(Color.bronze)
-            }.padding(21).background(Color.bronze.opacity(0.07), in: .rect(cornerRadius: 24))
+            }.padding(21).cardSurface(cornerRadius: 24, emphasized: true)
         }.buttonStyle(PressStyle()).disabled(store.concierge.isReplying).accessibilityIdentifier("restaurant-concierge")
     }
     private var visitCard: some View {
@@ -181,7 +182,7 @@ struct RestaurantDetailView: View {
                     Text("\(hotel.city), \(hotel.country)").font(.caption).foregroundStyle(.secondary)
                 }
             }
-            Button(action: openMap) { Label("Open in Apple Maps", systemImage: "arrow.up.right").font(.subheadline).frame(maxWidth: .infinity).padding(.vertical, 10) }.buttonStyle(.glass)
+            Button(action: openMap) { Label("Open in Apple Maps", systemImage: "arrow.up.right").labelStyle(.titleOnly).font(.subheadline).frame(maxWidth: .infinity).padding(.vertical, 10) }.buttonStyle(.glass)
         }
     }
     private func openMap() {

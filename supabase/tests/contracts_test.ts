@@ -156,3 +156,33 @@ Deno.test("standalone flights reject invalid coordinates and preserve local date
     Problem,
   );
 });
+
+Deno.test("Runway estimates survive flight normalization without fabricated values", () => {
+  const row = normalize({ fa_flight_id: "timeline", estimated_off: "2026-09-08T01:27:00Z", estimated_on: "2026-09-08T08:40:00Z" });
+  assert.equal(row.estimatedOff, "2026-09-08T01:27:00Z");
+  assert.equal(row.estimatedOn, "2026-09-08T08:40:00Z");
+  assert.equal(normalize({ fa_flight_id: "missing" }).estimatedOff, undefined);
+});
+
+Deno.test("Route planning metadata and transfer blocks retain the journey contract", () => {
+  const d: any = fixture();
+  d.routePlan = { keepFirst: true, keepLast: false, preferTrain: true, objective: "distance", choices: [], reserveTransfers: true, returnHome: true };
+  d.events[0].kind = "train";
+  d.events[0].title = "Travel to Brussels";
+  d.events[0].routeLegID = d.stops[0].id + ">destination";
+  d.events[0].routeMode = "train";
+  d.events[0].allDay = true;
+  d.events[0].description = "Planning allowance, not a booking.";
+  assert.doesNotThrow(() => validateDocument(d));
+  const restored = JSON.parse(JSON.stringify(d));
+  assert.deepEqual(restored.routePlan, d.routePlan);
+  assert.equal(restored.events[0].routeLegID, d.events[0].routeLegID);
+});
+
+Deno.test("planned hotel checkout time is optional and validates clock bounds", () => {
+  const d: any = fixture();
+  d.hotels = [{id:crypto.randomUUID(),place:{id:"hotel",name:"Paris hotel",category:"hotel"},checkIn:"2026-10-01",checkOut:"2026-10-03",guests:2,rooms:1}];
+  validateDocument(d);
+  for (const value of ["00:00","09:30","9:30","23:59",null]) { d.hotels[0].checkOutTime=value; validateDocument(d); }
+  for (const value of ["24:00","12:60","noon",930,""]) { d.hotels[0].checkOutTime=value; assert.throws(() => validateDocument(d),Problem); }
+});

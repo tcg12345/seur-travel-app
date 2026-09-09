@@ -63,11 +63,13 @@ Unit tests cover catalog integrity, city/cuisine search, sorting, persistence, d
 
 Build products, result bundles, and simulator recordings are excluded from source control. See `Validation.md` for the checks actually completed.
 
-## Concierge preview
+## AI concierge
 
-The native **Concierge** tab is an on-device chat demo. It includes suggested prompts, a glass composer, animated messages and a preparation indicator, catalog-based hotel/dining cards, simple weekend ideas, follow-up city/cuisine context, and links into the existing Flights, Experiences, and Trips screens. It can summarize the device’s saved places and draft itinerary. Recommended hotel cards open the normal hotel details and planning flow.
+The native **Concierge** tab connects to OpenAI through the authenticated Supabase travel API. Sign in, then ask for a destination comparison, detailed itinerary, restaurant ideas, practical travel advice or improvements to an existing trip. Select a trip above the conversation to include its schedule; travel preferences and saved places can be enabled independently. Restaurant detail pages can open the concierge with that venue's supplied context.
 
-The demo uses local intent matching and response templates, not a connected AI model. It makes no network calls and does not book anything. The interface labels this explicitly. Chat remains in memory while the app runs and across tab switches; “New conversation” clears the chat and cancels any pending reply. Saved places and plans are unaffected. Input is limited to 1,000 characters. An AI service can later replace `ConciergeEngine` without replacing the native chat interface.
+Replies support readable Markdown, contextual follow-ups and Apple Maps place discovery. Draft itineraries have a **Review & add to a trip** action with daily activities, proposed local times and notes. Save to a new trip with flexible or exact dates, or add a compatible draft to an existing route without overwriting its plans. The concierge does not make bookings or verify live availability. Provider lookups and estimated advice are distinguished in responses.
+
+Chat remains in memory while the app runs and across tab switches; **New conversation** clears it and cancels pending client work. Saved trips are unaffected. Input is limited to 4,000 characters, with bounded recent history and prior draft context sent for follow-ups. Stop/Retry controls handle slow or failed replies. Booking references, journal notes, photos and private booking notes are omitted from automatic trip context. See `PlacesCostControls.md` for call limits and paid-test protections.
 
 ## Restaurant details
 
@@ -97,6 +99,8 @@ Location entry now suggests matches as you type in trip destinations, itinerary 
 
 No extra key or location permission is required for Apple Maps autocomplete. Two or more characters start a debounced lookup. Suggestions include context to distinguish similarly named places. Selecting one fills the field and applicable metadata; clearing/changing a query cancels older lookups. Manual text remains usable offline or when no match is available. Editing a resolved location clears its stale coordinates.
 
+Google suggestions are now an explicit fallback, not part of routine typing. Automated tests block live Google calls and default to local search fixtures. See [Places API cost controls](PlacesCostControls.md) for request deduplication, testing flags and billing safeguards.
+
 ## Flexible itinerary events
 
 Use **Travel → a trip → Plan → Add to plan**, or the plus beside a day, to choose from 16 types: restaurant/activity, meeting, appointment, conference, celebration, concert, performance, sporting event, tour, car transfer, train, boat/ferry, shopping, wellness, free time, and custom event. Hotel and flight booking records remain available in the same picker.
@@ -114,3 +118,15 @@ Existing dated trips without stops now prepare their route from the destination 
 
 ### Place-search popup stability
 The “Find a restaurant or place” and “Search hotels” buttons present search from the editor’s NavigationStack. The reusable place form only requests presentation; it no longer owns a sheet on a Form section. Restaurant/activity plans, hotel records, and journal entries use this shared presenter, so form row recycling cannot dismiss the search popup. Selecting a result returns it to the current draft; cancelling keeps the draft intact.
+
+## Flight alerts and destination weather
+
+Flight detail pages now offer **Follow flight** for push alerts and **Show on Lock Screen** for Live Activities. Upcoming itinerary days use native WeatherKit forecasts with rain-aware concierge suggestions. See [AppleServices.md](AppleServices.md) for setup, permissions, monitoring costs and platform limits.
+
+## Friends
+
+The dedicated Friends tab contains shared trip discovery, invitations, friend profiles, private/group conversations, date-overlap hints, saved trip shortcuts and itinerary sharing controls. Shared itineraries have a readable day-by-day preview. Search is available from magnifying-glass buttons in Discover and Map so all five primary tabs remain visible. See [Friends.md](Friends.md) for sharing behavior and privacy details.
+
+## Travel wishlist
+
+Travel now includes a Wishlist section for saved places, destinations and personal ideas. Add notes, organize collections, mark Top picks, search/filter and turn ideas into existing or new trips. The wishlist uses existing bookmarks and private on-device storage. See [Wishlist.md](Wishlist.md) for behavior and storage details.

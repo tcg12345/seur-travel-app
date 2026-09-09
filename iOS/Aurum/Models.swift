@@ -106,8 +106,10 @@ struct FlightSearch {
     private(set) var savedExploreCities: [ExploreCity] = []
     private(set) var recentExploreCities: [ExploreCity] = []
     private(set) var restaurantVisits: [String: RestaurantVisit] = [:]
+    let wishlist: WishlistLibrary
     let concierge = ConciergeConversation()
     var selectedTab = 0
+    var searchPresented = false
     var cityMapRequest: CityMapRequest?
     var category: TravelCategory = .hotels
     var query = ""
@@ -124,6 +126,7 @@ struct FlightSearch {
 
     init(defaults: UserDefaults? = nil) {
         self.defaults = defaults ?? .standard
+        self.wishlist = WishlistLibrary(defaults: defaults ?? .standard)
         if let saved = self.defaults.stringArray(forKey: "aurum.saved") { self.saved = Set(saved) }
         if let data = self.defaults.data(forKey: "aurum.plans"), let plans = try? JSONDecoder().decode([TripPlan].self, from: data) { self.plans = plans }
         savedRestaurants = Set(self.defaults.stringArray(forKey: "aurum.savedRestaurants") ?? [])
@@ -159,7 +162,7 @@ struct FlightSearch {
     func toggleDiscovery(_ place: ExplorePlace) {
         let removing = isDiscoverySaved(place)
         savedDiscoveries.removeAll { $0.id == place.id }
-        if !removing { savedDiscoveries.insert(place, at: 0) }
+        if !removing { savedDiscoveries.insert(place, at: 0); wishlist.register(place.isCollection ? "restaurant:" + place.record.id : "place:" + place.id) }
         if place.isCollection {
             if removing { savedRestaurants.remove(place.record.id) } else { savedRestaurants.insert(place.record.id) }
             defaults.set(Array(savedRestaurants), forKey: "aurum.savedRestaurants")
@@ -173,7 +176,7 @@ struct FlightSearch {
     }
     func isExploreCitySaved(_ city: ExploreCity) -> Bool { savedExploreCities.contains { $0.id == city.id } }
     func toggleExploreCity(_ city: ExploreCity) {
-        if isExploreCitySaved(city) { savedExploreCities.removeAll { $0.id == city.id } } else { savedExploreCities.insert(city, at: 0) }
+        if isExploreCitySaved(city) { savedExploreCities.removeAll { $0.id == city.id } } else { savedExploreCities.insert(city, at: 0); wishlist.register("city:" + city.id) }
         if let data = try? JSONEncoder().encode(savedExploreCities) { defaults.set(data, forKey: "aurum.savedExploreCities") }
     }
     func rememberExploreCity(_ city: ExploreCity) {
@@ -182,7 +185,7 @@ struct FlightSearch {
         if let data = try? JSONEncoder().encode(recentExploreCities) { defaults.set(data, forKey: "aurum.recentExploreCities") }
     }
     func toggleSave(_ hotel: Hotel) {
-        if saved.contains(hotel.id) { saved.remove(hotel.id) } else { saved.insert(hotel.id) }
+        if saved.contains(hotel.id) { saved.remove(hotel.id) } else { saved.insert(hotel.id); wishlist.register("hotel:" + hotel.id) }
         defaults.set(Array(saved), forKey: "aurum.saved")
     }
     var savedDiningPlaces: [RestaurantPlace] {
@@ -191,7 +194,7 @@ struct FlightSearch {
     }
     func toggleRestaurantSave(_ place: RestaurantPlace) {
         if let city = ExploreCity.collection.first(where: { $0.name == place.hotel.city }), let discovery = ExplorePlace.collection([place.hotel], city: city).first(where: { $0.record.id == place.id }) { toggleDiscovery(discovery); return }
-        if savedRestaurants.contains(place.id) { savedRestaurants.remove(place.id) } else { savedRestaurants.insert(place.id) }
+        if savedRestaurants.contains(place.id) { savedRestaurants.remove(place.id) } else { savedRestaurants.insert(place.id); wishlist.register("restaurant:" + place.id) }
         defaults.set(Array(savedRestaurants), forKey: "aurum.savedRestaurants")
     }
     func saveRestaurantVisit(_ visit: RestaurantVisit, for place: RestaurantPlace) {

@@ -47,6 +47,80 @@ struct ExploreCity: Codable, Hashable, Identifiable {
     }
 }
 
+/// Lightweight city centers for browsing. Venue searches only run after a city is opened;
+/// worldwide autocomplete remains available beyond this directory.
+struct CityBrowseRegion: Identifiable {
+    let name: String
+    let cities: [ExploreCity]
+    var id: String { name }
+    static let all: [Self] = [
+        .init(name: "Europe", cities: [
+            .init(name: "Paris", country: "France", latitude: 48.8566, longitude: 2.3522),
+            .init(name: "London", country: "United Kingdom", latitude: 51.5074, longitude: -0.1278),
+            .init(name: "Rome", country: "Italy", latitude: 41.9028, longitude: 12.4964),
+            .init(name: "Barcelona", country: "Spain", latitude: 41.3874, longitude: 2.1686),
+            .init(name: "Lisbon", country: "Portugal", latitude: 38.7223, longitude: -9.1393),
+            .init(name: "Amsterdam", country: "Netherlands", latitude: 52.3676, longitude: 4.9041),
+            .init(name: "Copenhagen", country: "Denmark", latitude: 55.6761, longitude: 12.5683),
+            .init(name: "Stockholm", country: "Sweden", latitude: 59.3293, longitude: 18.0686),
+            .init(name: "Oslo", country: "Norway", latitude: 59.9139, longitude: 10.7522),
+            .init(name: "Athens", country: "Greece", latitude: 37.9838, longitude: 23.7275),
+            .init(name: "Vienna", country: "Austria", latitude: 48.2082, longitude: 16.3738),
+            .init(name: "Prague", country: "Czechia", latitude: 50.0755, longitude: 14.4378),
+            .init(name: "Berlin", country: "Germany", latitude: 52.5200, longitude: 13.4050),
+            .init(name: "Zurich", country: "Switzerland", latitude: 47.3769, longitude: 8.5417),
+            .init(name: "Dublin", country: "Ireland", latitude: 53.3498, longitude: -6.2603),
+            .init(name: "Istanbul", country: "Türkiye", latitude: 41.0082, longitude: 28.9784)
+        ]),
+        .init(name: "Asia", cities: [
+            .init(name: "Tokyo", country: "Japan", latitude: 35.6762, longitude: 139.6503),
+            .init(name: "Kyoto", country: "Japan", latitude: 35.0116, longitude: 135.7681),
+            .init(name: "Seoul", country: "South Korea", latitude: 37.5665, longitude: 126.9780),
+            .init(name: "Bangkok", country: "Thailand", latitude: 13.7563, longitude: 100.5018),
+            .init(name: "Singapore", country: "Singapore", latitude: 1.3521, longitude: 103.8198),
+            .init(name: "Hong Kong", country: "Hong Kong", latitude: 22.3193, longitude: 114.1694),
+            .init(name: "Shanghai", country: "China", latitude: 31.2304, longitude: 121.4737),
+            .init(name: "Macau", country: "Macau", latitude: 22.1987, longitude: 113.5439),
+            .init(name: "Kuala Lumpur", country: "Malaysia", latitude: 3.1390, longitude: 101.6869),
+            .init(name: "Hanoi", country: "Vietnam", latitude: 21.0278, longitude: 105.8342),
+            .init(name: "Taipei", country: "Taiwan", latitude: 25.0330, longitude: 121.5654),
+            .init(name: "Mumbai", country: "India", latitude: 19.0760, longitude: 72.8777)
+        ]),
+        .init(name: "Americas", cities: [
+            .init(name: "New York", country: "United States", latitude: 40.7128, longitude: -74.0060),
+            .init(name: "Los Angeles", country: "United States", latitude: 34.0522, longitude: -118.2437),
+            .init(name: "San Francisco", country: "United States", latitude: 37.7749, longitude: -122.4194),
+            .init(name: "Miami", country: "United States", latitude: 25.7617, longitude: -80.1918),
+            .init(name: "Chicago", country: "United States", latitude: 41.8781, longitude: -87.6298),
+            .init(name: "Toronto", country: "Canada", latitude: 43.6532, longitude: -79.3832),
+            .init(name: "Vancouver", country: "Canada", latitude: 49.2827, longitude: -123.1207),
+            .init(name: "Mexico City", country: "Mexico", latitude: 19.4326, longitude: -99.1332),
+            .init(name: "Buenos Aires", country: "Argentina", latitude: -34.6037, longitude: -58.3816),
+            .init(name: "Rio de Janeiro", country: "Brazil", latitude: -22.9068, longitude: -43.1729),
+            .init(name: "Lima", country: "Peru", latitude: -12.0464, longitude: -77.0428),
+            .init(name: "Cartagena", country: "Colombia", latitude: 10.3910, longitude: -75.4794)
+        ]),
+        .init(name: "Africa & Middle East", cities: [
+            .init(name: "Marrakech", country: "Morocco", latitude: 31.6295, longitude: -7.9811),
+            .init(name: "Cape Town", country: "South Africa", latitude: -33.9249, longitude: 18.4241),
+            .init(name: "Cairo", country: "Egypt", latitude: 30.0444, longitude: 31.2357),
+            .init(name: "Nairobi", country: "Kenya", latitude: -1.2921, longitude: 36.8219),
+            .init(name: "Dubai", country: "United Arab Emirates", latitude: 25.2048, longitude: 55.2708),
+            .init(name: "Abu Dhabi", country: "United Arab Emirates", latitude: 24.4539, longitude: 54.3773),
+            .init(name: "Doha", country: "Qatar", latitude: 25.2854, longitude: 51.5310),
+            .init(name: "Muscat", country: "Oman", latitude: 23.5880, longitude: 58.3829)
+        ]),
+        .init(name: "Oceania", cities: [
+            .init(name: "Sydney", country: "Australia", latitude: -33.8688, longitude: 151.2093),
+            .init(name: "Melbourne", country: "Australia", latitude: -37.8136, longitude: 144.9631),
+            .init(name: "Brisbane", country: "Australia", latitude: -27.4698, longitude: 153.0251),
+            .init(name: "Perth", country: "Australia", latitude: -31.9505, longitude: 115.8605),
+            .init(name: "Auckland", country: "New Zealand", latitude: -36.8485, longitude: 174.7633),
+            .init(name: "Queenstown", country: "New Zealand", latitude: -45.0312, longitude: 168.6626)
+        ])
+    ]
+}
+
 extension String {
     var foldedCityText: String { folding(options: [.caseInsensitive, .diacriticInsensitive], locale: Locale(identifier: "en_US_POSIX")).trimmingCharacters(in: .whitespacesAndNewlines) }
     var usefulCollectionText: String { ["", "n/a", "unknown", "not available", "not specified", "none"].contains(foldedCityText) ? "" : self }
@@ -156,6 +230,17 @@ struct CityMapRequest: Identifiable {
         var seen = Set<String>()
         return sections.flatMap(\.places).filter { seen.insert($0.id).inserted }
     }
+    /// Transfer the guide's unfiltered previews into a separate results page without
+    /// repeating network requests. Failed sections remain retryable.
+    func seed(city: ExploreCity, sections: [ExploreSection]) {
+        let successful = sections.filter { $0.error == nil }
+        for section in successful {
+            cache[city.id + "|" + section.interest.id + "||false"] = [section]
+        }
+        if ExploreInterest.overview.allSatisfy({ interest in successful.contains { $0.interest == interest } }) {
+            cache[city.id + "|highlights||false"] = ExploreInterest.overview.compactMap { interest in successful.first { $0.interest == interest } }
+        }
+    }
     func present(_ places: [ExplorePlace], interest: ExploreInterest) {
         revision = UUID()
         sections = [ExploreSection(interest: interest, places: places)]
@@ -198,7 +283,7 @@ struct CityMapRequest: Identifiable {
 @MainActor enum CityExploreSearch {
     static func search(city: ExploreCity, interest: ExploreInterest, term: String, wider: Bool) async throws -> [ExplorePlace] {
         #if DEBUG
-        if ProcessInfo.processInfo.arguments.contains("--ui-testing") && ProcessInfo.processInfo.arguments.contains("--city-testing") {
+        if PlaceSearchTestPolicy.usesFixtures || (ProcessInfo.processInfo.arguments.contains("--ui-testing") && ProcessInfo.processInfo.arguments.contains("--city-testing")) {
             try await Task.sleep(for: .milliseconds(120))
             if term.foldedCityText.contains("noresults") { return [] }
             return (0..<6).map { index in
@@ -231,7 +316,7 @@ struct CityMapRequest: Identifiable {
     static func locateCollection(_ value: ExplorePlace) async -> ExplorePlace {
         guard value.isCollection, !value.record.hasCoordinate else { return value }
         #if DEBUG
-        if ProcessInfo.processInfo.arguments.contains("--ui-testing") && ProcessInfo.processInfo.arguments.contains("--city-testing") {
+        if PlaceSearchTestPolicy.usesFixtures || (ProcessInfo.processInfo.arguments.contains("--ui-testing") && ProcessInfo.processInfo.arguments.contains("--city-testing")) {
             var result = value; result.record.latitude = value.city.latitude; result.record.longitude = value.city.longitude; return result
         }
         #endif

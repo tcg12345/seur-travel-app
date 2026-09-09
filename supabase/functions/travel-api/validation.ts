@@ -73,6 +73,7 @@ export const eventKinds: Record<string, string> = {
 export function place(p: any, empty = false) {
   requireValue(object(p), "Invalid place.");
   text(p.id, "place ID", 500);
+  if (p.brand != null) text(p.brand, "hotel brand", 200, true);
   text(p.name, "place name", 500, empty);
   requireValue(categories.has(p.category), "Invalid place category.");
   for (
@@ -130,6 +131,16 @@ export function validateDocument(d: any) {
     ["private", "friends", "public"].includes(d.visibility),
     "Invalid audience.",
   );
+  requireValue(d.isTemplate == null || typeof d.isTemplate === "boolean", "Invalid template flag.");
+  if (d.templateMeta != null) {
+    const m = d.templateMeta;
+    requireValue(object(m), "Invalid template metadata.");
+    text(m.tagline ?? "", "template tagline", 250, true);
+    text(m.suggestedSeason ?? "", "suggested season", 120, true);
+    text(m.authorHandle ?? "", "template author", 32, true);
+    requireValue(Array.isArray(m.tags) && m.tags.length <= 8 && m.tags.every((t: any) => typeof t === "string" && /^[a-z0-9 -]{1,30}$/.test(t)), "Use up to eight short style tags.");
+    requireValue(m.cloneCount == null || Number.isSafeInteger(m.cloneCount) && m.cloneCount >= 0, "Invalid template count.");
+  }
   text(d.title, "title", 200);
   text(d.description ?? "", "description", 20000, true);
   text(d.destination ?? "", "destination", 1000, true);
@@ -168,6 +179,7 @@ export function validateDocument(d: any) {
   let previous = 0;
   for (const s of d.stops) {
     text(s.name, "destination name", 500);
+    requireValue(s.countryCode == null || typeof s.countryCode === "string" && /^[A-Z]{2}$/.test(s.countryCode), "Invalid ISO country code.");
     requireValue(
       Number.isInteger(s.nights) && s.nights >= 1 && s.nights <= 365 &&
         day(s.arrival),
@@ -223,6 +235,7 @@ export function validateDocument(d: any) {
     );
   }
   for (const h of d.hotels) {
+    requireValue(h.checkOutTime == null || (typeof h.checkOutTime === "string" && /^(?:[01]?\d|2[0-3]):[0-5]\d$/.test(h.checkOutTime)), "Invalid planned hotel checkout time.");
     place(h.place);
     money(h.cost);
     requireValue(

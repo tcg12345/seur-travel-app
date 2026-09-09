@@ -12,6 +12,351 @@ final class AurumUITests: XCTestCase {
         app.tabBars.buttons["Map"].firstMatch.tap()
         if app.buttons["map-saved"].waitForExistence(timeout: 2) { app.buttons["map-saved"].tap() }
     }
+    func testTemplateDiscoveryDateCloneAndSaveOwnTemplate() {
+        app.terminate(); app.launchArguments = ["--ui-testing"]; app.launch()
+        app.tabBars.buttons["Travel"].tap()
+        XCTAssertFalse(app.buttons["travel-section-Templates"].exists)
+        XCTAssertTrue(app.buttons["travel-section-Wishlist"].exists)
+        app.buttons["travel-new-trip"].tap()
+        app.buttons["travel-use-template"].tap()
+        let riviera = app.buttons.containing(.staticText, identifier: "The Riviera, slowly").firstMatch
+        reveal(riviera); XCTAssertTrue(riviera.exists); riviera.tap()
+        let use = app.buttons["template-use"]; XCTAssertTrue(use.waitForExistence(timeout: 5)); use.tap()
+        XCTAssertTrue(app.datePickers["template-departure"].exists)
+        app.buttons["template-create-trip"].tap()
+        XCTAssertTrue(app.staticTexts["journey-title"].waitForExistence(timeout: 6))
+        XCTAssertEqual(app.staticTexts["journey-title"].label, "The Riviera, slowly")
+        app.buttons["Share journey"].tap()
+        app.buttons["trip-save-template"].tap()
+        app.buttons["template-save"].tap()
+        XCTAssertTrue(app.buttons["trip-save-template"].waitForExistence(timeout: 5))
+    }
+    func testDiscoverCurrentTripShowsTodayAndOpensItinerary() {
+        app.terminate(); app.launchArguments = ["--ui-testing", "--today-testing"]; app.launch()
+        let card = app.buttons["discover-current-trip"]
+        XCTAssertTrue(card.waitForExistence(timeout: 5))
+        XCTAssertTrue(card.isHittable)
+        XCTAssertTrue(card.staticTexts["Today in Paris"].exists)
+        XCTAssertFalse(app.buttons["discover-continue-trip"].exists)
+        XCTAssertFalse(app.staticTexts["Or start with"].exists)
+        XCTAssertTrue(card.staticTexts["Lunch by the river"].exists)
+        XCTAssertTrue(card.staticTexts["13:00 – 14:30"].exists)
+        XCTAssertFalse(card.staticTexts["Museum morning"].exists)
+        XCTAssertLessThan(card.frame.minY, app.buttons["explore-cities"].frame.minY)
+        XCTAssertFalse(app.staticTexts["Where to next?"].exists)
+        XCTAssertFalse(app.staticTexts["Start from an itinerary"].exists)
+        card.tap()
+        XCTAssertTrue(app.staticTexts["journey-title"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.staticTexts["journey-title"].label, "Paris with family")
+        app.terminate(); app.launchArguments = ["--ui-testing"]; app.launch()
+        XCTAssertTrue(app.buttons["explore-cities"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["discover-current-trip"].exists)
+    }
+    func testTodayAutomaticTimelineDayNavigationAndConfirmation() {
+        app.terminate(); app.launchArguments = ["--ui-testing", "--today-testing"]; app.launch()
+        app.tabBars.buttons["Travel"].tap()
+        XCTAssertTrue(app.staticTexts["today-day-title"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.staticTexts["today-day-title"].label, "Today")
+        XCTAssertTrue(app.descendants(matching: .any)["today-next"].exists)
+        XCTAssertEqual(app.staticTexts.matching(identifier: "Lunch by the river").count, 1)
+        XCTAssertFalse(app.buttons["today-open-trip"].exists)
+        XCTAssertFalse(app.staticTexts["Your travel library"].exists)
+        XCTAssertFalse(app.buttons["today-directions"].exists)
+        let activity = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "event-")).firstMatch
+        activity.tap()
+        XCTAssertTrue(app.buttons["today-directions"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["today-call"].exists)
+        XCTAssertTrue(app.buttons["today-website"].exists)
+        app.buttons["today-actions-done"].tap()
+        app.buttons["today-next-day"].tap()
+        XCTAssertEqual(app.staticTexts["today-day-title"].label, "Tomorrow")
+        XCTAssertTrue(app.staticTexts["Museum morning"].exists)
+        app.buttons["today-previous"].tap()
+        let today = app.descendants(matching: .any)["today-view"]
+        let from = today.coordinate(withNormalizedOffset: CGVector(dx: 0.85, dy: 0.15))
+        let to = today.coordinate(withNormalizedOffset: CGVector(dx: 0.15, dy: 0.15))
+        from.press(forDuration: 0.05, thenDragTo: to)
+        XCTAssertEqual(app.staticTexts["today-day-title"].label, "Tomorrow")
+        app.buttons["today-previous"].tap()
+        let stay = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "stay-")).firstMatch
+        stay.tap()
+        let confirmation = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "today-confirmation-")).firstMatch
+        reveal(confirmation); XCTAssertTrue(confirmation.exists); confirmation.tap()
+        XCTAssertTrue(confirmation.label.contains("copied"))
+        app.buttons["today-actions-done"].tap()
+        app.buttons["today-previous"].tap(); app.buttons["today-previous"].tap()
+        XCTAssertTrue(app.staticTexts["today-day-title"].label.hasPrefix("No activities"))
+        let trip = app.buttons.containing(.staticText, identifier: "Paris with family").firstMatch
+        reveal(trip); trip.tap()
+        let mode = app.buttons["trip-plan-view"]; reveal(mode)
+        XCTAssertEqual(mode.value as? String, "Today")
+        mode.tap(); app.buttons["List"].tap()
+        XCTAssertEqual(mode.value as? String, "List")
+    }
+    func testMultiCityRouteSuggestionManualOrderAndPersistence() {
+        app.terminate(); app.launchArguments = ["--ui-testing", "--routing-testing", "--location-testing", "--city-testing"]; app.launch()
+        app.tabBars.buttons["Travel"].tap()
+        let trip = app.buttons.containing(.staticText, identifier: "European route").firstMatch
+        XCTAssertTrue(trip.waitForExistence(timeout: 5)); trip.tap()
+        let route = app.buttons["trip-route-planner"]; XCTAssertTrue(route.waitForExistence(timeout: 5)); route.tap()
+        XCTAssertTrue(app.staticTexts["route-suggestion-message"].waitForExistence(timeout: 8))
+        XCTAssertTrue(app.staticTexts["route-suggestion-message"].label.contains("Suggested order ready"))
+        let restore = app.buttons["route-restore"]; reveal(restore); restore.tap()
+        let move = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "Move Amsterdam")).firstMatch
+        for _ in 0..<5 { if move.exists && move.isHittable { break }; app.swipeDown(velocity: .slow) }
+        XCTAssertTrue(move.exists, app.debugDescription); move.tap()
+        app.buttons["Move later"].tap()
+        app.buttons["route-apply"].tap()
+        XCTAssertTrue(app.staticTexts["Paris → Brussels → Amsterdam"].waitForExistence(timeout: 5))
+        app.terminate(); app.launchArguments += ["--preserve-state"]; app.launch()
+        app.tabBars.buttons["Travel"].tap()
+        XCTAssertTrue(trip.waitForExistence(timeout: 5)); trip.tap()
+        XCTAssertTrue(app.staticTexts["Paris → Brussels → Amsterdam"].waitForExistence(timeout: 5))
+        app.buttons["trip-route-planner"].tap()
+        XCTAssertTrue(app.buttons["route-apply"].waitForExistence(timeout: 5))
+        app.buttons["Cancel"].tap()
+        let transfer = app.staticTexts["Travel to Brussels"].firstMatch; reveal(transfer); XCTAssertTrue(transfer.exists)
+    }
+    func testFlightTimetableAndImmersedAirportDetails() {
+        app.terminate(); app.launchArguments = ["--ui-testing", "--map-testing", "--location-testing", "--city-testing"]; app.launch()
+        app.tabBars.buttons["Map"].tap(); XCTAssertTrue(app.buttons["map-section-Flights"].waitForExistence(timeout: 8))
+        resizeMapPanel(expanded: true); app.buttons["map-section-Flights"].tap()
+        let flight = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "map-flight-")).firstMatch
+        XCTAssertTrue(flight.waitForExistence(timeout: 5)); flight.tap(); resizeMapPanel(expanded: true)
+        XCTAssertTrue(app.staticTexts["map-flight-title"].waitForExistence(timeout: 5))
+        let time = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "30m late")).firstMatch
+        XCTAssertTrue(time.waitForExistence(timeout: 8))
+        let heading = app.staticTexts["flight-timetable-title"]; reveal(heading)
+        XCTAssertTrue(heading.exists)
+        XCTAssertTrue(app.staticTexts["Gate departure"].exists)
+        XCTAssertTrue(app.staticTexts["Taxi to runway"].exists)
+        let landing = app.staticTexts["Landing"]; reveal(landing); XCTAssertTrue(landing.exists)
+        let gate = app.staticTexts["Gate arrival"]; reveal(gate); XCTAssertTrue(gate.exists)
+        let performance = app.buttons["flight-performance"]; reveal(performance); performance.tap()
+        XCTAssertTrue(app.buttons["Load delay history"].waitForExistence(timeout: 5))
+        app.buttons["All flights"].tap(); XCTAssertTrue(app.buttons["map-section-Flights"].waitForExistence(timeout: 5))
+    }
+    func testMapPanelReachesEdgesAndCollapsesAfterContentScrolling() {
+        app.terminate(); app.launchArguments = ["--ui-testing", "--map-testing", "--location-testing", "--city-testing"]; app.launch()
+        app.tabBars.buttons["Map"].tap()
+        XCTAssertTrue(app.buttons["map-section-Flights"].waitForExistence(timeout: 8))
+        let surface = app.otherElements["map-panel-surface"].firstMatch
+        XCTAssertTrue(surface.waitForExistence(timeout: 5))
+        let compactWidth = surface.frame.width
+        XCTAssertEqual(compactWidth, app.frame.width - 24, accuracy: 2)
+        resizeMapPanel(expanded: true)
+        XCTAssertEqual(surface.frame.width, app.frame.width, accuracy: 2)
+        app.buttons["map-section-Flights"].tap()
+        let flight = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "map-flight-")).firstMatch
+        XCTAssertTrue(flight.waitForExistence(timeout: 5)); flight.tap(); resizeMapPanel(expanded: true)
+        let scroll = app.scrollViews["map-panel-scroll"].firstMatch
+        scroll.swipeUp(); scroll.swipeUp()
+        reveal(app.buttons["flight-performance"]); XCTAssertTrue(app.buttons["flight-performance"].exists)
+        let contentY = app.buttons["flight-performance"].frame.minY
+        resizeMapPanel(expanded: false)
+        XCTAssertEqual(surface.frame.width, compactWidth, accuracy: 2)
+        resizeMapPanel(expanded: true)
+        XCTAssertEqual(surface.frame.width, app.frame.width, accuracy: 2)
+        XCTAssertEqual(app.buttons["flight-performance"].frame.minY, contentY, accuracy: 3, "Resizing must preserve the content scroll position")
+        XCTAssertEqual(app.scrollViews.matching(identifier: "map-panel-scroll").count, 1)
+    }
+    func testMapPanelContentPanHandsOffWithoutMovingMap() {
+        app.terminate(); app.launchArguments = ["--ui-testing", "--map-testing", "--location-testing", "--city-testing"]; app.launch()
+        app.tabBars.buttons["Map"].tap()
+        XCTAssertTrue(app.buttons["map-section-Flights"].waitForExistence(timeout: 8))
+        resizeMapPanel(expanded: true); app.buttons["map-section-Flights"].tap()
+        let surface = app.otherElements["map-panel-surface"].firstMatch
+        // Pull within the scroll content, not the handle: the native pan owns this path.
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.40))
+            .press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.90)))
+        XCTAssertEqual(surface.frame.width, app.frame.width - 24, accuracy: 2)
+        let scroll = app.scrollViews["map-panel-scroll"].firstMatch
+        let start = scroll.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: scroll.frame.width * 0.5, dy: 55))
+        start.press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.12)))
+        XCTAssertEqual(surface.frame.width, app.frame.width, accuracy: 2)
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "map-flight-")).firstMatch.isHittable)
+        XCTAssertEqual(app.scrollViews.matching(identifier: "map-panel-scroll").count, 1)
+    }
+    func testOrganizedFlightDetailSectionsAndTimingLabels() {
+        app.terminate(); app.launchArguments = ["--ui-testing", "--map-testing", "--location-testing", "--city-testing"]; app.launch()
+        app.tabBars.buttons["Map"].tap()
+        XCTAssertTrue(app.buttons["map-section-Flights"].waitForExistence(timeout: 8))
+        resizeMapPanel(expanded: true); app.buttons["map-section-Flights"].tap()
+        let flight = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "map-flight-")).firstMatch
+        XCTAssertTrue(flight.waitForExistence(timeout: 5)); flight.tap(); resizeMapPanel(expanded: true)
+        XCTAssertTrue(app.staticTexts["map-flight-title"].waitForExistence(timeout: 5))
+        let departure = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "30m late")).firstMatch
+        XCTAssertTrue(departure.waitForExistence(timeout: 8)); XCTAssertTrue(departure.label.contains("30m late"))
+        let arrival = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "35m late")).firstMatch; reveal(arrival)
+        XCTAssertTrue(arrival.label.contains("35m late"))
+        let performance = app.buttons["flight-performance"]; reveal(performance); performance.tap()
+        XCTAssertTrue(app.buttons["Load delay history"].waitForExistence(timeout: 5))
+        app.buttons["All flights"].tap()
+        XCTAssertTrue(app.buttons["map-section-Flights"].waitForExistence(timeout: 5))
+    }
+    private func openWishlist(preserve: Bool = false) {
+        app.terminate(); app.launchArguments = ["--ui-testing", "--map-testing", "--location-testing", "--city-testing"] + (preserve ? ["--preserve-state"] : []); app.launch()
+        app.tabBars.buttons["Travel"].tap()
+        XCTAssertTrue(app.buttons["travel-section-Wishlist"].waitForExistence(timeout: 8)); app.buttons["travel-section-Wishlist"].tap()
+    }
+    private func firstWishlistItem() -> XCUIElement { app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "wishlist-item-")).firstMatch }
+    func testWishlistFullTripUsesNightsThenDatesOnlyAfterScheduling() {
+        app.terminate(); app.launchArguments = ["--ui-testing", "--location-testing"]; app.launch()
+        app.tabBars.buttons["Travel"].tap(); app.buttons["travel-section-Wishlist"].tap()
+        app.buttons["wishlist-create-trip"].tap()
+        XCTAssertTrue(app.steppers["wishlist-trip-nights"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.datePickers["trip-departure-date"].exists)
+        app.textFields["trip-destination"].tap(); app.textFields["trip-destination"].typeText("Paris\n")
+        app.buttons["journey-save"].tap()
+        XCTAssertTrue(app.buttons["wishlist-schedule-trip"].waitForExistence(timeout: 8))
+        app.buttons["journey-menu"].tap(); app.buttons["Edit journey"].tap()
+        XCTAssertFalse(app.segmentedControls["Plan with"].exists)
+        let stop = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "journey-stop-")).firstMatch
+        reveal(stop); stop.tap()
+        XCTAssertTrue(app.steppers["stop-nights"].waitForExistence(timeout: 5))
+        app.buttons["stop-save"].tap(); app.buttons["journey-save"].tap()
+        app.buttons["wishlist-schedule-trip"].tap()
+        XCTAssertTrue(app.datePickers["wishlist-departure-date"].waitForExistence(timeout: 5))
+        app.buttons["wishlist-confirm-dates"].tap()
+        XCTAssertTrue(app.buttons["journey-menu"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["wishlist-schedule-trip"].exists)
+        app.buttons["journey-menu"].tap(); app.buttons["Edit journey"].tap()
+        XCTAssertFalse(app.segmentedControls["Plan with"].exists)
+        reveal(stop); stop.tap()
+        XCTAssertFalse(app.steppers["stop-nights"].exists)
+        XCTAssertEqual(app.datePickers.count, 2)
+    }
+    func testWishlistCustomIdeaPersistencePlanningAndRemoval() {
+        openWishlist()
+        app.buttons["wishlist-add"].tap()
+        let name = app.textFields["wishlist-name"]; XCTAssertTrue(name.waitForExistence(timeout: 5)); name.tap(); name.typeText("An evening at the museum")
+        app.textFields["wishlist-destination"].tap(); app.textFields["wishlist-destination"].typeText("London")
+        let notes = app.descendants(matching: .any).matching(identifier: "wishlist-notes").firstMatch
+        notes.tap(); notes.typeText("Go after lunch")
+        app.swipeUp()
+        let collection = app.textFields["wishlist-collection"]; collection.tap(); collection.typeText("Summer")
+        app.buttons["wishlist-save"].tap()
+        let item = firstWishlistItem(); XCTAssertTrue(item.waitForExistence(timeout: 5)); item.tap()
+        XCTAssertTrue(app.staticTexts["wishlist-notes-display"].waitForExistence(timeout: 5))
+        app.buttons["wishlist-top-pick"].tap()
+        XCTAssertEqual(app.buttons["wishlist-top-pick"].value as? String, "Selected")
+        app.buttons["wishlist-plan"].tap()
+        let trip = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "wishlist-trip-")).firstMatch
+        XCTAssertTrue(trip.waitForExistence(timeout: 5)); trip.tap()
+        XCTAssertTrue(app.buttons["event-save"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.textFields["place-name"].value as? String, "An evening at the museum")
+        app.buttons["event-save"].tap()
+        XCTAssertTrue(app.buttons["wishlist-planned-trip"].waitForExistence(timeout: 8))
+        openWishlist(preserve: true)
+        firstWishlistItem().tap()
+        XCTAssertEqual(app.staticTexts["wishlist-notes-display"].label, "Go after lunch")
+        XCTAssertEqual(app.buttons["wishlist-top-pick"].value as? String, "Selected")
+        app.buttons["wishlist-planned-trip"].tap()
+        XCTAssertTrue(app.staticTexts["An evening at the museum"].waitForExistence(timeout: 8))
+        app.navigationBars.buttons.firstMatch.tap()
+        let remove = app.buttons["wishlist-remove"]; reveal(remove); remove.tap()
+        let confirms = app.buttons.matching(identifier: "wishlist-confirm-remove"); XCTAssertTrue(confirms.firstMatch.waitForExistence(timeout: 5)); let confirm = confirms.allElementsBoundByIndex.first { $0.isHittable }; XCTAssertNotNil(confirm); confirm?.tap()
+        XCTAssertTrue(app.otherElements["wishlist-empty"].waitForExistence(timeout: 5) || !firstWishlistItem().exists)
+        app.buttons["travel-section-Trips"].tap()
+        app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Map QA journey")).firstMatch.tap()
+        XCTAssertTrue(app.staticTexts["An evening at the museum"].waitForExistence(timeout: 5))
+    }
+    func testWishlistSavedHotelAndNewTripContinuation() {
+        app.terminate(); app.launchArguments = ["--ui-testing", "--location-testing", "--city-testing"]; app.launch()
+        let hotel = app.buttons["hero-hotel"]; reveal(hotel); hotel.tap()
+        XCTAssertTrue(app.buttons["detail-save"].waitForExistence(timeout: 5)); app.buttons["detail-save"].tap()
+        app.navigationBars.buttons.firstMatch.tap(); app.tabBars.buttons["Travel"].tap(); app.buttons["travel-section-Wishlist"].tap()
+        let item = firstWishlistItem(); XCTAssertTrue(item.waitForExistence(timeout: 5)); item.tap()
+        XCTAssertTrue(app.buttons["wishlist-source"].waitForExistence(timeout: 5))
+        app.buttons["wishlist-plan"].tap(); app.buttons["wishlist-new-trip"].tap()
+        let destination = app.textFields["trip-destination"]; XCTAssertTrue(destination.waitForExistence(timeout: 5))
+        XCTAssertEqual(destination.value as? String, "Bangkok")
+        app.buttons["journey-save"].tap()
+        XCTAssertTrue(app.buttons["hotel-record-save"].waitForExistence(timeout: 8))
+        app.buttons["hotel-record-save"].tap()
+        XCTAssertTrue(app.buttons["wishlist-planned-trip"].waitForExistence(timeout: 8))
+        app.navigationBars.buttons.firstMatch.tap()
+        app.buttons["wishlist-add"].tap()
+        app.textFields["wishlist-name"].tap(); app.textFields["wishlist-name"].typeText("Paris")
+        app.buttons["wishlist-kind"].tap(); app.buttons["Destinations"].tap()
+        app.buttons["wishlist-save"].tap()
+        let paris = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@", "wishlist-item-", "Paris")).firstMatch
+        XCTAssertTrue(paris.waitForExistence(timeout: 5)); paris.tap(); app.buttons["wishlist-plan"].tap()
+        XCTAssertTrue(app.textFields["trip-destination"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.textFields["trip-destination"].value as? String, "Paris")
+        app.buttons["journey-save"].tap()
+        XCTAssertTrue(app.buttons["wishlist-planned-trip"].waitForExistence(timeout: 5))
+    }
+    func testDiscoverClearStartingPointAndCategoryDestinations() {
+        app.terminate(); app.launchArguments = ["--ui-testing", "--location-testing", "--city-testing"]; app.launch()
+        let start = app.buttons["explore-cities"]
+        XCTAssertTrue(start.waitForExistence(timeout: 8)); XCTAssertTrue(start.isHittable)
+        for name in ["Stays", "Dining", "Experiences", "Flights"] {
+            XCTAssertTrue(app.buttons["category-" + name].isHittable)
+        }
+        XCTAssertLessThan(start.frame.minY, app.buttons["category-Stays"].frame.minY)
+        start.tap(); XCTAssertTrue(app.textFields["explore-city-query"].waitForExistence(timeout: 5))
+        app.navigationBars.buttons.firstMatch.tap()
+        app.buttons["category-Stays"].tap()
+        XCTAssertTrue(app.searchFields.firstMatch.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Mandarin Oriental, Bangkok"].exists || app.buttons["search-explore-cities"].exists)
+        app.buttons["Done"].tap()
+        app.buttons["category-Flights"].tap()
+        XCTAssertTrue(app.textFields["flight-origin"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.textFields["flight-destination"].exists)
+        app.navigationBars.buttons.firstMatch.tap()
+        for category in [("Dining", "Restaurants"), ("Experiences", "Things to do")] {
+            app.buttons["category-" + category.0].tap()
+            XCTAssertTrue(app.navigationBars[category.1].waitForExistence(timeout: 5))
+            let query = app.textFields["explore-city-query"]; query.tap(); query.typeText("Lis")
+            let suggestion = app.buttons["explore-city-query-suggestion-0"]
+            XCTAssertTrue(suggestion.waitForExistence(timeout: 5)); suggestion.tap()
+            XCTAssertTrue(app.buttons["city-all-interests"].waitForExistence(timeout: 5))
+            XCTAssertTrue(app.buttons["city-all-interests"].label.contains(category.1))
+            app.navigationBars.buttons.firstMatch.tap(); app.navigationBars.buttons.firstMatch.tap()
+        }
+        let create = app.buttons["discover-create-trip"]; reveal(create); create.tap()
+        XCTAssertTrue(app.textFields["trip-destination"].waitForExistence(timeout: 5))
+    }
+    func testDiscoverResumeTripAndInspirationWithLargeText() {
+        app.terminate(); app.launchArguments = ["--ui-testing", "--map-testing", "--location-testing", "--city-testing", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityM"]; app.launch()
+        XCTAssertTrue(app.buttons["explore-cities"].waitForExistence(timeout: 8))
+        let resume = app.buttons["discover-continue-trip"]; reveal(resume); resume.tap()
+        XCTAssertTrue(app.buttons["journey-add"].waitForExistence(timeout: 8))
+        app.navigationBars.buttons.firstMatch.tap()
+        let hero = app.buttons["hero-hotel"]; reveal(hero); hero.tap()
+        XCTAssertTrue(app.buttons["detail-save"].waitForExistence(timeout: 8))
+        app.navigationBars.buttons.firstMatch.tap()
+        let concierge = app.buttons["discover-concierge"]; reveal(concierge); concierge.tap()
+        XCTAssertTrue(app.tabBars.buttons["Concierge"].isSelected)
+    }
+    func testFriendsTabSharedItineraryPeopleAndSearch() {
+        app.terminate(); app.launchArguments = ["--ui-testing", "--friends-testing"]; app.launch()
+        let bar = app.tabBars.firstMatch
+        XCTAssertTrue(bar.buttons["Friends"].waitForExistence(timeout: 8))
+        XCTAssertTrue(bar.buttons["Concierge"].exists); XCTAssertFalse(bar.buttons["More"].exists)
+        XCTAssertGreaterThan(bar.buttons["Friends"].frame.minX, bar.buttons["Travel"].frame.minX)
+        bar.buttons["Friends"].tap()
+        XCTAssertTrue(app.staticTexts["friends-home-title"].waitForExistence(timeout: 8))
+        let trip = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "friends-trip-")).firstMatch
+        if !trip.isHittable { app.swipeUp() }
+        XCTAssertTrue(trip.waitForExistence(timeout: 8)); trip.tap()
+        XCTAssertTrue(app.staticTexts["shared-itinerary-title"].waitForExistence(timeout: 8))
+        XCTAssertTrue(app.buttons["shared-itinerary-copy"].exists)
+        app.navigationBars.buttons.firstMatch.tap()
+        app.swipeDown()
+        app.buttons["friends-section-People"].tap()
+        XCTAssertTrue(app.staticTexts["Maya Chen"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Accept"].exists)
+        app.buttons["friends-add-person"].tap()
+        XCTAssertTrue(app.textFields["friend-invite-username"].waitForExistence(timeout: 5)); app.buttons["Cancel"].tap()
+        app.buttons["friends-section-Messages"].tap()
+        XCTAssertTrue(app.staticTexts["Paris planning"].waitForExistence(timeout: 5))
+        bar.buttons["Travel"].tap(); XCTAssertFalse(app.segmentedControls["travel-tool"].exists)
+        bar.buttons["Discover"].tap(); app.buttons["global-search"].tap()
+        XCTAssertTrue(app.buttons["Done"].waitForExistence(timeout: 5)); app.buttons["Done"].tap()
+        XCTAssertTrue(bar.buttons["Friends"].exists)
+    }
     func testGlobeFlightsTripsAndSaved() {
         app.terminate(); app.launchArguments = ["--ui-testing", "--map-testing", "--location-testing", "--city-testing", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryL"]; app.launch()
         app.tabBars.buttons["Map"].firstMatch.tap()
@@ -29,6 +374,68 @@ final class AurumUITests: XCTestCase {
         let trip = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "map-trip-")).firstMatch; XCTAssertTrue(trip.waitForExistence(timeout: 5)); trip.tap()
         XCTAssertTrue(app.buttons["Open trip"].waitForExistence(timeout: 5))
         app.buttons["map-saved"].tap(); XCTAssertTrue(app.navigationBars["Saved places"].waitForExistence(timeout: 5))
+    }
+    func testMapTripRecapPlaybackAndReturnToOverview() {
+        app.terminate(); app.launchArguments = ["--ui-testing", "--map-testing", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryL"]; app.launch()
+        app.tabBars.buttons["Map"].tap()
+        XCTAssertTrue(app.buttons["map-section-Trips"].waitForExistence(timeout: 8))
+        resizeMapPanel(expanded: true)
+        app.buttons["map-section-Trips"].tap()
+        let trip = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "map-trip-")).firstMatch
+        XCTAssertTrue(trip.waitForExistence(timeout: 5)); trip.tap()
+        RunLoop.current.run(until: Date().addingTimeInterval(0.8))
+        resizeMapPanel(expanded: true)
+        RunLoop.current.run(until: Date().addingTimeInterval(0.8))
+        app.buttons["map-trip-recap"].tap()
+        let play = app.buttons["map-recap-play"]
+        XCTAssertTrue(play.waitForExistence(timeout: 5), app.debugDescription)
+        XCTAssertFalse(app.buttons["recap-replay"].exists, "Recap should use the main map, not embed another map")
+        play.tap()
+        XCTAssertTrue(app.staticTexts["map-recap-current-stop"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["map-recap-current-stop"].label.contains("London"))
+        let finished = expectation(for: NSPredicate(format: "label CONTAINS %@", "Play route"), evaluatedWith: play)
+        wait(for: [finished], timeout: 8)
+        app.buttons["map-recap-memories"].tap()
+        reveal(app.buttons["recap-share"])
+        XCTAssertTrue(app.buttons["recap-share"].exists, app.debugDescription)
+        reveal(app.staticTexts["Day by day"])
+        XCTAssertTrue(app.staticTexts["Day by day"].exists)
+        let close = app.buttons["map-recap-close"]
+        for _ in 0..<5 { if close.isHittable { break }; app.swipeDown() }
+        close.tap()
+        XCTAssertTrue(app.buttons["map-trip-recap"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["map-recap-play"].exists)
+        app.buttons["map-section-Flights"].tap()
+        XCTAssertTrue(app.buttons["map-add-flight"].waitForExistence(timeout: 5))
+    }
+    func testSheetDraggingPreservesMapCameraAndViewport() {
+        app.terminate(); app.launchArguments = ["--ui-testing", "--map-testing", "--location-testing", "--city-testing"]; app.launch()
+        app.tabBars.buttons["Map"].tap()
+        XCTAssertTrue(app.buttons["map-section-Explore"].waitForExistence(timeout: 8))
+        let probe = app.staticTexts["map-camera-probe"]
+        XCTAssertTrue(probe.waitForExistence(timeout: 8))
+        func camera() -> [Double] { probe.label.split(separator: ",").compactMap { Double($0) } }
+        expectation(for: NSPredicate { _, _ in camera().count == 5 }, evaluatedWith: probe); waitForExpectations(timeout: 8)
+        RunLoop.current.run(until: Date().addingTimeInterval(1))
+        let baseline = camera(), tabY = app.tabBars.firstMatch.frame.minY
+        guard baseline.count == 5 else { return XCTFail("Missing camera measurement") }
+        for section in ["Explore", "Trips", "Flights"] {
+            app.buttons["map-section-" + section].tap()
+            for expanded in [true, false] {
+                resizeMapPanel(expanded: expanded)
+                RunLoop.current.run(until: Date().addingTimeInterval(0.8))
+                let current = camera()
+                XCTAssertEqual(current.count, 5)
+                guard current.count == 5 else { continue }
+                XCTAssertEqual(current[0], baseline[0], accuracy: 0.0001, "Sheet moved map latitude")
+                XCTAssertEqual(current[1], baseline[1], accuracy: 0.0001, "Sheet moved map longitude")
+                XCTAssertEqual(current[2], baseline[2], accuracy: 20, "Sheet changed map zoom")
+                XCTAssertEqual(current[3], baseline[3], accuracy: 0.01)
+                XCTAssertEqual(current[4], baseline[4], accuracy: 0.01)
+                XCTAssertEqual(app.tabBars.firstMatch.frame.minY, tabY, accuracy: 2)
+                XCTAssertEqual(app.scrollViews.matching(identifier: "map-panel-scroll").count, 1)
+            }
+        }
     }
     func testNativeMapSheetExpandsAndReturnsToTabBar() {
         let originalBarY = app.tabBars.firstMatch.frame.minY
@@ -240,7 +647,7 @@ final class AurumUITests: XCTestCase {
         let hero = app.buttons["hero-hotel"]
         XCTAssertTrue(hero.waitForExistence(timeout: 10))
         capture("01 Discover — Liquid Glass")
-        hero.tap()
+        reveal(hero); hero.tap()
         XCTAssertTrue(app.buttons["plan-stay"].waitForExistence(timeout: 5))
         capture("02 Hotel detail")
         app.buttons["detail-save"].tap()
@@ -259,7 +666,7 @@ final class AurumUITests: XCTestCase {
         capture("04 Itinerary")
     }
     func testSearchCatalogAndEmptyState() {
-        app.tabBars.buttons["Search"].tap()
+        app.tabBars.buttons["Discover"].tap(); app.buttons["global-search"].tap()
         let field = app.searchFields.firstMatch
         XCTAssertTrue(field.waitForExistence(timeout: 5)); field.tap(); field.typeText("Savoy")
         XCTAssertTrue(app.staticTexts["The Savoy"].waitForExistence(timeout: 5))
@@ -270,7 +677,7 @@ final class AurumUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["A little further afield?"].waitForExistence(timeout: 5))
     }
     func testDiningPlan() {
-        app.buttons["hero-hotel"].tap()
+        reveal(app.buttons["hero-hotel"]); app.buttons["hero-hotel"].tap()
         let venue = app.buttons["venue-0"]
         for _ in 0..<4 { if venue.isHittable { break }; app.swipeUp() }
         XCTAssertTrue(venue.isHittable); venue.tap()
@@ -288,7 +695,7 @@ final class AurumUITests: XCTestCase {
         capture("06 Dining planner")
     }
     func testRestaurantVisitAndSavedNavigation() {
-        app.buttons["hero-hotel"].tap()
+        reveal(app.buttons["hero-hotel"]); app.buttons["hero-hotel"].tap()
         let venue = app.buttons["venue-0"]
         for _ in 0..<5 { if venue.isHittable { break }; app.swipeUp() }
         venue.tap()
@@ -317,8 +724,62 @@ final class AurumUITests: XCTestCase {
         XCTAssertEqual(app.textViews["visit-note"].value as? String, "Ask for a quiet table.")
         app.buttons["Cancel"].tap()
     }
+    func testCityDirectoryAndSeparateCategorySearch() {
+        app.terminate()
+        app.launchArguments = ["--ui-testing", "--location-testing", "--city-testing", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryL"]
+        app.launch()
+        app.buttons["explore-cities"].tap()
+        XCTAssertTrue(app.textFields["explore-city-query"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts["Choose a city"].exists)
+        XCTAssertFalse(app.staticTexts["Featured destinations"].exists)
+        app.buttons["explore-city-region"].tap()
+        app.buttons["Oceania"].tap()
+        let sydney = app.buttons["explore-city-Sydney"]
+        XCTAssertTrue(sydney.waitForExistence(timeout: 5)); sydney.tap()
+        XCTAssertTrue(app.buttons["city-open-search"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.textFields["city-place-query"].exists)
+
+        // A category pushes its own results screen, with restaurant filters.
+        chooseCityInterest("restaurants")
+        XCTAssertTrue(app.navigationBars["Restaurants"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.textFields["city-place-query"].exists)
+        XCTAssertFalse(app.buttons["city-open-search"].exists)
+        app.buttons["city-filters"].tap()
+        XCTAssertTrue(app.navigationBars["Filters"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Cuisine"].exists || app.buttons["Any cuisine"].exists)
+        app.buttons["Done"].tap()
+        let result = firstCityResult()
+        XCTAssertTrue(result.waitForExistence(timeout: 5)); result.tap()
+        XCTAssertTrue(app.buttons["explore-place-save"].waitForExistence(timeout: 5))
+        app.buttons["explore-place-save"].tap()
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        app.buttons["city-saved-places"].tap()
+        XCTAssertTrue(app.navigationBars["Saved places"].waitForExistence(timeout: 5))
+        XCTAssertTrue(firstCityResult().exists)
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        XCTAssertTrue(app.buttons["city-open-search"].waitForExistence(timeout: 5))
+
+        // General search also gets a separate page; going back preserves the guide.
+        app.buttons["city-open-search"].tap()
+        let query = app.textFields["city-place-query"]
+        XCTAssertTrue(query.waitForExistence(timeout: 5)); query.tap(); query.typeText("gardens")
+        XCTAssertEqual(query.value as? String, "gardens")
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        XCTAssertTrue(app.buttons["city-open-search"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.textFields["city-place-query"].exists)
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        XCTAssertTrue(app.buttons["explore-city-Sydney"].waitForExistence(timeout: 5))
+
+        // Worldwide autocomplete still handles destinations beyond the visible region.
+        let city = app.textFields["explore-city-query"]
+        city.tap(); city.typeText("Lis")
+        let suggestion = app.buttons["explore-city-query-suggestion-0"]
+        XCTAssertTrue(suggestion.waitForExistence(timeout: 5)); suggestion.tap()
+        XCTAssertTrue(app.buttons["city-open-search"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Lisbon"].exists)
+    }
     private func openCityExplorer(fixtures: Bool, createTrip: Bool = false) {
-        app.terminate(); app.launchArguments = ["--ui-testing"] + (fixtures ? ["--location-testing", "--city-testing"] : []); app.launch()
+        app.terminate(); app.launchArguments = ["--ui-testing"] + (fixtures ? ["--location-testing", "--city-testing"] : ["--live-apple-places"]); app.launch()
         if createTrip {
             app.tabBars.buttons["Travel"].tap(); app.buttons["travel-create"].tap()
             let field = app.textFields["trip-destination"]; XCTAssertTrue(field.waitForExistence(timeout: 5)); field.tap(); field.typeText("Lis")
@@ -429,7 +890,7 @@ final class AurumUITests: XCTestCase {
         app.buttons[view].tap()
     }
     private func createAddFlowTrip(fixtures: Bool = true) {
-        app.terminate(); app.launchArguments = ["--ui-testing"] + (fixtures ? ["--location-testing"] : []); app.launch()
+        app.terminate(); app.launchArguments = ["--ui-testing"] + (fixtures ? ["--location-testing"] : ["--live-apple-places"]); app.launch()
         app.tabBars.buttons["Travel"].tap(); app.buttons["travel-create"].tap()
         let destination = app.textFields["trip-destination"]
         XCTAssertTrue(destination.waitForExistence(timeout: 5)); destination.tap(); destination.typeText("Paris\n")
@@ -751,6 +1212,7 @@ final class AurumUITests: XCTestCase {
         XCTAssertTrue(travel.waitForExistence(timeout: 5)); travel.tap()
         let create = app.buttons["travel-new-trip"]
         XCTAssertTrue(create.waitForExistence(timeout: 5)); create.tap()
+        app.buttons["travel-create-blank"].tap()
         XCTAssertTrue(app.textFields["trip-destination"].waitForExistence(timeout: 5))
         app.textFields["trip-destination"].tap(); app.textFields["trip-destination"].typeText("Paris")
         app.buttons["journey-save"].tap(); app.staticTexts["Trip to Paris"].tap()
@@ -870,39 +1332,42 @@ final class AurumUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["account-success"].waitForExistence(timeout: 25))
     }
     func testAccountFullPageDesign() {
-        app.terminate()
-        app.launchArguments = ["--ui-testing", "--travel-test-server", "https://bwrodcxmdzrpyrshrlfd.supabase.co/functions/v1/travel-api?account-layout=" + UUID().uuidString]
-        app.launch()
-        Thread.sleep(forTimeInterval: 1)
+        app.terminate(); app.launchArguments = ["--ui-testing", "--travel-test-server", "https://bwrodcxmdzrpyrshrlfd.supabase.co/functions/v1/travel-api?account-layout=" + UUID().uuidString]; app.launch()
         app.tabBars.buttons["Travel"].tap()
-        XCTAssertTrue(app.buttons["Travel account"].waitForExistence(timeout: 8), app.debugDescription)
         app.buttons["Travel account"].tap()
-        XCTAssertTrue(app.textFields["account-handle"].waitForExistence(timeout: 8))
-        XCTAssertFalse(app.sheets.firstMatch.exists)
-        XCTAssertFalse(app.tabBars.buttons["Map"].isHittable)
+        XCTAssertTrue(app.buttons["account-email-option"].waitForExistence(timeout: 8))
+        XCTAssertFalse(app.textFields["account-email"].exists)
+        app.buttons["account-email-option"].tap()
+        XCTAssertTrue(app.textFields["account-email"].waitForExistence(timeout: 5))
         app.segmentedControls["account-mode"].buttons["Create account"].tap()
         XCTAssertTrue(app.textFields["account-name"].waitForExistence(timeout: 5))
-        reveal(app.secureTextFields["account-confirmation"])
+        XCTAssertTrue(app.textFields["account-handle"].exists)
+        XCTAssertFalse(app.secureTextFields["account-confirmation"].exists)
+        reveal(app.secureTextFields["account-password"])
+        XCTAssertTrue(app.secureTextFields["account-password"].isHittable)
         app.buttons["Done"].tap()
         XCTAssertTrue(app.tabBars.buttons["Map"].waitForExistence(timeout: 5))
-        // The native tab bar animates back into place after leaving account navigation.
-        Thread.sleep(forTimeInterval: 0.8)
-        app.tabBars.buttons["Discover"].tap()
-        XCTAssertTrue(app.buttons["Your workspace"].waitForExistence(timeout: 8))
-        app.buttons["Your workspace"].tap()
-        app.buttons["profile-sign-in"].tap()
-        XCTAssertTrue(app.textFields["account-handle"].waitForExistence(timeout: 5))
-        XCTAssertFalse(app.sheets.firstMatch.exists)
     }
     func testAccountAccessAtLargeText() {
         app.terminate(); app.launchArguments = ["--ui-testing", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]; app.launch()
         app.tabBars.buttons["Travel"].tap(); app.buttons["Travel account"].tap()
-        XCTAssertTrue(app.textFields["account-handle"].waitForExistence(timeout: 8))
+        let emailOption = app.buttons["account-email-option"]; reveal(emailOption); emailOption.tap()
         let mode = app.segmentedControls["account-mode"]; reveal(mode); mode.buttons["Create account"].tap()
         let name = app.textFields["account-name"]; reveal(name); XCTAssertTrue(name.isHittable)
         let submit = app.buttons["account-submit"]; reveal(submit); XCTAssertTrue(submit.isHittable)
-        capture("93 Accessible account page")
         app.buttons["Done"].tap(); XCTAssertTrue(app.buttons["travel-create"].waitForExistence(timeout: 5))
+    }
+    func testOnboardingUsesVerifiedAccountFlow() {
+        app.terminate(); app.launchArguments = ["--ui-testing", "--onboarding-testing", "--travel-test-server", "https://bwrodcxmdzrpyrshrlfd.supabase.co/functions/v1/travel-api?account-layout=" + UUID().uuidString]; app.launch()
+        app.buttons["onboarding-sign-in"].tap()
+        XCTAssertTrue(app.buttons["account-email-option"].waitForExistence(timeout: 8))
+        app.buttons["account-email-option"].tap()
+        XCTAssertTrue(app.textFields["account-email"].waitForExistence(timeout: 5))
+        app.segmentedControls["account-mode"].buttons["Create account"].tap()
+        XCTAssertTrue(app.textFields["account-name"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.secureTextFields["onboarding-account-confirmation"].exists)
+        app.buttons["onboarding-account-skip"].tap()
+        XCTAssertTrue(app.buttons["membership-preview"].waitForExistence(timeout: 5))
     }
     @MainActor func testSupabaseNativeAccount() async throws {
         let root = "https://bwrodcxmdzrpyrshrlfd.supabase.co/functions/v1/travel-api"
@@ -952,33 +1417,22 @@ final class AurumUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Choose different departure and arrival cities."].waitForExistence(timeout: 5))
         capture("07 Flight validation")
     }
-    func testConciergeChatAndHotelNavigation() {
+    func testConciergeChatAndPlanSave() {
+        app.terminate(); app.launchArguments.append("--concierge-testing"); app.launch()
         app.tabBars.buttons["Concierge"].tap()
-        let prompt = app.buttons["concierge-prompt-bed.double"]
-        XCTAssertTrue(prompt.waitForExistence(timeout: 5))
-        capture("09 Concierge welcome")
-        prompt.tap()
-        XCTAssertTrue(app.staticTexts["concierge-reply"].waitForExistence(timeout: 5))
-        capture("10 Concierge recommendations")
-        let hotel = app.buttons["concierge-hotel-par-peninsula"]
-        XCTAssertTrue(hotel.waitForExistence(timeout: 5))
-        if !hotel.isHittable { app.swipeDown() }
-        hotel.tap()
-        XCTAssertTrue(app.buttons["plan-stay"].waitForExistence(timeout: 5))
-        app.navigationBars.buttons.element(boundBy: 0).tap()
-        let input = app.textFields["concierge-input"].exists ? app.textFields["concierge-input"] : app.textViews["concierge-input"]
-        XCTAssertTrue(input.waitForExistence(timeout: 5)); input.tap(); input.typeText("What about Tokyo?")
-        app.buttons["concierge-send"].tap()
-        let reply = app.staticTexts.matching(identifier: "concierge-reply")
-        let hasTwo = NSPredicate(format: "count == 2")
-        expectation(for: hasTwo, evaluatedWith: reply)
-        waitForExpectations(timeout: 6)
-        XCTAssertTrue(reply.element(boundBy: 1).label.contains("Tokyo"))
-        openSavedCollection()
+        let prompt = app.buttons["concierge-prompt-calendar"]
+        XCTAssertTrue(prompt.waitForExistence(timeout: 5)); prompt.tap()
+        let review = app.buttons["concierge-review-plan"]
+        XCTAssertTrue(review.waitForExistence(timeout: 8))
+        if !review.isHittable { app.swipeUp() }
+        review.tap()
+        let save = app.buttons["concierge-save-plan"]
+        XCTAssertTrue(save.waitForExistence(timeout: 5)); save.tap()
+        XCTAssertTrue(app.buttons["Added to your trips"].waitForExistence(timeout: 5))
+        app.tabBars.buttons["Travel"].tap()
+        XCTAssertTrue(app.staticTexts["A thoughtful Paris weekend"].waitForExistence(timeout: 5))
         app.tabBars.buttons["Concierge"].tap()
-        XCTAssertEqual(app.staticTexts.matching(identifier: "concierge-reply").count, 2)
-        app.buttons["New conversation"].tap()
-        app.buttons["Clear this conversation"].tap()
+        app.buttons["New conversation"].tap(); app.buttons["Clear this conversation"].tap()
         XCTAssertTrue(prompt.waitForExistence(timeout: 5))
     }
 
@@ -1154,6 +1608,7 @@ final class AurumUITests: XCTestCase {
     func testSimpleTripCreationBuildsRouteAutomatically() {
         app.terminate(); app.launchArguments = ["--ui-testing", "--location-testing"]; app.launch()
         app.tabBars.buttons["Travel"].tap(); app.buttons["travel-new-trip"].tap()
+        app.buttons["travel-create-blank"].tap()
         let create = app.buttons["journey-save"]
         XCTAssertFalse(create.isEnabled)
         XCTAssertFalse(app.textFields["journey-name"].exists)
@@ -1246,6 +1701,7 @@ final class AurumUITests: XCTestCase {
         capture("34 Selected flight airport")
     }
     func testLiveTripDestinationAutocomplete() {
+        app.terminate(); app.launchArguments = ["--ui-testing", "--live-apple-places"]; app.launch()
         app.tabBars.buttons["Travel"].tap(); app.buttons["travel-create"].tap()
         let destination = app.textFields["trip-destination"]
         destination.tap(); destination.typeText("Paris")

@@ -73,7 +73,7 @@ def normalized(row):
               'originZone': origin.get('timezone') or 'UTC', 'destinationZone': dest.get('timezone') or 'UTC'}
     fields = {'scheduledOut':'scheduled_out','estimatedOut':'estimated_out','actualOut':'actual_out',
               'scheduledIn':'scheduled_in','estimatedIn':'estimated_in','actualIn':'actual_in',
-              'scheduledOff':'scheduled_off','actualOff':'actual_off','scheduledOn':'scheduled_on','actualOn':'actual_on',
+              'scheduledOff':'scheduled_off','estimatedOff':'estimated_off','actualOff':'actual_off','scheduledOn':'scheduled_on','estimatedOn':'estimated_on','actualOn':'actual_on',
               'departureDelay':'departure_delay','arrivalDelay':'arrival_delay','gateOrigin':'gate_origin','gateDestination':'gate_destination',
               'terminalOrigin':'terminal_origin','terminalDestination':'terminal_destination','baggageClaim':'baggage_claim',
               'aircraft':'aircraft_type','registration':'registration','inboundID':'inbound_fa_flight_id'}

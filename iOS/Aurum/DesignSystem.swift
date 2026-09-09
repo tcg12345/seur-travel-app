@@ -10,7 +10,46 @@ extension Color {
     // transparent; use headings, spacing and dividers instead of another rounded box.
     // Icons inside a card stay unboxed; photographs and compact control/status badges
     // are not additional content containers.
-    static let cardSurface = Color(uiColor: .secondarySystemGroupedBackground)
+    static let cardSurface = Color(uiColor: UIColor { traits in
+        guard traits.userInterfaceStyle == .dark else { return .secondarySystemGroupedBackground }
+        return traits.accessibilityContrast == .high
+            ? UIColor(red: 0.23, green: 0.22, blue: 0.21, alpha: 1)
+            : UIColor(red: 0.18, green: 0.17, blue: 0.16, alpha: 1)
+    })
+}
+
+/// One shared content surface, with a visible edge on dark canvases and map sheets.
+struct CardSurface: ViewModifier {
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.colorSchemeContrast) private var contrast
+    var cornerRadius: CGFloat
+    var emphasized = false
+    var enabled = true
+
+    func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        content.background {
+            if enabled {
+                shape.fill(Color.cardSurface)
+                if emphasized { shape.fill(Color.bronze.opacity(0.10)) }
+            }
+        }.overlay {
+            if enabled {
+                shape.strokeBorder(
+                    colorScheme == .dark
+                        ? Color.bronze.opacity(contrast == .increased ? 0.65 : 0.30)
+                        : Color.primary.opacity(contrast == .increased ? 0.25 : 0.06),
+                    lineWidth: 1
+                ).allowsHitTesting(false)
+            }
+        }
+    }
+}
+
+extension View {
+    func cardSurface(cornerRadius: CGFloat, emphasized: Bool = false, enabled: Bool = true) -> some View {
+        modifier(CardSurface(cornerRadius: cornerRadius, emphasized: emphasized, enabled: enabled))
+    }
 }
 
 /// The shared Seur flight-ribbon mark. Uses the same artwork as the home-screen icon.
@@ -85,7 +124,7 @@ struct PressStyle: ButtonStyle {
 }
 struct HotelRow: View {
     let hotel: Hotel
-    var showsChevron = true
+    var showsChevron = false
     var body: some View {
         HStack(spacing: 15) {
             HotelPhoto(hotel: hotel).frame(width: 90, height: 104).clipShape(.rect(cornerRadius: 18))
@@ -95,7 +134,7 @@ struct HotelRow: View {
                 Label("\(hotel.venues.count) dining options", systemImage: "fork.knife").font(.caption).foregroundStyle(.secondary)
             }.frame(maxWidth: .infinity, alignment: .leading)
             if showsChevron { Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(.tertiary) }
-        }.padding(12).background(.background, in: .rect(cornerRadius: 24)).contentShape(.rect(cornerRadius: 24))
+        }.padding(12).cardSurface(cornerRadius: 24).contentShape(.rect(cornerRadius: 24))
     }
 }
 struct BrowserDestination: Identifiable { let id = UUID(); let url: URL }

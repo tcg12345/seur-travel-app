@@ -23,7 +23,8 @@ struct HotelDetailView: View {
                         detailStat(hotel.stars + " star", "Hotel category")
                         Divider().frame(height: 35)
                         detailStat(hotel.price.hasPrefix("$") ? hotel.price : "Luxury", "Price band")
-                    }.padding(.vertical, 18).background(.background, in: .rect(cornerRadius: 22))
+                    }.padding(.vertical, 18).cardSurface(cornerRadius: 22)
+                    TripadvisorDetailsLink(place: PlaceRecord(name: hotel.name, category: .hotel, city: hotel.city, address: hotel.address))
                     Text(hotel.description).font(.body).foregroundStyle(.secondary).lineSpacing(5)
                     HStack(alignment: .top) {
                         SectionHeading(title: "A stay with great taste.", subtitle: "Restaurants, bars & places to linger.")
@@ -40,17 +41,16 @@ struct HotelDetailView: View {
                                         Text(item.cuisine).font(.caption).foregroundStyle(.secondary).lineLimit(2)
                                         if item.price != "n/a" { Text(item.price).font(.caption2).foregroundStyle(Color.bronze) }
                                     }.frame(maxWidth: .infinity, alignment: .leading)
-                                    Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
                                 }.padding(.vertical, 17).padding(.horizontal, 14).contentShape(.rect)
                             }.buttonStyle(.plain).accessibilityIdentifier("venue-\(index)")
                             if index < hotel.venues.count - 1 { Divider().padding(.leading, 69) }
                         }
-                    }.background(.background, in: .rect(cornerRadius: 24))
+                    }.cardSurface(cornerRadius: 24)
                     SectionHeading(title: "The neighborhood")
                     VStack(alignment: .leading, spacing: 14) {
                         Label(hotel.address, systemImage: "mappin.and.ellipse")
                         if hotel.transit != "n/a" { Label(hotel.transit, systemImage: "tram") }
-                        Button { openMap() } label: { Label("Explore in Maps", systemImage: "arrow.up.right") }.padding(.top, 4)
+                        Button { openMap() } label: { Label("Explore in Maps", systemImage: "arrow.up.right").labelStyle(.titleOnly) }.padding(.top, 4)
                     }.font(.subheadline).foregroundStyle(.secondary)
                     VStack(alignment: .leading, spacing: 12) {
                         Text("From the hotel collection").font(.subheadline.weight(.medium))
@@ -83,7 +83,7 @@ struct HotelDetailView: View {
                         Text("Choose dates & plan your stay").font(.caption2).foregroundStyle(.secondary)
                     }
                     Spacer()
-                    Button { booking = true } label: { HStack(spacing: 7) { Text("Plan a stay"); Image(systemName: "arrow.up.right") }.font(.subheadline.weight(.semibold)).padding(.vertical, 8) }
+                    Button { booking = true } label: { HStack(spacing: 7) { Text("Plan a stay") }.font(.subheadline.weight(.semibold)).padding(.vertical, 8) }
                         .buttonStyle(.glassProminent).accessibilityIdentifier("plan-stay")
                 }.padding(14).glassEffect(.regular, in: .rect(cornerRadius: 27)).padding(.horizontal, 16).padding(.bottom, 8)
             }
@@ -121,7 +121,7 @@ struct StayPlanner: View {
                     if !dates.isValid { Label("Check-out must be after check-in.", systemImage: "exclamationmark.circle").font(.subheadline).foregroundStyle(.red) }
                     VStack(spacing: 12) {
                         if let url = hotel.officialURL {
-                            Button { browser = BrowserDestination(url: url) } label: { Label("Check hotel availability", systemImage: "arrow.up.right").frame(maxWidth: .infinity).padding(.vertical, 12) }
+                            Button { browser = BrowserDestination(url: url) } label: { Label("Check hotel availability", systemImage: "arrow.up.right").labelStyle(.titleOnly).frame(maxWidth: .infinity).padding(.vertical, 12) }
                                 .buttonStyle(.glassProminent).disabled(!dates.isValid).accessibilityIdentifier("check-hotel-availability")
                         }
                         Button {
@@ -152,7 +152,7 @@ struct StayPlanner: View {
             DatePicker("Check-out", selection: $dates.end, in: dates.start..., displayedComponents: .date).padding(18)
             Divider().padding(.horizontal, 18)
             Stepper("\(dates.guests) adults", value: $dates.guests, in: 1...9).padding(18)
-        }.background(.background, in: .rect(cornerRadius: 23))
+        }.cardSurface(cornerRadius: 23)
     }
 }
 
@@ -177,7 +177,7 @@ struct DiningVisitPlanner: View {
                     DatePicker("Dining date", selection: $date, in: Date.now..., displayedComponents: .date)
                     Stepper("\(guests) guests", value: $guests, in: 1...9)
                     if let url = hotel.officialURL {
-                        Button { browser = BrowserDestination(url: url) } label: { Label("Visit hotel for reservations", systemImage: "arrow.up.right").frame(maxWidth: .infinity).padding(.vertical, 9) }.buttonStyle(.glassProminent)
+                        Button { browser = BrowserDestination(url: url) } label: { Label("Visit hotel for reservations", systemImage: "arrow.up.right").labelStyle(.titleOnly).frame(maxWidth: .infinity).padding(.vertical, 9) }.buttonStyle(.glassProminent)
                     }
                     Button {
                         var dates = BookingDates(); dates.start = date; dates.end = Calendar.current.date(byAdding: .day, value: 1, to: date)!; dates.guests = guests
@@ -218,7 +218,7 @@ struct ComparisonView: View {
                                     }.buttonStyle(.plain)
                                 }
                             }.padding(18)
-                        }.frame(width: 270).background(.background, in: .rect(cornerRadius: 28))
+                        }.frame(width: 270).cardSurface(cornerRadius: 28)
                     }
                 }.padding(20)
             }.background(Color.canvas).navigationTitle("Compare the tables").navigationBarTitleDisplayMode(.inline)
