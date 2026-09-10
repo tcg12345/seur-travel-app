@@ -15,7 +15,7 @@ struct WorldMapView: View {
     @State private var mapBottomInset: CGFloat = 0
     @State private var center = CLLocationCoordinate2D(latitude: 22, longitude: 5)
     @State private var mode = "Explore"
-    @State private var detent: PresentationDetent = .height(260)
+    @State private var detent: PresentationDetent = .height(MapPanelLayout.compactHeight)
     @State private var showSaved = false
     @State private var selection: String?
     @State private var cityQuery = ""
@@ -112,7 +112,7 @@ struct WorldMapView: View {
         .onChange(of: store.selectedTab) { _, _ in
             stopRecap()
             var transaction = Transaction(); transaction.disablesAnimations = true
-            withTransaction(transaction) { detent = .height(260) }
+            withTransaction(transaction) { detent = .height(MapPanelLayout.compactHeight) }
         }
         .onChange(of: selection) { _, value in selected(value) }
         .onChange(of: tracker.position?.timestamp) { old, _ in
@@ -385,7 +385,7 @@ struct WorldMapView: View {
                 if !reduceMotion && !recap.stops.isEmpty {
                     Button(recapPlaying ? "Stop" : "Play route", systemImage: recapPlaying ? "stop.fill" : "play.fill") {
                         if recapPlaying { stopRecap() }
-                        else { recapPlaying = true; recapRun = UUID(); resizePanel(.height(260)) }
+                        else { recapPlaying = true; recapRun = UUID(); resizePanel(.height(MapPanelLayout.compactHeight)) }
                     }.font(.subheadline.weight(.semibold)).accessibilityIdentifier("map-recap-play")
                 }
                 Spacer()
@@ -498,10 +498,11 @@ struct WorldMapView: View {
 }
 
 struct MapPanelLayout {
+    static let compactHeight: CGFloat = 220
     let availableHeight: CGFloat
     let flightDetail: Bool
     var maximum: CGFloat { max(300, availableHeight - 8) }
-    var compact: CGFloat { min(260, maximum * 0.48) }
+    var compact: CGFloat { min(Self.compactHeight, maximum * 0.48) }
     var medium: CGFloat { max(compact, maximum * (flightDetail ? 0.80 : 0.60)) }
     func expansion(for height: CGFloat) -> CGFloat {
         min(1, max(0, (height - compact) / max(1, maximum - compact)))
@@ -565,12 +566,12 @@ private struct PersistentMapPanel<Header: View, Content: View>: View {
                 guard let draggedHeight = drag.height else { return }
                 let projected = draggedHeight - velocity * 0.18
                 let target = [compact, medium, maximum].min(by: { abs($0 - projected) < abs($1 - projected) }) ?? compact
-                withAnimation(spring) { drag.finish(); detent = target == maximum ? .large : target == medium ? .medium : .height(260) }
+                withAnimation(spring) { drag.finish(); detent = target == maximum ? .large : target == medium ? .medium : .height(MapPanelLayout.compactHeight) }
             }
             VStack(spacing: 0) {
                 VStack(spacing: 0) {
                     Capsule().fill(.secondary.opacity(0.25)).frame(width: 32, height: 4).padding(.top, 10).padding(.bottom, 7)
-                        .accessibilityIdentifier("map-panel-handle").accessibilityLabel("Map panel height").accessibilityAdjustableAction { direction in withAnimation(spring) { detent = direction == .increment ? .large : .height(260) } }
+                        .accessibilityIdentifier("map-panel-handle").accessibilityLabel("Map panel height").accessibilityAdjustableAction { direction in withAnimation(spring) { detent = direction == .increment ? .large : .height(MapPanelLayout.compactHeight) } }
                     header()
                 }.contentShape(Rectangle()).simultaneousGesture(DragGesture(minimumDistance: 8, coordinateSpace: .global)
                     .onChanged { value in if drag.height != nil || abs(value.translation.height) > abs(value.translation.width) { change(value.translation.height) } }

@@ -71,6 +71,11 @@ struct RoutePlannerView: View {
                                     Button("Change location", systemImage: "mappin") { locating = stop }
                                 } label: { Image(systemName: "arrow.up.arrow.down").frame(width: 35, height: 40) }.accessibilityLabel("Move " + stop.name).accessibilityIdentifier("route-move-\(index)")
                             }
+                            if let projected = preview?.stops.first(where: { $0.id == stop.id }) {
+                                SeasonalityCard(city: projected.name, countryCode: projected.countryCode ?? TravelStatistics.countryCode(projected.country), arrival: document.dateMode == .dates ? projected.arrival : nil, departure: document.dateMode == .dates ? projected.departure : nil, compact: true)
+                            } else {
+                                SeasonalityCard(city: stop.name, countryCode: stop.countryCode ?? TravelStatistics.countryCode(stop.country), compact: true)
+                            }
                             if RoutePoint(stop) == nil {
                                 Button("Choose this city on the map", systemImage: "mappin.and.ellipse") { locating = stop }.font(.caption).accessibilityIdentifier("route-locate-\(index)")
                             }
@@ -79,7 +84,7 @@ struct RoutePlannerView: View {
                     if let home = plan.home, plan.returnHome { Label(home.name + " · return", systemImage: "house.fill").font(.subheadline).foregroundStyle(.secondary).moveDisabled(true) }
                 } header: {
                     HStack { Text("Stop order"); Spacer(); Button(editMode == .active ? "Done" : "Reorder") { withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) { editMode = editMode == .active ? .inactive : .active } }.font(.caption).accessibilityIdentifier("route-reorder") }
-                } footer: { Text("Drag to reorder, or use the arrows beside a city. Fixed first/last cities constrain suggestions; you can still move them yourself.") }
+                } footer: { Text("Drag to reorder, or use the arrows beside a city. Fixed first/last cities constrain suggestions; you can still move them yourself. Seasonality follows the proposed dates; suggestions optimize transfers.") }
                 Section {
                     Button(suggesting ? "Finding a route…" : "Suggest an order", systemImage: "sparkles") { suggest() }.disabled(!ready || suggesting).accessibilityIdentifier("route-suggest")
                     Button("Restore current trip order", systemImage: "arrow.uturn.backward") {

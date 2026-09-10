@@ -36,7 +36,89 @@ struct LocationSuggestion: Identifiable {
     var localValue: String?
     var fixture: LocationSelection?
     var google: GooglePlaceSuggestion?
+    var destination: ExploreCity?
     var id: String { title + "|" + subtitle }
+}
+
+/// Travel destinations come from the existing offline directory. A qualified query must
+/// match the destination's geography; "London Ontario" never gets a UK promotion.
+enum DestinationSuggestions {
+    static let cities: [ExploreCity] = {
+        var seen = Set<String>()
+        return (ExploreCity.collection + CityBrowseRegion.all.flatMap(\.cities)).filter { seen.insert($0.id).inserted }
+    }()
+    static func normalized(_ value: String) -> String {
+        value.foldedCityText.components(separatedBy: CharacterSet.alphanumerics.inverted).filter { !$0.isEmpty }.joined(separator: " ")
+    }
+    private static func names(_ city: ExploreCity) -> [String] {
+        [normalized(city.name)] + (city.name == "New York" ? ["new york city", "nyc"] : city.name == "Macau" ? ["macao"] : [])
+    }
+    private static func countryCode(_ city: ExploreCity) -> String? {
+        ["China": "CN", "Macau": "MO"][city.country] ?? TravelStatistics.countryCode(city.country)
+    }
+    private static func geography(_ city: ExploreCity) -> [String] {
+        var values = [city.country]
+        if let code = countryCode(city) {
+            values.append(code)
+            if let localized = Locale.current.localizedString(forRegionCode: code) { values.append(localized) }
+        }
+        if city.country == "United Kingdom" { values += ["UK", "Great Britain"] }
+        if city.country == "United States" { values += ["USA", "US"] }
+        if city.name == "London" { values += ["England", "Greater London"] }
+        if city.name == "New York" { values += ["NY", "New York State"] }
+        return values.map(normalized)
+    }
+    private static func matchesGeography(_ query: String, city: ExploreCity) -> Bool {
+        let words = Set(geography(city).flatMap { $0.split(separator: " ").map(String.init) })
+        let tokens = query.split(separator: " ").map(String.init)
+        return !tokens.isEmpty && tokens.enumerated().allSatisfy { index, token in
+            words.contains(token) || (index == tokens.count - 1 && token.count >= 2 && words.contains { $0.hasPrefix(token) })
+        }
+    }
+    static func preferred(_ query: String, kind: LocationSearchKind) -> [LocationSuggestion] {
+        guard kind == .destination || kind == .city else { return [] }
+        let query = normalized(query)
+        guard query.count >= 2 else { return [] }
+        return cities.filter { city in
+            names(city).contains { name in
+                name.hasPrefix(query) || (query.hasPrefix(name + " ") && matchesGeography(String(query.dropFirst(name.count + 1)), city: city))
+            }
+        }.sorted { a, b in
+            let exactA = names(a).contains(query), exactB = names(b).contains(query)
+            return exactA != exactB ? exactA : a.name < b.name
+        }.prefix(5).map { city in
+            LocationSuggestion(title: city.name, subtitle: city.name == "London" ? "England, United Kingdom" : city.country, destination: city)
+        }
+    }
+    static func merge(_ matches: [LocationSuggestion], query: String, kind: LocationSearchKind) -> [LocationSuggestion] {
+        guard kind == .destination || kind == .city else { return matches }
+        let preferred = preferred(query, kind: kind)
+        let query = normalized(query)
+        let ranked = matches.enumerated().sorted { a, b in
+            // Exact city names precede longer names such as Londonderry. Preserve
+            // provider order for ties and for qualified searches.
+            let aExact = normalized(a.element.title.components(separatedBy: ",").first ?? "") == query
+            let bExact = normalized(b.element.title.components(separatedBy: ",").first ?? "") == query
+            return aExact != bExact ? aExact : a.offset < b.offset
+        }.map(\.element)
+        var seen = Set<String>()
+        return (preferred + ranked.filter { suggestion in
+            !preferred.contains { item in
+                guard let city = item.destination else { return false }
+                let parts = suggestion.title.components(separatedBy: ",")
+                let region = (Array(parts.dropFirst()) + [suggestion.subtitle]).joined(separator: " ")
+                return names(city).contains(normalized(parts[0])) && matchesGeography(normalized(region), city: city)
+            }
+        }).filter { seen.insert(normalized($0.title) + "|" + normalized($0.subtitle)).inserted }.prefix(5).map { $0 }
+    }
+    static func selection(_ city: ExploreCity, kind: LocationSearchKind) -> LocationSelection {
+        let aliases = ["Barcelona": "Europe/Madrid", "Kyoto": "Asia/Tokyo", "Doha": "Asia/Qatar", "San Francisco": "America/Los_Angeles", "Miami": "America/New_York", "Mumbai": "Asia/Kolkata", "Hanoi": "Asia/Ho_Chi_Minh", "Rio de Janeiro": "America/Sao_Paulo", "Cartagena": "America/Bogota", "Marrakech": "Africa/Casablanca", "Cape Town": "Africa/Johannesburg", "Abu Dhabi": "Asia/Dubai", "Queenstown": "Pacific/Auckland"]
+        let zone = aliases[city.name] ?? TimeZone.knownTimeZoneIdentifiers.sorted().first { normalized($0.components(separatedBy: "/").last ?? "") == normalized(city.name) } ?? ""
+        let fullName = city.name + ", " + city.country
+        return LocationSelection(text: kind == .city ? city.name : fullName,
+            place: PlaceRecord(id: "seur-city-" + city.id, name: city.name, category: .other, city: city.name, address: fullName, latitude: city.latitude, longitude: city.longitude, source: "Seur destination directory"),
+            country: city.country, timeZone: zone, countryCode: countryCode(city))
+    }
 }
 
 /// Each query owns its completer and resolution task, so old responses cannot overwrite newer input.
@@ -73,6 +155,7 @@ struct LocationSuggestion: Identifiable {
         query = next; self.kind = kind; self.context = area
         guard query.count >= 2 else { return }
         if kind.isLocal { suggestions = Self.localSuggestions(query, kind: kind); return }
+        suggestions = DestinationSuggestions.preferred(query, kind: kind)
         loading = true
         let current = revision; let fragment = query
         let contextual = contextualQuery
@@ -81,17 +164,19 @@ struct LocationSuggestion: Identifiable {
             guard let self, !Task.isCancelled, self.revision == current else { return }
             #if DEBUG
             if self.fixtures {
-                self.suggestions = Self.testSuggestions(fragment, kind: kind); self.loading = false; return
+                let preferred = DestinationSuggestions.preferred(fragment, kind: kind)
+                self.suggestions = preferred.isEmpty ? Self.testSuggestions(fragment, kind: kind) : preferred; self.loading = false; return
             }
             #endif
             if let appleSearch = self.appleSearch {
                 do {
                     let matches = try await appleSearch(contextual, kind)
                     guard !Task.isCancelled, self.revision == current else { return }
-                    self.suggestions = matches; self.loading = false
+                    self.suggestions = DestinationSuggestions.merge(matches, query: fragment, kind: kind); self.loading = false
                 } catch {
                     guard !Task.isCancelled, self.revision == current else { return }
-                    self.loading = false; self.message = "Suggestions are unavailable. You can still enter a location."
+                    self.loading = false
+                    self.message = self.suggestions.isEmpty ? "Suggestions are unavailable. You can still enter a location." : "More suggestions are unavailable. You can use these destinations."
                 }
                 return
             }
@@ -136,16 +221,19 @@ struct LocationSuggestion: Identifiable {
         guard completer === self.completer else { return }
         loading = false
         var seen = Set<String>()
-        suggestions = completer.results.map { LocationSuggestion(title: $0.title, subtitle: $0.subtitle, completion: $0) }.filter { seen.insert($0.id).inserted }.prefix(5).map { $0 }
+        let matches = completer.results.map { LocationSuggestion(title: $0.title, subtitle: $0.subtitle, completion: $0) }.filter { seen.insert($0.id).inserted }
+        suggestions = Array(DestinationSuggestions.merge(matches, query: query, kind: kind).prefix(5))
         message = suggestions.isEmpty ? "No suggestions. You can keep the location you typed." : nil
     }
     func completer(_ completer: MKLocalSearchCompleter, didFailWithError error: Error) {
         guard completer === self.completer else { return }
-        loading = false; suggestions = []; message = "Suggestions are unavailable. You can still enter a location."
+        loading = false; suggestions = DestinationSuggestions.preferred(query, kind: kind)
+        message = suggestions.isEmpty ? "Suggestions are unavailable. You can still enter a location." : "More suggestions are unavailable. You can use these destinations."
     }
     func select(_ suggestion: LocationSuggestion, kind: LocationSearchKind, category: PlaceCategory, completion: @escaping (LocationSelection) -> Void) {
         stop(); resolving = true
         let current = revision
+        if let city = suggestion.destination { resolving = false; completion(DestinationSuggestions.selection(city, kind: kind)); return }
         if let value = suggestion.localValue { resolving = false; completion(LocationSelection(text: value, place: PlaceRecord(name: value), country: kind == .country ? value : "", timeZone: kind == .timeZone ? value : "")); return }
         #if DEBUG
         if fixtures, let result = suggestion.fixture { resolving = false; completion(result); return }
@@ -244,7 +332,7 @@ struct LocationAutocompleteField: View {
                 .onSubmit { focused = false; model.stop() }.accessibilityIdentifier(identifier)
             if focused && text.trimmingCharacters(in: .whitespacesAndNewlines).count >= 2 {
                 VStack(alignment: .leading, spacing: 0) {
-                    if model.loading || model.resolving { HStack(spacing: 8) { ProgressView(); Text(model.resolving ? "Finding this place…" : "Finding suggestions…").font(.caption).foregroundStyle(.secondary) }.padding(.vertical, 12) }
+                    if (model.loading && model.suggestions.isEmpty) || model.resolving { HStack(spacing: 8) { ProgressView(); Text(model.resolving ? "Finding this place…" : "Finding suggestions…").font(.caption).foregroundStyle(.secondary) }.padding(.vertical, 12) }
                     ForEach(Array(model.suggestions.enumerated()), id: \.element.id) { index, suggestion in
                         Button {
                             model.select(suggestion, kind: kind, category: category) { result in
@@ -257,7 +345,6 @@ struct LocationAutocompleteField: View {
                                     Text(suggestion.title).font(.subheadline.weight(.medium)).foregroundStyle(.primary)
                                     if !suggestion.subtitle.isEmpty { Text(suggestion.subtitle).font(.caption).foregroundStyle(.secondary) }
                                 }.frame(maxWidth: .infinity, alignment: .leading)
-                                Image(systemName: "arrow.up.left").font(.caption2).foregroundStyle(.secondary)
                             }.padding(.vertical, 12).contentShape(.rect)
                         }.buttonStyle(.plain).accessibilityIdentifier("\(identifier)-suggestion-\(index)")
                         if index < model.suggestions.count - 1 { Divider() }
@@ -267,7 +354,7 @@ struct LocationAutocompleteField: View {
                         Button("Try Google suggestions") { model.requestGoogle { try await api.autocompletePlaces($0) } }
                             .font(.caption).padding(.vertical, 10).accessibilityIdentifier(identifier + "-google-fallback")
                     }
-                    if !model.suggestions.isEmpty { Text(kind.isLocal ? "Suggested matches" : model.suggestions.contains(where: { $0.google != nil }) ? "Google Maps" : "Apple Maps suggestions").font(.caption).foregroundStyle(.secondary).padding(.bottom, 5) }
+                    if !model.suggestions.isEmpty { Text(kind.isLocal ? "Suggested matches" : model.suggestions.contains(where: { $0.google != nil }) ? "Google Maps" : model.suggestions.allSatisfy({ $0.destination != nil }) ? "Seur destinations" : model.suggestions.contains(where: { $0.destination != nil }) ? "Seur destinations · Apple Maps" : "Apple Maps suggestions").font(.caption).foregroundStyle(.secondary).padding(.bottom, 5) }
                 }.padding(.top, 6)
             }
         }

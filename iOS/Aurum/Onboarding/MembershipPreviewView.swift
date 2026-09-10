@@ -51,7 +51,7 @@ struct MembershipPreviewView: View {
                 Button {
                     if success { onFinish() } else { confirming = true }
                 } label: {
-                    HStack { Text(success ? "Explore Seur" : typeSize.isAccessibilitySize ? "Preview plan" : "Preview \(selected.title.lowercased()) membership"); Spacer(); Image(systemName: "arrow.right") }.onboardingPrimary()
+                    HStack { Text(success ? (onBack == nil ? "Explore Seur" : "Continue") : typeSize.isAccessibilitySize ? "Preview plan" : "Preview \(selected.title.lowercased()) membership"); Spacer(); Image(systemName: "arrow.right") }.onboardingPrimary()
                 }.buttonStyle(PressStyle()).accessibilityIdentifier(success ? "membership-finish" : "membership-preview")
                 if !success { Button("Continue without membership", action: onFinish).font(.subheadline).frame(minHeight: 36).accessibilityIdentifier("membership-skip") }
                 Text("No charge. No trial. No automatic renewal.").font(.caption2).foregroundStyle(.secondary).dynamicTypeSize(...DynamicTypeSize.xxxLarge)

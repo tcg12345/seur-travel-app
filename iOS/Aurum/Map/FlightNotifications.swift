@@ -190,3 +190,41 @@ struct FlightNotificationControls: View {
         Task { defer { busy = false }; do { try await action() } catch { notifications.error = error.localizedDescription } }
     }
 }
+
+
+/// Permission alone does not follow flights or subscribe the traveler to alerts.
+@MainActor @Observable final class OnboardingNotificationPermission {
+    private(set) var status: UNAuthorizationStatus?
+    private(set) var busy = false
+    private(set) var error: String?
+    private let readStatus: () async -> UNAuthorizationStatus
+    private let request: () async throws -> Bool
+    private let register: @MainActor () -> Void
+    var isAllowed: Bool { status == .authorized || status == .provisional || status == .ephemeral }
+    init(
+        readStatus: @escaping () async -> UNAuthorizationStatus = { await UNUserNotificationCenter.current().notificationSettings().authorizationStatus },
+        request: @escaping () async throws -> Bool = { try await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) },
+        register: @escaping @MainActor () -> Void = { if !FlightNotifications.testing { UIApplication.shared.registerForRemoteNotifications() } }
+    ) {
+        self.readStatus = readStatus; self.request = request; self.register = register
+    }
+    func requestOnArrival() async {
+        guard !busy else { return }
+        busy = true; error = nil
+        defer { busy = false }
+        status = await readStatus()
+        guard !Task.isCancelled else { return }
+        if status == .notDetermined {
+            do { _ = try await request(); status = await readStatus() }
+            catch { self.error = "Permission couldn’t be requested. Try again, or continue without notifications." }
+        }
+        if isAllowed { register() }
+    }
+    func refresh() async {
+        guard !busy else { return }
+        busy = true
+        defer { busy = false }
+        status = await readStatus()
+        if isAllowed { error = nil; register() }
+    }
+}

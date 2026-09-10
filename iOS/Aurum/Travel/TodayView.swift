@@ -47,7 +47,7 @@ struct TodayView: View {
                 }
             }.accessibilityElement(children: .contain).accessibilityIdentifier("today-view")
                 .sheet(item: $selectedItem) { item in
-                    TodayItemActions(item: item, day: day, statusLabel: item.flightID.flatMap { id in document.flights.first { $0.id == id } }.map { statuses.label($0, server: api.baseURL, now: now) })
+                    TodayItemActions(item: item, day: day, documentID: document.id, statusLabel: item.flightID.flatMap { id in document.flights.first { $0.id == id } }.map { statuses.label($0, server: api.baseURL, now: now) })
                 }
                 .contentShape(Rectangle())
                 .simultaneousGesture(DragGesture(minimumDistance: 35).onEnded { value in
@@ -105,6 +105,7 @@ private struct TodayItemRow: View {
                 VStack(alignment: .leading, spacing: 3) {
                     if isNext { Text(happening ? "Happening now" : "Up next").font(.caption2.weight(.medium)).foregroundStyle(accent).accessibilityIdentifier("today-next") }
                     Text(item.title).font(.subheadline.weight(.semibold)).foregroundStyle(.primary).lineLimit(2)
+                    if item.kind == .event && item.completed { Label("Done", systemImage: "checkmark.circle.fill").font(.caption2).foregroundStyle(.secondary) }
                     if let timing = item.timing { Label(timing.label, systemImage: timing.symbol).font(.caption2).foregroundStyle(timing.color) }
                 }.frame(maxWidth: .infinity, alignment: .leading)
                 Text(item.schedule).font(.subheadline.weight(.medium).monospacedDigit()).foregroundStyle(accent).fixedSize(horizontal: true, vertical: false)
@@ -116,9 +117,12 @@ private struct TodayItemRow: View {
     }
 }
 private struct TodayItemActions: View {
+    @Environment(JourneyLibrary.self) private var library
+    @State private var saveError: String?
     @Environment(\.dismiss) private var dismiss
     let item: TodayItem
     let day: String
+    let documentID: UUID
     var statusLabel: String?
     @State private var copyCount = 0
     @State private var copied = false
@@ -134,6 +138,15 @@ private struct TodayItemActions: View {
                     if let saved = item.scheduled, let live = item.start, abs(saved.timeIntervalSince(live)) >= 60 {
                         Text("Scheduled " + TodayPlanner.clock(saved, zone: item.zone)).font(.caption).foregroundStyle(.secondary)
                     }
+                    if item.kind == .event, let document = library.documents.first(where: { $0.id == documentID }),
+                       let event = document.events.first(where: { "event-" + $0.id.uuidString == item.id }) {
+                        Toggle("Done · include in spent", isOn: Binding(get: { event.isDone == true }, set: { done in
+                            guard var current = library.documents.first(where: { $0.id == documentID }), let index = current.events.firstIndex(where: { $0.id == event.id }) else { return }
+                            current.events[index].isDone = done
+                            if !library.save(current) { saveError = library.error }
+                        })).accessibilityIdentifier("today-event-done")
+                    }
+                    if let saveError { Text(saveError).font(.caption).foregroundStyle(.red) }
                     if let statusLabel { Text(statusLabel).font(.caption).foregroundStyle(.secondary) }
                     if !item.note.isEmpty { Text(item.note).font(.subheadline).textSelection(.enabled) }
                     VStack(spacing: 0) {
@@ -193,6 +206,12 @@ enum TodayFixtures {
         var trip = JourneyDocument(title: "Paris with family", startDate: stop.arrival, endDate: stop.departure, stops: [stop])
         trip.events = [JourneyEvent(stopID: stop.id, day: 1, minute: 780, place: restaurant, durationMinutes: 90), JourneyEvent(stopID: stop.id, day: 2, minute: 600, place: PlaceRecord(name: "Museum morning", category: .museum))]
         trip.hotels = [HotelReservation(place: PlaceRecord(name: "Your Paris hotel", category: .hotel, address: "10 Place de la Concorde, Paris", phone: "+33 1 44 71 15 00"), checkIn: "2026-09-06", checkOut: "2026-09-09", roomType: "Deluxe double", confirmation: "SEUR-DEMO-123")]
+        if ProcessInfo.processInfo.arguments.contains("--budget-testing") {
+            let a = "00000000-0000-4000-8000-000000000001", b = "00000000-0000-4000-8000-000000000002"
+            trip.companions = [.init(id: a, name: "Alex"), .init(id: b, name: "Blair")]
+            trip.homeCurrency = "USD"; trip.budgetTarget = 500
+            trip.events[0].cost = .init(amount: 100, currency: "USD", paidBy: a, splitBetween: [a, b])
+        }
         return trip
     }
 }

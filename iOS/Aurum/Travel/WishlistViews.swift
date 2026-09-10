@@ -1,93 +1,259 @@
 import SwiftUI
 
+enum WishlistSaveType: String, CaseIterable, Identifiable {
+    case trip, destination, hotel, restaurant, activity, sight
+    var id: String { rawValue }
+    var title: String { switch self { case .trip: "Trip"; case .destination: "Destination"; case .hotel: "Hotel"; case .restaurant: "Restaurant"; case .activity: "Activity"; case .sight: "Sight" } }
+    var subtitle: String { switch self { case .trip: "Build a future itinerary"; case .destination: "Cities, islands & escapes"; case .hotel: "Somewhere to stay"; case .restaurant: "A table worth a visit"; case .activity: "Something to experience"; case .sight: "Landmarks & must-sees" } }
+    var kind: WishlistKind { switch self { case .trip, .destination: .destinations; case .hotel: .stays; case .restaurant: .dining; case .activity: .experiences; case .sight: .sights } }
+    var symbol: String { self == .trip ? "suitcase.rolling" : kind.symbol }
+    var prompt: String { switch self { case .trip: "Plan a trip"; case .destination: "Find a destination"; case .hotel: "Find a hotel"; case .restaurant: "Find a restaurant"; case .activity: "Find an activity"; case .sight: "Find a sight" } }
+    var placeholder: String { switch self { case .trip, .destination: "Search cities or destinations"; case .hotel: "Search hotels"; case .restaurant: "Search restaurants"; case .activity: "Search activities or experiences"; case .sight: "Search landmarks, museums & sights" } }
+}
+
+private struct WishlistSaveChoices: View {
+    @Environment(\.dynamicTypeSize) private var typeSize
+    var select: (WishlistSaveType) -> Void
+    var body: some View {
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12, alignment: .top), count: typeSize.isAccessibilitySize ? 1 : 2), spacing: 12) {
+            ForEach(WishlistSaveType.allCases) { type in
+                Button { select(type) } label: {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Image(systemName: type.symbol).font(.system(size: 22, weight: .light)).foregroundStyle(Color.bronze)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(type.title).font(.headline).foregroundStyle(.primary)
+                            Text(type.subtitle).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                        }
+                    }.frame(maxWidth: .infinity, minHeight: 98, alignment: .topLeading).padding(16)
+                        .background(Color.cardSurface, in: .rect(cornerRadius: 20))
+                        .overlay { RoundedRectangle(cornerRadius: 20).strokeBorder(Color.primary.opacity(0.06), lineWidth: 1) }
+                        .contentShape(.rect(cornerRadius: 20))
+                }.buttonStyle(.plain).accessibilityIdentifier("wishlist-save-" + type.rawValue)
+            }
+        }
+    }
+}
+
+private struct WishlistSavePlaceView: View {
+    let type: WishlistSaveType
+    @Environment(TravelStore.self) private var store
+    @Environment(\.dismiss) private var dismiss
+    @State private var name = ""
+    @State private var destination = ""
+    @State private var selected: LocationSelection?
+    @State private var reviewing = false
+    @State private var details = WishlistDetails()
+    @State private var website = ""
+    @State private var addingDetails = false
+    @State private var error: String?
+    @State private var savedID = UUID().uuidString
+    private var canContinue: Bool { !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 26) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text(type.prompt).font(.system(.largeTitle, design: .serif))
+                        Text(type == .destination ? "Keep a destination for a future escape." : "Search by name. Add a city to narrow it down.")
+                            .font(.subheadline).foregroundStyle(.secondary)
+                    }
+                    VStack(alignment: .leading, spacing: 18) {
+                        LocationAutocompleteField(type.placeholder, text: $name, kind: type == .destination ? .city : .place,
+                            identifier: "wishlist-name", category: type.kind.category, searchContext: destination,
+                            suggestionSymbol: type.symbol, onEdit: { selected = nil; website = "" }) { value in
+                                selected = value
+                                name = value.place.name.isEmpty ? value.text : value.place.name
+                                destination = type == .destination ? value.country : value.place.city
+                                website = value.place.website
+                                reviewing = true
+                            }
+                        if type != .destination {
+                            Divider()
+                            LocationAutocompleteField("City or destination (optional)", text: $destination, kind: .city,
+                                identifier: "wishlist-destination", onEdit: { selected = nil; website = "" })
+                        }
+                    }.padding(18).background(Color.cardSurface, in: .rect(cornerRadius: 22))
+                    if canContinue {
+                        Button { reviewing = true } label: {
+                            HStack { Text("Continue with this name"); Spacer(); Image(systemName: "arrow.right") }.font(.subheadline.weight(.medium))
+                        }.padding(.vertical, 12).accessibilityIdentifier("wishlist-continue")
+                    }
+                }.padding(22)
+            }.scrollDismissesKeyboard(.interactively).background(Color.canvas)
+                .navigationTitle("Save a " + type.title.lowercased()).navigationBarTitleDisplayMode(.inline)
+                .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
+                .navigationDestination(isPresented: $reviewing) { review }
+        }
+    }
+    private var review: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 24) {
+                VStack(alignment: .leading, spacing: 14) {
+                    Label(type.title, systemImage: type.symbol).font(.subheadline).foregroundStyle(Color.bronze)
+                    Text(name).font(.system(.largeTitle, design: .serif)).fixedSize(horizontal: false, vertical: true)
+                    if !destination.isEmpty { Text(destination).font(.subheadline).foregroundStyle(.secondary) }
+                    if type != .destination, let address = selected?.place.address, !address.isEmpty, address != destination {
+                        Text(address).font(.caption).foregroundStyle(.secondary)
+                    }
+                }.frame(maxWidth: .infinity, alignment: .leading).padding(22).cardSurface(cornerRadius: 24)
+                DisclosureGroup("Add a note or collection", isExpanded: $addingDetails) {
+                    VStack(alignment: .leading, spacing: 18) {
+                        TextField("A note for later", text: $details.notes, axis: .vertical).lineLimit(2...5).accessibilityIdentifier("wishlist-notes")
+                        Divider()
+                        TextField("Collection (optional)", text: $details.collection).accessibilityIdentifier("wishlist-collection")
+                        TextField("Website (optional)", text: $website).keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled().accessibilityIdentifier("wishlist-website")
+                        Toggle("Top pick", isOn: $details.topPick)
+                    }.padding(.top, 16)
+                }.font(.subheadline).tint(.bronze).padding(18).cardSurface(cornerRadius: 20)
+                if let error { Text(error).font(.subheadline).foregroundStyle(.red).accessibilityIdentifier("wishlist-editor-error") }
+            }.padding(22)
+        }.scrollDismissesKeyboard(.interactively).background(Color.canvas).navigationTitle("Save to wishlist").navigationBarTitleDisplayMode(.inline)
+            .safeAreaInset(edge: .bottom) {
+                Button(action: save) { Label("Save to wishlist", systemImage: "bookmark").font(.headline).frame(maxWidth: .infinity).padding(.vertical, 12) }
+                    .buttonStyle(.glassProminent).padding(.horizontal, 22).padding(.vertical, 12).background(Color.canvas).accessibilityIdentifier("wishlist-save")
+            }
+    }
+    private func save() {
+        let value = WishlistIdea(id: savedID, name: name, destination: destination, kind: type.kind, website: website, selectedPlace: selected?.place)
+        if store.wishlist.saveIdea(value, details: details) { dismiss() }
+        else { error = store.wishlist.error; store.wishlist.error = nil }
+    }
+}
+
+
 struct WishlistContent: View {
     @Environment(TravelStore.self) private var store
     @Environment(JourneyLibrary.self) private var library
-    let query: String
     @State private var kind: WishlistKind?
     @State private var collection: String?
     @State private var topPicks = false
     @State private var sort: WishlistSort = .newest
-    @State private var adding = false
-    @State private var planningTrip = false
+    @State private var saving: WishlistSaveType?
     @State private var createdTrip: UUID?
     private var tripPlans: [JourneyDocument] { library.wishlistTrips.filter { query.isEmpty || ($0.title + " " + $0.routeLabel).localizedCaseInsensitiveContains(query) }.sorted { $0.updatedAt > $1.updatedAt } }
     private var entries: [WishlistEntry] { store.wishlistMatches(query: query, kind: kind, collection: collection, topPicks: topPicks, sort: sort) }
     private var filtered: Bool { kind != nil || collection != nil || topPicks || sort != .newest }
+    @State private var exploring = false
+    @Binding var query: String
+    private var hasSavedContent: Bool { !library.wishlistTrips.isEmpty || !store.wishlistEntries.isEmpty }
+    private var filterLabel: String {
+        [kind?.title, collection.map { $0.isEmpty ? "Unsorted" : $0 }, topPicks ? "Top picks" : nil, sort != .newest ? sort.rawValue : nil].compactMap { $0 }.joined(separator: " · ")
+    }
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            VStack(alignment: .leading, spacing: 7) {
-                Editorial("Someday starts here.", size: 28)
-                Text("Full trip plans and saved places, ready when you are.").font(.subheadline).foregroundStyle(.secondary)
-            }
-            VStack(alignment: .leading, spacing: 14) {
-                HStack {
-                    Text("Trip plans").font(.headline)
-                    Spacer()
-                    Button("Plan a trip", systemImage: "plus") { planningTrip = true }.font(.subheadline).accessibilityIdentifier("wishlist-create-trip")
-                }
-                if tripPlans.isEmpty {
-                    Text(query.isEmpty ? "Build a whole itinerary with nights in each destination. Add dates when you’re ready to go." : "No trip plans match your search.").font(.subheadline).foregroundStyle(.secondary)
-                }
-                ForEach(tripPlans) { trip in
-                    NavigationLink { JourneyDetailView(id: trip.id) } label: {
-                        HStack(spacing: 14) {
-                            Image(systemName: "point.topleft.down.to.point.bottomright.curvepath").font(.title2).foregroundStyle(Color.bronze)
-                            VStack(alignment: .leading, spacing: 5) {
-                                Text(trip.title).font(.headline).foregroundStyle(.primary)
-                                Text(trip.routeLabel).font(.subheadline).foregroundStyle(.secondary)
-                                Text("\(trip.nights) nights · \(trip.planCount) plans · Dates flexible").font(.caption).foregroundStyle(Color.bronze)
-                            }
-                            Spacer()
-                        }.padding(.vertical, 10)
-                    }.buttonStyle(.plain).accessibilityIdentifier("wishlist-trip-plan-" + trip.id.uuidString)
-                    Divider()
-                }
-            }
-            HStack {
-                Menu {
-                    Picker("Type", selection: $kind) { Text("All types").tag(nil as WishlistKind?); ForEach(WishlistKind.allCases) { Text($0.rawValue).tag(Optional($0)) } }
-                    Picker("Collection", selection: $collection) { Text("All collections").tag(nil as String?); Text("Unsorted").tag(Optional("")); ForEach(store.wishlistCollections, id: \.self) { Text($0).tag(Optional($0)) } }
-                    Toggle("Top picks only", isOn: $topPicks)
-                    Picker("Sort", selection: $sort) { ForEach(WishlistSort.allCases, id: \.self) { Text($0.rawValue).tag($0) } }
-                    if filtered { Button("Reset filters") { resetFilters() } }
-                } label: { Label(filtered ? "Filtered" : "All saved ideas", systemImage: "line.3.horizontal.decrease") }
-                    .font(.subheadline).accessibilityIdentifier("wishlist-filters")
-                Spacer()
-                Button { adding = true } label: { Label("Add idea", systemImage: "plus") }
-                    .font(.subheadline.weight(.medium)).accessibilityIdentifier("wishlist-add")
-            }
-            if filtered {
-                HStack {
-                    Text([kind?.rawValue, collection.map { $0.isEmpty ? "Unsorted" : $0 }, topPicks ? "Top picks" : nil].compactMap { $0 }.joined(separator: " · ")).font(.caption).foregroundStyle(.secondary)
-                    Spacer(); Button("Reset") { resetFilters() }.font(.caption).accessibilityIdentifier("wishlist-reset")
-                }
-            }
-            if entries.isEmpty {
-                VStack(alignment: .leading, spacing: 14) {
-                    Text(store.wishlistEntries.isEmpty ? "Keep the places you don’t want to forget." : "No ideas match your search.").font(.headline)
-                    Text(store.wishlistEntries.isEmpty ? "Tap the heart or bookmark on a stay, restaurant or city. Or add your own idea, even if you haven’t chosen the dates yet." : "Try another name, destination or note, or reset your filters.").font(.subheadline).foregroundStyle(.secondary)
-                    if filtered { Button("Show all types & collections") { resetFilters() }.font(.subheadline) }
-                    if store.wishlistEntries.isEmpty { Button("Add your first idea") { adding = true }.buttonStyle(.glassProminent).accessibilityIdentifier("wishlist-first-idea") }
-                }.padding(.vertical, 18).accessibilityIdentifier("wishlist-empty")
+        VStack(alignment: .leading, spacing: 26) {
+            if !hasSavedContent {
+                emptyState
             } else {
-                LazyVStack(spacing: 0) {
-                    ForEach(entries) { entry in
-                        NavigationLink { WishlistDetailView(entryID: entry.id) } label: { row(entry) }
-                            .buttonStyle(.plain).accessibilityIdentifier("wishlist-item-" + entry.id)
-                        Divider()
+                HStack(spacing: 10) {
+                    Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+                    TextField("Search wishlist", text: $query).submitLabel(.search).accessibilityIdentifier("wishlist-search")
+                    if !query.isEmpty { Button { query = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary) }.accessibilityLabel("Clear search") }
+                }.padding(14).background(Color.cardSurface, in: .rect(cornerRadius: 16))
+                if tripPlans.isEmpty && entries.isEmpty && !query.isEmpty {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("No matches").font(.headline)
+                        Text("Try another trip or place.").font(.subheadline).foregroundStyle(.secondary)
+                        Button("Clear search & filters") { query = ""; resetFilters() }.font(.subheadline)
+                    }.padding(.vertical, 24).accessibilityIdentifier("wishlist-no-results")
+                } else {
+                    if !tripPlans.isEmpty {
+                        VStack(alignment: .leading, spacing: 12) {
+                            sectionTitle("Trip plans", count: tripPlans.count)
+                            ForEach(tripPlans) { trip in
+                                NavigationLink { JourneyDetailView(id: trip.id) } label: {
+                                    HStack(spacing: 14) {
+                                        Image(systemName: "point.topleft.down.to.point.bottomright.curvepath").font(.title2).foregroundStyle(Color.bronze)
+                                            .frame(width: 44, height: 50)
+                                        VStack(alignment: .leading, spacing: 5) {
+                                            Text(trip.title).font(.system(.headline, design: .serif)).foregroundStyle(.primary).lineLimit(2)
+                                            if !trip.routeLabel.isEmpty { Text(trip.routeLabel).font(.caption).foregroundStyle(.secondary).lineLimit(1) }
+                                            Text("\(trip.nights) nights · Dates flexible").font(.caption).foregroundStyle(Color.bronze)
+                                        }
+                                        Spacer(minLength: 0)
+                                        Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(.tertiary)
+                                    }.padding(16).frame(maxWidth: .infinity, alignment: .leading).cardSurface(cornerRadius: 22)
+                                }.buttonStyle(.plain).accessibilityIdentifier("wishlist-trip-plan-" + trip.id.uuidString)
+                            }
+                        }
+                    }
+                    if !store.wishlistEntries.isEmpty {
+                        VStack(alignment: .leading, spacing: 12) {
+                            HStack {
+                                sectionTitle("Saved places", count: entries.count)
+                                Spacer()
+                                filters
+                            }
+                            if filtered {
+                                HStack {
+                                    Text(filterLabel).font(.caption).foregroundStyle(.secondary)
+                                    Spacer()
+                                    Button("Reset") { resetFilters() }.font(.caption).accessibilityIdentifier("wishlist-reset")
+                                }
+                            }
+                            if entries.isEmpty {
+                                Text("No places match these filters.").font(.subheadline).foregroundStyle(.secondary).padding(.vertical, 18)
+                            } else {
+                                LazyVStack(spacing: 0) {
+                                    ForEach(entries) { entry in
+                                        NavigationLink { WishlistDetailView(entryID: entry.id) } label: { row(entry) }
+                                            .buttonStyle(.plain).accessibilityIdentifier("wishlist-item-" + entry.id)
+                                        if entry.id != entries.last?.id { Divider().padding(.leading, 43) }
+                                    }
+                                }.padding(.horizontal, 16).cardSurface(cornerRadius: 22)
+                            }
+                        }
                     }
                 }
             }
-            NavigationLink { CityExplorerView() } label: {
-                HStack { Label("Find more places", systemImage: "globe.europe.africa"); Spacer() }.font(.subheadline).padding(.vertical, 12)
-            }.accessibilityIdentifier("wishlist-find-places")
-            Label("Private · Saved on this device", systemImage: "lock").font(.caption).foregroundStyle(.secondary)
         }
-        .sheet(isPresented: $adding) { WishlistEditor() }
-        .sheet(isPresented: $planningTrip) { TripCreationView(wishlist: true, onCreated: { createdTrip = $0 }) }
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    ForEach(WishlistSaveType.allCases) { type in
+                        Button(type.title, systemImage: type.symbol) { saving = type }
+                            .accessibilityIdentifier("wishlist-menu-" + type.rawValue)
+                    }
+                    Divider()
+                    Button("Explore destinations", systemImage: "globe.europe.africa") { exploring = true }.accessibilityIdentifier("wishlist-find-places")
+                } label: { Image(systemName: "plus") }
+                    .accessibilityLabel("Add to wishlist").accessibilityIdentifier("wishlist-actions")
+            }
+        }
+        .sheet(item: $saving) { type in
+            if type == .trip { TripCreationView(wishlist: true, onCreated: { createdTrip = $0 }) }
+            else { WishlistSavePlaceView(type: type) }
+        }
         .navigationDestination(item: $createdTrip) { JourneyDetailView(id: $0) }
+        .navigationDestination(isPresented: $exploring) { CityExplorerView() }
         .alert("Wishlist", isPresented: Binding(get: { store.wishlist.error != nil }, set: { if !$0 { store.wishlist.error = nil } })) { Button("OK") { store.wishlist.error = nil } } message: { Text(store.wishlist.error ?? "") }
+    }
+    private var emptyState: some View {
+        VStack(alignment: .leading, spacing: 24) {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("What would you like to save?").font(.system(.title, design: .serif))
+                    .fixedSize(horizontal: false, vertical: true)
+                Text("A whole trip or a place along the way.").font(.subheadline).foregroundStyle(.secondary)
+            }
+            WishlistSaveChoices { saving = $0 }
+        }.padding(.top, 12).accessibilityIdentifier("wishlist-empty")
+    }
+    private func sectionTitle(_ title: String, count: Int) -> some View {
+        HStack(spacing: 8) {
+            Text(title).font(.headline)
+            Text(count.formatted()).font(.caption).foregroundStyle(.secondary)
+        }.accessibilityElement(children: .combine)
+    }
+    private var filters: some View {
+        Menu {
+            Picker("Type", selection: $kind) { Text("All types").tag(nil as WishlistKind?); ForEach(WishlistKind.allCases) { Text($0.title).tag(Optional($0)) } }
+            Picker("Collection", selection: $collection) { Text("All collections").tag(nil as String?); Text("Unsorted").tag(Optional("")); ForEach(store.wishlistCollections, id: \.self) { Text($0).tag(Optional($0)) } }
+            Toggle("Top picks only", isOn: $topPicks)
+            Picker("Sort", selection: $sort) { ForEach(WishlistSort.allCases, id: \.self) { Text($0.rawValue).tag($0) } }
+            if filtered { Button("Reset filters") { resetFilters() } }
+        } label: {
+            Image(systemName: filtered ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease")
+                .frame(width: 44, height: 44).contentShape(.rect)
+        }.accessibilityLabel(filtered ? "Filter saved places, active" : "Filter saved places").accessibilityIdentifier("wishlist-filters")
     }
     private func resetFilters() { kind = nil; collection = nil; topPicks = false; sort = .newest }
     private func row(_ entry: WishlistEntry) -> some View {
@@ -99,8 +265,8 @@ struct WishlistContent: View {
                     Text(entry.title).font(.system(.headline, design: .serif)).foregroundStyle(.primary)
                     if info.topPick { Image(systemName: "star.fill").font(.caption).foregroundStyle(Color.bronze).accessibilityLabel("Top pick") }
                 }
-                Text(entry.subtitle + (entry.kind == .destinations ? "" : " · " + entry.kind.rawValue)).font(.caption).foregroundStyle(.secondary)
-                if !info.notes.isEmpty { Text(info.notes).font(.subheadline).foregroundStyle(.secondary).lineLimit(2) }
+                Text(entry.subtitle + (entry.kind == .destinations ? "" : " · " + entry.kind.title)).font(.caption).foregroundStyle(.secondary)
+                if !info.notes.isEmpty { Text(info.notes).font(.subheadline).foregroundStyle(.secondary).lineLimit(1) }
                 HStack(spacing: 10) {
                     if !info.collection.isEmpty { Label(info.collection, systemImage: "folder").lineLimit(1) }
                     if (library.trips + library.wishlistTrips).contains(where: { entry.isPlanned(in: $0) }) { Label("In your plans", systemImage: "checkmark.circle") }
@@ -129,7 +295,7 @@ struct WishlistDetailView: View {
         .sheet(isPresented: $editing) { if let entry { WishlistEditor(entry: entry) } }
         .sheet(isPresented: $planning) { if let entry { WishlistPlanView(entry: entry, notes: store.wishlist.info(entry.id).notes) } }
         .sheet(isPresented: $creating) { if let entry { TripCreationView(initialDestination: entry.tripDestination, initialCity: entry.city, onCreated: { _ in store.showMessage("Your new trip is ready in Travel") }) } }
-        .confirmationDialog("Remove this idea from your wishlist?", isPresented: $removing, titleVisibility: .visible) {
+        .confirmationDialog("Remove this place from your wishlist?", isPresented: $removing, titleVisibility: .visible) {
             Button("Remove from wishlist", role: .destructive) { if let entry, store.removeFromWishlist(entry) { dismiss() } }.accessibilityIdentifier("wishlist-confirm-remove")
         } message: { Text("This also removes its bookmark. Plans you’ve already added to a trip will stay.") }
         .alert("Wishlist", isPresented: Binding(get: { store.wishlist.error != nil }, set: { if !$0 { store.wishlist.error = nil } })) { Button("OK") { store.wishlist.error = nil } } message: { Text(store.wishlist.error ?? "") }
@@ -140,7 +306,7 @@ struct WishlistDetailView: View {
         return ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 VStack(alignment: .leading, spacing: 12) {
-                    Label(entry.kind.rawValue, systemImage: entry.kind.symbol).font(.subheadline).foregroundStyle(Color.bronze)
+                    Label(entry.kind.title, systemImage: entry.kind.symbol).font(.subheadline).foregroundStyle(Color.bronze)
                     Editorial(entry.title, size: 32).accessibilityIdentifier("wishlist-detail-title")
                     Text(entry.subtitle).font(.subheadline).foregroundStyle(.secondary)
                 }
@@ -212,9 +378,9 @@ struct WishlistEditor: View {
         NavigationStack {
             Form {
                 if isCustom {
-                    Section("Your idea") {
-                        TextField("Name or idea", text: $idea.name).accessibilityIdentifier("wishlist-name")
-                        Picker("Type", selection: $idea.kind) { ForEach(WishlistKind.allCases) { Text($0.rawValue).tag($0) } }.accessibilityIdentifier("wishlist-kind")
+                    Section("Place") {
+                        TextField("Name", text: $idea.name).accessibilityIdentifier("wishlist-name")
+                        Picker("Type", selection: $idea.kind) { ForEach(WishlistKind.allCases) { Text($0.title).tag($0) } }.accessibilityIdentifier("wishlist-kind")
                         TextField(idea.kind == .destinations ? "Country or region (optional)" : "City or destination (optional)", text: $idea.destination).accessibilityIdentifier("wishlist-destination")
                         TextField("Website link (optional)", text: $idea.website).keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled().accessibilityIdentifier("wishlist-website")
                     }
@@ -228,10 +394,10 @@ struct WishlistEditor: View {
                     if !store.wishlistCollections.isEmpty {
                         Menu("Choose an existing collection") { Button("Unsorted") { details.collection = "" }; ForEach(store.wishlistCollections, id: \.self) { name in Button(name) { details.collection = name } } }
                     }
-                } header: { Text("Collection") } footer: { Text("Group ideas with names like Japan, Summer escapes or Family adventures. Leave blank to keep an idea unsorted.") }
+                } header: { Text("Collection") } footer: { Text("Group places with names like Japan, Summer escapes or Family adventures. Leave blank to keep a place unsorted.") }
                 if let error { Section { Text(error).foregroundStyle(.red).accessibilityIdentifier("wishlist-editor-error") } }
             }.scrollContentBackground(.hidden).background(Color.canvas).scrollDismissesKeyboard(.interactively)
-                .navigationTitle(entry == nil ? "Add an idea" : "Edit wishlist idea").navigationBarTitleDisplayMode(.inline)
+                .navigationTitle(entry == nil ? "Save a place" : "Edit saved place").navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                     ToolbarItem(placement: .confirmationAction) { Button("Save") { save() }.accessibilityIdentifier("wishlist-save") }
@@ -265,7 +431,7 @@ struct WishlistPlanView: View {
     var body: some View {
         NavigationStack {
             List {
-                Section { Text(entry.title).font(.headline); Text("Choose a trip or wishlist plan, then review its days and details. Your wishlist idea stays saved.").font(.subheadline).foregroundStyle(.secondary) }
+                Section { Text(entry.title).font(.headline); Text("Choose a trip or wishlist plan, then review its days and details. Your saved place stays on your wishlist.").font(.subheadline).foregroundStyle(.secondary) }
                 Section("Trips & wishlist plans") {
                     ForEach((library.trips + library.wishlistTrips).sorted { $0.updatedAt > $1.updatedAt }) { trip in
                         Button { choose(trip.id) } label: {
@@ -275,7 +441,7 @@ struct WishlistPlanView: View {
                             }.padding(.vertical, 5)
                         }.accessibilityIdentifier("wishlist-trip-" + trip.id.uuidString)
                     }
-                    if (library.trips + library.wishlistTrips).isEmpty { Text("No trips yet. Create one to give this idea a place in your plans.").foregroundStyle(.secondary) }
+                    if (library.trips + library.wishlistTrips).isEmpty { Text("No trips yet. Create one to start planning your visit.").foregroundStyle(.secondary) }
                     Button("Create a new trip", systemImage: "plus") { route = .create }.accessibilityIdentifier("wishlist-new-trip")
                 }
                 if let error { Text(error).foregroundStyle(.red) }
@@ -332,6 +498,7 @@ struct WishlistScheduleView: View {
                    let scheduled = try? document.scheduledWishlist(departure: TravelDay.key(departure)) {
                     Section("Your route") { ForEach(scheduled.stops) { stop in
                         LabeledContent(stop.name, value: "\(TravelDay.label(stop.arrival)) – \(TravelDay.label(stop.departure))")
+                        SeasonalityCard(city: stop.name, countryCode: stop.countryCode ?? TravelStatistics.countryCode(stop.country), arrival: stop.arrival, departure: stop.departure)
                     } }
                 }
                 if let error { Text(error).foregroundStyle(.red) }

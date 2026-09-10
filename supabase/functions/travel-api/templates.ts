@@ -16,14 +16,14 @@ export function sanitizedTemplate(d: any, author: string) {
     const matches = d.stops.filter((s: any) => s.arrival <= h.checkIn && h.checkIn < add(s.arrival, s.nights) && h.checkOut <= add(s.arrival, s.nights));
     requireValue(matches.length === 1, "Match each hotel stay to one destination before publishing.");
     const stop = matches[0], shifted = stops.find((s: any) => s.id === stop.id);
-    return { id: h.id, place: place(h.place), checkIn: add(shifted.arrival, distance(stop.arrival, h.checkIn)), checkOut: add(shifted.arrival, distance(stop.arrival, h.checkOut)), guests: 2, rooms: 1, roomType: "", confirmation: "", notes: "", overview: "", ...(costs && h.cost ? { cost: h.cost } : {}) };
+    return { id: h.id, place: place(h.place), checkIn: add(shifted.arrival, distance(stop.arrival, h.checkIn)), checkOut: add(shifted.arrival, distance(stop.arrival, h.checkOut)), guests: 2, rooms: 1, roomType: "", confirmation: "", notes: "", overview: "", ...(costs && h.cost ? { cost: pick(h.cost, ["amount", "currency"]) } : {}) };
   });
   const clean = {
     id: d.id, kind: "journey", title: d.title, destination: d.destination ?? "", description: "", dateMode: "nights", visibility: d.visibility,
     isTemplate: true, updatedAt: d.updatedAt,
     templateMeta: { tagline: meta.tagline ?? "", tags: meta.tags ?? [], suggestedSeason: meta.suggestedSeason ?? "", authorHandle: author, cloneCount: 0, includesCosts: costs, includesRatings: ratings },
     stops, hotels, flights: [],
-    events: d.events.map((e: any) => ({ ...pick(e, ["id", "seriesID", "stopID", "day", "minute", "kind", "title", "allDay", "durationMinutes"]), place: place(e.place), description: "", links: [], ...(costs && e.cost ? { cost: e.cost } : {}) })),
+    events: d.events.map((e: any) => ({ ...pick(e, ["id", "seriesID", "stopID", "day", "minute", "kind", "title", "allDay", "durationMinutes"]), place: place(e.place), description: "", links: [], ...(costs && e.cost ? { cost: pick(e.cost, ["amount", "currency"]) } : {}) })),
     places: ratings ? d.places.map((r: any) => ({ ...pick(r, ["id", "overall", "scores", "michelinStars"]), place: place(r.place), notes: "", photos: [], priceRange: "" })) : [],
   };
   validateDocument(clean); return clean;

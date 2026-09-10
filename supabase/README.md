@@ -62,6 +62,16 @@ python3 supabase/tests/live_smoke.py
 
 The live test creates temporary test accounts, shares only among them, and deletes those accounts in `finally`. Pass `--providers` to additionally make one live FlightAware and one Google Places lookup. The script saves a temporary shared PDF under `/tmp` for visual review.
 
+For local cutover regression coverage without live accounts or provider requests:
+
+```sh
+npm exec --yes --package=deno@2.9.6 -- deno test --allow-env --allow-read=iOS/Aurum/Resources/TripTemplates.json --config supabase/functions/travel-api/deno.json supabase/tests/
+```
+
+`cutover_test.ts` exercises the actual Edge handler with mocked upstream responses: summary/detail photo contracts, denied access, unavailable photos, owner-scoped paginated deletion and cleanup retries. Account deletion enumerates the owner's private Storage folder, including abandoned uploads, and removes photos in batches before deleting Auth. A Storage failure leaves the account available to retry. Storage and Auth cannot share a transaction: an Auth failure after cleanup leaves the account active with those cloud photos already removed; retrying finishes deletion. Local iOS journeys are preserved.
+
+The September 8 cutover hardening was deployed with budget support in `travel-api` version 32 (including `account-deletion.ts`); no new migration was needed. Deployed version 30 and all eleven migration versions matched this checkout's baseline during the read-only review. The existing `recap_cleanup_triggers` migration already avoids service-only DELETE trigger work during Auth's restricted-role cascade.
+
 Use `supabase secrets set --env-file <ignored-secret-file>` to configure provider credentials. Never commit passwords, service keys, provider keys or session tokens. `config.toml` contains local development defaults and function deployment settings; it is not a complete remote Auth configuration. Apply reviewed migrations before enabling GitHub production deployment.
 
 ## Migration evidence and rollback reference
@@ -87,3 +97,30 @@ The `seur-flight-notifications` database cron runs every five minutes and skips 
 ## Friends tab feed
 
 `GET /v1/feed` now uses the service-only `travel_social_feed(actor)` RPC. It includes accepted friends’ friends/public itineraries and private itineraries explicitly granted to the current account. The actor comes from the authenticated Seur session. Existing document redaction, photo summaries, grants and revocation rules apply; unrelated public itineraries are excluded. No new client database grants or public profile directory are added. The extended live smoke test verifies private-share inclusion, third-party exclusion, redaction, direct-RPC access denial and removal after revocation.
+
+## Budget, splits and daily currency rates
+
+`GET /v1/exchange-rates` requires an authenticated Seur session. It uses a USD pivot and a shared daily cache in `travel_provider_cache`, with a 20/minute per-account limit and 100/hour upstream limit. Frankfurter v2 supplies reference rates without an API key. Responses include publication dates and a stale flag; an upstream failure can fall back to data fetched within seven days. iOS preserves original amounts and refuses partial combined totals when a required rate is missing.
+
+Journey JSON now validates optional `budgetTarget`, `homeCurrency`, `companions`, event `isDone`, and cost `paidBy`, `splitBetween` and `isPaid`. Companion IDs are references within the owner-managed ledger, never authentication or authorization claims. Existing cloud ownership, stale-write, sharing and revocation rules remain in force. Templates retain optional estimated amounts only, stripping targets, completion and companion/payment fields. No schema migration is required.
+
+Run the local Deno suite above for rate-cache and ledger validation tests. `python3 supabase/tests/budget_live.py` exercises authenticated rates, cache reuse, budget/split/photo persistence, malformed split rejection and account cleanup with one disposable account. It sends no messages and makes no paid-provider calls. [Native behavior](../iOS/TripBudget.md).
+
+## Destination card photography
+
+`GET /v1/cities/photo?city=Athens%2C%20Greece` is a guest-accessible route with one Wikimedia Commons API query for landmark imagery and reusable-image credits. The 12 catalog cities plus Athens have curated landmark targets and matching-title checks; Paris also has an exact curated file and is bundled on iOS for zero runtime requests. There are no Google calls or photo API keys. The app claims one attempt per trip on disk before requesting, then downloads the image file once and saves bytes and credits permanently in Application Support. Failures never retry. Unknown licenses and untrusted URLs fail closed. The route keeps 20/network/minute and 500/global/day limits and no-store HTTP responses. `/v1/status` advertises `cityPhotos: true`, so clients do not consume attempts before rollout. See [the native card guide](../iOS/TripCards.md) for the exact request counts and local-storage lifetime.
+
+Production v34 includes the curated photo endpoint and guide routes, deployed September 9 after explicit user approval. All other existing dependency modules remain byte-identical to v33. The 68 backend tests and live status/New York photo/guide-read/auth-boundary checks passed. No photo migration was required.
+
+## Traveler-created guides
+
+The `20260909183248_travel_guides.sql` migration, applied remotely as `20260909200003`, adds publications, reports, and author blocks with service-role-only access. `travel-api` validates public content, enforces ownership/revisions, and serves public guide summaries, details and PDFs. Account deletion cascades through the author profile. `/v1/status` advertises `travelGuides` after rollout; local drafts work before deployment. See [the guide feature notes](../iOS/TravelGuides.md) for routes, local validation and moderation operations. Guide publishing is deployed in v34; the tables retain service-only access.
+
+### Google destination photos
+
+Updated iOS cards use guest `GET /v1/cities/google-photo?city=Paris` and the `googleCityPhotos` status flag. This uses the existing server-only `GOOGLE_PLACES_API_KEY`: one landmark Text Search, at most one Photo Media request, no photo-content cache, no retry, 20/network/minute and 500/global/day limits. Legacy `/v1/cities/photo` remains Commons for clients that persist photographs. No migration or new secret is needed. See [TripCards.md](../iOS/TripCards.md) for attribution, fallback and request lifetime.
+
+
+## Pexels destination covers
+
+The updated iOS app uses `/v1/cities/pexels-photo` for all destination cards. Configure `PEXELS_API_KEY` in Edge secrets; status exposes `pexelsCityPhotos`. Landmark-oriented landscape selection returns a 1200×675 rendition and linked photographer/Pexels attribution. Service-only 24-hour `travel_provider_cache` entries share city results and retain candidates for editorial review. Provider cache misses are capped at 180/hour and 500/day; endpoint reads at 30/network/minute. No migration is needed. Existing Google/Commons routes remain for older clients. Tests: `supabase/tests/pexels_city_photos_test.ts`.

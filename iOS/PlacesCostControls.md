@@ -1,8 +1,8 @@
 # Places API cost controls
 
-Normal typing uses Apple Maps autocomplete after a 350 ms pause. Countries and time zones are local. City-guide/map discovery also uses Apple Maps. No Google request is triggered by typing, focus changes, Apple returning zero matches, or search errors.
+Destination/city fields immediately show matching cities from the existing Seur worldwide directory, then merge Apple Maps autocomplete after a 350 ms pause. Bare names such as London and Paris prioritize the major travel city; explicit regions such as London Ontario or Paris Texas do not receive that promotion. Exact city names precede longer names, equivalent directory/provider matches are deduplicated, and the merged list remains limited to five. Countries and time zones are local. City-guide/map discovery also uses Apple Maps. No Google request is triggered by typing, focus changes, Apple returning zero matches, or search errors.
 
-For signed-in users with Google Places available, place/address fields offer **Try Google suggestions** after the Apple search settles and at least three characters have been entered. A tap makes one request; repeat taps for that active query are suppressed. Empty/failed Google searches retain available Apple matches and do not retry automatically. Selecting a suggestion still resolves its location using Apple Maps. There are no Google Place Details/photo/review calls in this path.
+For signed-in users with Google Places available, place/address fields offer **Try Google suggestions** after the Apple search settles and at least three characters have been entered. A tap makes one request; repeat taps for that active query are suppressed. Empty/failed Google searches retain available Apple matches and do not retry automatically. Selecting an Apple or Google suggestion still resolves its location using Apple Maps. Directory city selections use bundled coordinates, country codes and time-zone identifiers without a resolution request; they remain available offline and are labeled as Seur destinations. There are no Google Place Details/photo/review calls in this path.
 
 `GoogleAutocompleteRequests` combines simultaneous requests with equivalent whitespace/case and the same server into one in-flight task. Invalid/short queries are discarded. Completed prediction responses are not cached to disk or reused across later requests. The request has a five-second timeout. This avoids the restricted prediction caching described in [Google's Places policies](https://developers.google.com/maps/documentation/places/web-service/policies).
 
@@ -36,3 +36,12 @@ Each submitted chat turn makes one OpenAI request, with at most one additional r
 The automated concierge UI test opts into a deterministic `--concierge-testing` fixture together with `--ui-testing`; it never uses the live OpenAI key. The service-level paid-provider guard remains in force for all other automated tests. Stop cancels client work and prevents late messages; a provider request already underway may still incur cost.
 
 For domain-restricted Tripadvisor keys, configure `TRIPADVISOR_REFERER` in Supabase with an HTTPS URL whose exact hostname is allowed in Tripadvisor (for example, `https://your-allowed-domain.example/`). The backend sends it only to Tripadvisor; it does not accept client-provided referring domains. See [Tripadvisor security](https://tripadvisor-content-api.readme.io/reference/api-security). Do not guess the allowed domain or remove key restrictions.
+
+## Pexels destination covers (September 9 update)
+
+All destination trip covers use Pexels, with no bundled/Google/Commons fallback in the updated app. One visible-trip request and image download are retained per installation; scroll, grid and relaunch reuse the saved image and credits. The Edge Function shares 24-hour city responses across trips and bounds Pexels cache misses to 180/hour and 500/day, with a single landscape search (up to 30 candidates) per miss. No pagination or secondary searches. See [TripCards.md](TripCards.md) for exact attempt, failure, selection and attribution behavior. User-provided journal photos and business/place details are unchanged.
+
+
+## Supplied 16:9 destination catalog
+
+The 300-destination supplied catalog now takes priority over saved Pexels images, with the separately supplied Tokyo photo still first for Tokyo. Matching usable local assets make zero photo calls and do not consume a Pexels attempt. Missing or unreadable assets and noncatalog locations retain the daytime Pexels fallback and its existing cache/rate limits. The app checks actual image availability, so a metadata match alone cannot suppress fallback. See `TripCards.md` for import size, attribution and matching details.

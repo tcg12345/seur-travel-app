@@ -134,7 +134,7 @@ struct DiscoverView: View {
             HStack(alignment: .firstTextBaseline) {
                 Editorial("A little inspiration", size: 26)
                 Spacer(minLength: 8)
-                NavigationLink("City guides") { CityExplorerView() }.font(.subheadline).foregroundStyle(Color.bronze)
+                NavigationLink("Travel guides") { GuideHubView() }.font(.subheadline).foregroundStyle(Color.bronze)
             }
             if let hotel = store.featured.first {
                 heroCard(hotel)

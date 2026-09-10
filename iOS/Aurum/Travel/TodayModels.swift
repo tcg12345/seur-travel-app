@@ -74,7 +74,7 @@ enum TodayPlanner {
             result.append(TodayItem(id: "event-\(event.id)", kind: .event, title: event.displayTitle, detail: event.categoryTitle,
                 symbol: event.symbol, schedule: event.scheduleLabel, start: allDay ? nil : start, end: end,
                 sortMinute: allDay ? -1 : minute(start, zone: zone, fallback: event.sortMinute), place: event.place,
-                note: event.description, zone: eventZone))
+                note: event.description, zone: eventZone, completed: event.isDone == true))
         }
         for hotel in document.hotels {
             for checkout in [true, false] where (checkout ? hotel.checkOut : hotel.checkIn) == day {

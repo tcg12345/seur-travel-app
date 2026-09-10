@@ -1,4 +1,6 @@
 import XCTest
+import WidgetKit
+import UserNotifications
 import SwiftUI
 import PDFKit
 import MapKit
@@ -13,6 +15,174 @@ import MapKit
         var d = JourneyDocument(title: "Paris, thoughtfully", startDate: "2026-10-01", endDate: "2026-10-04", stops: [stop])
         d.events = [JourneyEvent(stopID: stop.id, place: PlaceRecord(id: "dinner", name: "Dinner", category: .restaurant), cost: TravelMoney(amount: Decimal(string: "85.50")!, currency: "EUR"))]
         return d
+    }
+    func testGuideFromTripExcludesPrivateBookingsAndNotes() throws {
+        var trip = itinerary()
+        trip.events[0].description = "Private dinner note"; trip.events[0].attendees = "Family"; trip.events[0].place.overview = "Provider description"
+        trip.events[0].place.phone = "PRIVATE"; trip.events[0].place.rating = 4.5
+        trip.description = "Private trip notes"
+        let guide = TravelGuide.fromTrip(trip)
+        XCTAssertNotEqual(guide.id, trip.id); XCTAssertEqual(guide.places.count, 1)
+        XCTAssertTrue(guide.introduction.isEmpty); XCTAssertTrue(guide.places[0].note.isEmpty)
+        let text = String(decoding: try JSONEncoder().encode(guide), as: UTF8.self)
+        for secret in ["Private dinner note", "Family", "Provider description", "PRIVATE", "Private trip notes", "85.5"] { XCTAssertFalse(text.contains(secret)) }
+    }
+    func testGuideDraftPublicationAndEditsSurviveRelaunch() throws {
+        let url = directory.appendingPathComponent("guides.json"), library = GuideLibrary(url: url)
+        var guide = TravelGuide.fromTrip(itinerary()); guide.introduction = "A relaxed Paris weekend."
+        XCTAssertNil(guide.publicationIssue); XCTAssertTrue(library.save(guide))
+        let author = TravelAccount(id: UUID().uuidString, handle: "alice", name: "Alice")
+        var remote = PublishedGuide(guide: guide, author: author, revision: 1, isPublished: true, isSummary: false, updatedAt: 1, placeCount: 1)
+        XCTAssertTrue(library.accept(remote, server: "test")); XCTAssertFalse(library.drafts[0].hasChanges)
+        guide.introduction = "A revised introduction, still private."
+        XCTAssertTrue(library.save(guide)); XCTAssertTrue(library.drafts[0].hasChanges)
+        let restored = GuideLibrary(url: url); XCTAssertEqual(restored.drafts[0].guide.introduction, guide.introduction); XCTAssertEqual(restored.drafts[0].revision, 1); XCTAssertEqual(restored.drafts[0].ownerID, author.id)
+        remote.isPublished = false; remote.revision = 2
+        XCTAssertTrue(restored.accept(remote, server: "test", replaceDraft: false)); XCTAssertEqual(restored.drafts[0].guide, guide); XCTAssertFalse(restored.drafts[0].isPublished)
+        XCTAssertEqual(restored.drafts[0].revision, 2)
+    }
+    func testGuideBookmarksRequireFullContentAndBlockingPersists() throws {
+        let url = directory.appendingPathComponent("guides.json"), library = GuideLibrary(url: url)
+        let author = TravelAccount(id: UUID().uuidString, handle: "alice", name: "Alice")
+        var remote = PublishedGuide(guide: TravelGuide.fromTrip(itinerary()), author: author, revision: 1, isPublished: true, isSummary: true, updatedAt: 1, placeCount: 1)
+        XCTAssertFalse(library.bookmark(remote)); remote.isSummary = false; XCTAssertTrue(library.bookmark(remote))
+        XCTAssertEqual(GuideLibrary(url: url).saved[0].guide.places.count, 1)
+        XCTAssertTrue(library.block(author.id, blocked: true)); let restored = GuideLibrary(url: url)
+        XCTAssertTrue(restored.saved.isEmpty); XCTAssertFalse(restored.visible(remote))
+        XCTAssertTrue(restored.block(author.id, blocked: false)); XCTAssertTrue(restored.visible(remote))
+        XCTAssertTrue(restored.hide(remote.id)); XCTAssertFalse(restored.visible(remote))
+    }
+    func testGuideCorruptArchiveCannotBeOverwritten() throws {
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let url = directory.appendingPathComponent("guides.json"), bytes = Data("corrupt".utf8); try bytes.write(to: url)
+        let library = GuideLibrary(url: url)
+        XCTAssertFalse(library.save(TravelGuide(title: "Do not erase existing guides")))
+        XCTAssertEqual(try Data(contentsOf: url), bytes)
+    }
+    func testSuppliedDestinationCatalogIs16x9AndSkipsPhotoLookups() async throws {
+        XCTAssertEqual(BundledDestinationCover.destinations.count, 300)
+        let store = TripCoverStore(directory: directory)
+        var calls = 0
+        for city in BundledDestinationCover.destinations {
+            let available = try autoreleasepool {
+                let cover = try XCTUnwrap(BundledDestinationCover.cover(city: city), city)
+                XCTAssertEqual(cover.image.size.width / cover.image.size.height, 16.0 / 9.0, accuracy: 0.001, city)
+                XCTAssertEqual(cover.photo.provider, city == "Tokyo" ? "supplied" : "bundled", city)
+                if city != "Tokyo" { XCTAssertNotNil(cover.photo.sourceURL); XCTAssertFalse(cover.photo.license.isEmpty) }
+                return true
+            }
+            _ = await store.cover(for: UUID(), allowLookup: !available) { calls += 1; return nil }
+        }
+        XCTAssertEqual(calls, 0)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: directory.path))
+    }
+    func testSuppliedDestinationNamesRespectCountriesAndKeepTokyoOverride() throws {
+        for city in ["Paris, France", "London, England", "New York, NY, United States", "NYC, USA", "Rome, IT",
+                     "Washington, D.C., United States", "Xi’an, CN", "Cairo, Egypt", "Giza, EG", "Honolulu, US",
+                     "Macao, MO", "Marrakech, Morocco", "Québec City, Canada", "Tokyo, Japan"] {
+            XCTAssertNotNil(BundledDestinationCover.cover(city: city), city)
+        }
+        for city in ["Paris, TX, US", "London, ON, Canada", "Athens, GA, US", "Rome, Georgia, US", "Burlington, Vermont, US", ""] {
+            XCTAssertNil(BundledDestinationCover.cover(city: city), city)
+        }
+        let tokyo = try XCTUnwrap(BundledDestinationCover.cover(city: "Tokyo, Japan"))
+        XCTAssertEqual(tokyo.photo.provider, "supplied")
+        XCTAssertEqual(tokyo.photo.title, "Tokyo skyline")
+        XCTAssertNil(tokyo.photo.sourceURL)
+    }
+    func testPexelsOnlyPhotoHostsAndTestGuard() async throws {
+        XCTAssertTrue(CityPhotoImage.allowed(URL(string: "https://images.pexels.com/photos/123/a.jpeg")!))
+        for url in ["https://upload.wikimedia.org/a", "https://lh3.googleusercontent.com/a", "http://images.pexels.com/a",
+                    "https://images.pexels.com.evil.test/a", "https://key@images.pexels.com/a", "https://images.pexels.com:8443/a"] {
+            XCTAssertFalse(CityPhotoImage.allowed(URL(string: url)!))
+        }
+        let response = try await TravelAPI().pexelsCityPhoto("Paris")
+        XCTAssertNil(response.photo)
+    }
+    func testOldProvidersCannotEnterPexelsCoverStorage() async {
+        for provider in ["google", "bundled", "supplied", "commons"] {
+            var saved = savedCover(); saved.photo.provider = provider
+            let result = await TripCoverStore(directory: directory).cover(for: UUID()) { saved }
+            XCTAssertNil(result)
+        }
+    }
+    func testRetainedPhotoIsAvailableBeforeAsyncCardTaskAndMemoized() async throws {
+        let store = TripCoverStore(directory: directory), id = UUID()
+        let saved = savedCover()
+        _ = await store.cover(for: id) { saved }
+        let reloaded = TripCoverStore(directory: directory)
+        XCTAssertEqual(reloaded.cached(for: id)?.photo.title, saved.photo.title)
+        try FileManager.default.removeItem(at: directory.appendingPathComponent(id.uuidString + ".json"))
+        XCTAssertNotNil(reloaded.cached(for: id))
+    }
+    private func savedCover() -> SavedTripCover {
+        let image = UIGraphicsImageRenderer(size: CGSize(width: 160, height: 90)).image { context in
+            UIColor.blue.setFill(); context.fill(CGRect(x: 0, y: 0, width: 160, height: 90))
+        }
+        return SavedTripCover(photo: CityPhoto(provider: "pexels", imageURL: URL(string: "https://images.pexels.com/photos/123/fixture.jpg")!,
+            sourceURL: URL(string: "https://www.pexels.com/photo/fixture-123/"), authors: [.init(name: "Sample author")],
+            license: "Pexels License", licenseURL: URL(string: "https://www.pexels.com/license/")!, title: "Fixture", attribution: "Photo by Sample author on Pexels"),
+            data: image.jpegData(compressionQuality: 0.8)!)
+    }
+    func testTripCoverPersistsAcrossStoreRelaunchWithoutAnotherLookup() async throws {
+        let store = TripCoverStore(directory: directory), id = UUID(), expected = savedCover()
+        var calls = 0
+        let first = await store.cover(for: id) { calls += 1; return expected }
+        XCTAssertEqual(first?.data, expected.data)
+        let reloaded = TripCoverStore(directory: directory)
+        let restored = await reloaded.cover(for: id, allowLookup: false) { calls += 1; return nil }
+        XCTAssertEqual(restored?.photo.authors.first?.name, "Sample author")
+        XCTAssertEqual(restored?.photo.license, "Pexels License"); XCTAssertEqual(restored?.data, expected.data)
+        _ = await reloaded.cover(for: id) { calls += 1; return nil }
+        XCTAssertEqual(calls, 1)
+        _ = await reloaded.cover(for: UUID()) { calls += 1; return nil }
+        XCTAssertEqual(calls, 2) // A distinct trip gets its own attempt.
+    }
+    func testTripCoverFailureAndCorruptImageNeverRetryAfterRelaunch() async throws {
+        for mode in 0..<3 {
+            let id = UUID(), store = TripCoverStore(directory: directory)
+            var calls = 0
+            _ = await store.cover(for: id) {
+                calls += 1
+                if mode == 0 { throw URLError(.notConnectedToInternet) }
+                return mode == 1 ? nil : self.savedCover()
+            }
+            if mode == 2 { try Data("broken".utf8).write(to: directory.appendingPathComponent(id.uuidString + ".json")) }
+            let result = await TripCoverStore(directory: directory).cover(for: id) { calls += 1; return self.savedCover() }
+            XCTAssertNil(result); XCTAssertEqual(calls, 1)
+        }
+    }
+    func testTripCoverConcurrentViewsAndCancellationShareOneAttempt() async {
+        let id = UUID(), store = TripCoverStore(directory: directory)
+        var calls = 0
+        var finish: CheckedContinuation<Void, Never>?
+        let first = Task { await store.cover(for: id) {
+            calls += 1
+            await withCheckedContinuation { finish = $0 }
+            return self.savedCover()
+        } }
+        while finish == nil { await Task.yield() }
+        // Another instance must respect the claim even while the first request is running.
+        let duplicate = await TripCoverStore(directory: directory).cover(for: id) { calls += 1; return nil }
+        XCTAssertNil(duplicate)
+        let second = Task { await store.cover(for: id) { calls += 1; return nil } }
+        first.cancel() // Scrolling a card away must not abandon and restart the lookup.
+        finish?.resume()
+        let a = await first.value, b = await second.value
+        XCTAssertEqual(calls, 1); XCTAssertEqual(a?.data, savedCover().data); XCTAssertEqual(b?.data, a?.data)
+    }
+    func testTripCoverUnavailableEndpointAndUnwritableStorageMakeNoRequest() async throws {
+        let id = UUID(), store = TripCoverStore(directory: directory)
+        var calls = 0
+        _ = await store.cover(for: id, allowLookup: false) { calls += 1; return nil }
+        XCTAssertEqual(calls, 0)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: directory.path))
+        _ = await store.cover(for: id) { calls += 1; return nil }
+        XCTAssertEqual(calls, 1)
+        let blocked = directory.appendingPathComponent("file")
+        try Data([1]).write(to: blocked)
+        _ = await TripCoverStore(directory: blocked).cover(for: UUID()) { calls += 1; return nil }
+        XCTAssertEqual(calls, 1)
     }
     func testWishlistItineraryPersistsAndMovesToDatedTripsWithoutLosingPlans() throws {
         let paris = JourneyStop(name: "Paris", arrival: "2000-01-01", nights: 3)
@@ -582,6 +752,60 @@ import MapKit
             XCTAssertNil(resumed.profile.previewPlan)
         }
     }
+    func testNotificationStepResumesAndExistingCompletionStaysComplete() {
+        isolated { defaults in
+            let store = OnboardingStore(defaults: defaults)
+            store.move(to: 5)
+            XCTAssertEqual(OnboardingStore(defaults: defaults).profile.step, 5)
+            store.move(to: 6)
+            let resumed = OnboardingStore(defaults: defaults)
+            XCTAssertEqual(resumed.profile.step, 6)
+            XCTAssertFalse(resumed.profile.completed)
+            resumed.complete()
+            XCTAssertTrue(OnboardingStore(defaults: defaults).profile.completed)
+            let oldCompleted = TravelerProfile(completed: true, step: 5)
+            defaults.set(try! JSONEncoder().encode(oldCompleted), forKey: OnboardingStore.key)
+            XCTAssertTrue(OnboardingStore(defaults: defaults).profile.completed)
+        }
+    }
+    func testNotificationPermissionAutomaticallyAsksOnceAndRegistersWhenAllowed() async {
+        var status = UNAuthorizationStatus.notDetermined, requests = 0, registrations = 0
+        let permission = OnboardingNotificationPermission(readStatus: { status }, request: {
+            requests += 1; status = .authorized; return true
+        }, register: { registrations += 1 })
+        await permission.requestOnArrival()
+        XCTAssertEqual(requests, 1); XCTAssertTrue(permission.isAllowed); XCTAssertEqual(registrations, 1)
+        await permission.requestOnArrival()
+        XCTAssertEqual(requests, 1)
+    }
+    func testNotificationDenialAndSettingsChangesNeverReprompt() async {
+        var status = UNAuthorizationStatus.notDetermined, requests = 0, registrations = 0
+        let permission = OnboardingNotificationPermission(readStatus: { status }, request: {
+            requests += 1; status = .denied; return false
+        }, register: { registrations += 1 })
+        await permission.requestOnArrival()
+        XCTAssertEqual(permission.status, .denied); XCTAssertFalse(permission.isAllowed)
+        XCTAssertEqual(registrations, 0)
+        await permission.requestOnArrival(); XCTAssertEqual(requests, 1)
+        status = .authorized; await permission.refresh()
+        XCTAssertTrue(permission.isAllowed); XCTAssertEqual(registrations, 1); XCTAssertEqual(requests, 1)
+    }
+    func testExistingNotificationPermissionAndErrorsRemainRecoverable() async {
+        var requests = 0
+        for status in [UNAuthorizationStatus.authorized, .provisional, .ephemeral, .denied] {
+            let permission = OnboardingNotificationPermission(readStatus: { status }, request: { requests += 1; return true }, register: {})
+            await permission.requestOnArrival()
+            XCTAssertEqual(requests, 0)
+        }
+        var status = UNAuthorizationStatus.notDetermined
+        let permission = OnboardingNotificationPermission(readStatus: { status }, request: {
+            requests += 1
+            if requests == 1 { throw URLError(.notConnectedToInternet) }
+            status = .authorized; return true
+        }, register: {})
+        await permission.requestOnArrival(); XCTAssertNotNil(permission.error); XCTAssertFalse(permission.busy)
+        await permission.requestOnArrival(); XCTAssertNil(permission.error); XCTAssertTrue(permission.isAllowed)
+    }
     func testPreviewPlanIsOptionalAndCanBeCleared() {
         isolated { defaults in
             let store = OnboardingStore(defaults: defaults)
@@ -600,7 +824,7 @@ import MapKit
             let store = OnboardingStore(defaults: defaults)
             XCTAssertEqual(store.profile, TravelerProfile())
             store.move(to: 999); store.chooseDestination("Not in collection"); store.toggleCuisine("Unsupported")
-            XCTAssertEqual(store.profile.step, 5)
+            XCTAssertEqual(store.profile.step, 6)
             XCTAssertTrue(store.profile.destination.isEmpty)
             XCTAssertTrue(store.profile.cuisines.isEmpty)
             store.toggleInterest("Exceptional stays"); store.toggleInterest("Exceptional stays")
@@ -611,6 +835,66 @@ import MapKit
 
 
 @MainActor final class LocationAutocompleteTests: XCTestCase {
+    func testTravelCityPromotionPrecedesNearbyNamesAndDeduplicatesUK() {
+        let raw = [LocationSuggestion(title: "London", subtitle: "ON, Canada"), LocationSuggestion(title: "London, KY", subtitle: "United States"), LocationSuggestion(title: "Londonderry, NH", subtitle: "United States"), LocationSuggestion(title: "London", subtitle: "England, United Kingdom")]
+        let ranked = DestinationSuggestions.merge(raw, query: "London", kind: .destination)
+        XCTAssertEqual(ranked.first?.subtitle, "England, United Kingdom")
+        XCTAssertNotNil(ranked.first?.destination)
+        XCTAssertEqual(ranked.filter { $0.subtitle.contains("United Kingdom") }.count, 1)
+        XCTAssertEqual(ranked[1].subtitle, "ON, Canada")
+        XCTAssertEqual(ranked.last?.title, "Londonderry, NH")
+        XCTAssertEqual(DestinationSuggestions.preferred("Par", kind: .city).first?.title, "Paris")
+        XCTAssertEqual(DestinationSuggestions.preferred("rome", kind: .destination).first?.subtitle, "Italy")
+    }
+    func testExplicitRegionsNeverPromoteTheWrongCity() {
+        for query in ["London Ontario", "London, ON", "London Canada", "London, Kentucky", "London, OH", "Paris Texas", "Londonderry"] {
+            XCTAssertTrue(DestinationSuggestions.preferred(query, kind: .destination).isEmpty, query)
+        }
+        for query in ["London", " LONDON ", "lon", "London, England", "London UK", "London, United Kingdom"] {
+            XCTAssertEqual(DestinationSuggestions.preferred(query, kind: .destination).first?.destination?.country, "United Kingdom", query)
+        }
+        let ontario = LocationSuggestion(title: "London", subtitle: "Ontario, Canada")
+        XCTAssertEqual(DestinationSuggestions.merge([ontario], query: "London Ontario", kind: .destination).first?.subtitle, ontario.subtitle)
+        for kind in [LocationSearchKind.place, .airport, .address, .country, .timeZone] {
+            XCTAssertTrue(DestinationSuggestions.preferred("London", kind: kind).isEmpty)
+        }
+    }
+    func testDirectorySelectionHasCorrectOfflineGeography() {
+        for city in DestinationSuggestions.cities {
+            let selected = DestinationSuggestions.selection(city, kind: .destination)
+            XCTAssertTrue(selected.place.hasCoordinate, city.name)
+            XCTAssertNotNil(selected.countryCode, city.name)
+            XCTAssertNotNil(TimeZone(identifier: selected.timeZone), city.name)
+            XCTAssertEqual(selected.text, city.name + ", " + city.country)
+        }
+        let london = DestinationSuggestions.preferred("London", kind: .city)[0].destination!
+        let selection = DestinationSuggestions.selection(london, kind: .city)
+        XCTAssertEqual(selection.text, "London"); XCTAssertEqual(selection.countryCode, "GB")
+        XCTAssertEqual(selection.timeZone, "Europe/London")
+        XCTAssertEqual(selection.place.latitude!, 51.5074, accuracy: 0.001)
+    }
+    func testPreferredCitiesRemainStableAcrossAppleResponsesAndFailure() async throws {
+        var calls = 0
+        let model = LocationAutocompleteModel(appleSearch: { _, _ in
+            calls += 1
+            return [LocationSuggestion(title: "London", subtitle: "ON, Canada")]
+        })
+        model.update("London", kind: .destination)
+        XCTAssertEqual(model.suggestions.first?.destination?.country, "United Kingdom", "Available before debounce/network")
+        try await Task.sleep(for: .milliseconds(450))
+        XCTAssertEqual(model.suggestions.first?.destination?.country, "United Kingdom")
+        XCTAssertEqual(model.suggestions.last?.subtitle, "ON, Canada")
+        var selected: LocationSelection?
+        model.select(model.suggestions[0], kind: .destination, category: .other) { selected = $0 }
+        XCTAssertEqual(selected?.countryCode, "GB"); XCTAssertEqual(calls, 1, "Selection requires no additional lookup")
+        let offline = LocationAutocompleteModel(appleSearch: { _, _ in throw JourneyError.message("Offline") })
+        offline.update("London", kind: .destination)
+        try await Task.sleep(for: .milliseconds(450))
+        XCTAssertEqual(offline.suggestions.first?.destination?.country, "United Kingdom")
+        offline.update("London Ontario", kind: .destination)
+        XCTAssertTrue(offline.suggestions.isEmpty, "Old UK result clears immediately when the user qualifies the location")
+        offline.stop()
+    }
     func testGoogleAutocompleteAndStaleNetworkResponse() async throws {
         var paidCalls = 0
         var appleCalls = 0
@@ -1541,5 +1825,597 @@ import MapKit
         XCTAssertTrue(AccountSignIn.validEmail("me@example.com"));XCTAssertFalse(AccountSignIn.validEmail("me@"));XCTAssertFalse(AccountSignIn.validEmail("me @example.com"))
         let options=try JSONDecoder().decode(AccountAuthOptions.self,from:Data(#"{"apple":true,"google":false,"email":true,"minimumPasswordLength":8}"#.utf8))
         XCTAssertEqual(options.minimumPasswordLength,8);XCTAssertFalse(options.google)
+    }
+}
+
+private final class CutoverURLProtocol: URLProtocol, @unchecked Sendable {
+    @MainActor static var reply: ((URLRequest) async throws -> (Int, Data))?
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func startLoading() {
+        Task { @MainActor in
+            do {
+                guard let reply = Self.reply else { throw URLError(.unsupportedURL) }
+                let (status, data) = try await reply(request)
+                let response = HTTPURLResponse(url: request.url!, statusCode: status, httpVersion: nil, headerFields: ["Content-Type": "application/json"])!
+                client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+                client?.urlProtocol(self, didLoad: data)
+                client?.urlProtocolDidFinishLoading(self)
+            } catch { client?.urlProtocol(self, didFailWithError: error) }
+        }
+    }
+    override func stopLoading() { }
+}
+
+@MainActor final class SupabaseCutoverTests: XCTestCase {
+    private func client() -> (TravelAPI, URLSession, UserDefaults, String) {
+        let suite = "seur-cutover-" + UUID().uuidString
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.set("https://" + suite + ".invalid/functions/v1/travel-api", forKey: "aurum.backendURL")
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [CutoverURLProtocol.self]
+        let session = URLSession(configuration: config)
+        return (TravelAPI(session: session, defaults: defaults), session, defaults, suite)
+    }
+    func testSummaryListsCannotBeImportedThroughDetailEndpoint() async throws {
+        let (api, session, defaults, suite) = client()
+        defer { session.invalidateAndCancel(); defaults.removePersistentDomain(forName: suite); CutoverURLProtocol.reply = nil }
+        let remote = FriendsFixtures.remote
+        CutoverURLProtocol.reply = { request in
+            XCTAssertTrue(request.url!.path.hasPrefix("/functions/v1/travel-api/v1/"))
+            return (200, try request.url!.path.hasSuffix("/documents") ? JSONEncoder().encode([remote]) : JSONEncoder().encode(remote))
+        }
+        let summaries = try await api.documents()
+        XCTAssertEqual(summaries.first?.isSummary, true)
+        do { _ = try await api.document(remote.id); XCTFail("A summary cannot stand in for a complete journey") }
+        catch { XCTAssertTrue(error.localizedDescription.contains("full journey")) }
+    }
+    func testFullJourneyKeepsPhotoBytesAndImportsAsPrivateCopy() async throws {
+        let (api, session, defaults, suite) = client()
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(suite)
+        defer { session.invalidateAndCancel(); defaults.removePersistentDomain(forName: suite); CutoverURLProtocol.reply = nil; try? FileManager.default.removeItem(at: directory) }
+        var remote = FriendsFixtures.remote
+        remote.isSummary = nil // Deployed full responses omit the optional marker.
+        remote.document.visibility = .friends
+        let bytes = try XCTUnwrap(UIImage(systemName: "airplane")?.jpegData(compressionQuality: 0.8))
+        let photo = JournalPhoto(jpeg: bytes)
+        remote.document.places = [RatedPlace(place: PlaceRecord(name: "Paris dinner", category: .restaurant), photos: [photo])]
+        let payload = try JSONEncoder().encode(remote)
+        CutoverURLProtocol.reply = { _ in (200, payload) }
+        let full = try await api.document(remote.id)
+        XCTAssertEqual(full.document.places[0].photos[0], photo)
+        let library = JourneyLibrary(url: directory.appendingPathComponent("journeys.json"))
+        _ = try library.importData(JSONEncoder().encode(JourneyArchive(document: full.document)))
+        let copy = try XCTUnwrap(library.documents.first)
+        XCTAssertEqual(copy.visibility, .private); XCTAssertNotEqual(copy.id, remote.document.id)
+        XCTAssertEqual(copy.places[0].photos[0].jpeg, bytes)
+    }
+    func testAccountDeletionFailureRetainsSessionAndSuccessClearsKeychainWithoutDeletingLocalTrips() async throws {
+        let (api, session, defaults, suite) = client()
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(suite)
+        defer { session.invalidateAndCancel(); defaults.removePersistentDomain(forName: suite); CutoverURLProtocol.reply = nil; try? FileManager.default.removeItem(at: directory) }
+        let library = JourneyLibrary(url: directory.appendingPathComponent("journeys.json"))
+        XCTAssertTrue(library.save(FriendsFixtures.trip))
+        var failDeletion = true
+        let auth = TravelAuthResponse(token: String(repeating: "a", count: 80), user: FriendsFixtures.owner)
+        CutoverURLProtocol.reply = { request in
+            if request.url!.path.hasSuffix("/auth/login") { return (200, try JSONEncoder().encode(auth)) }
+            if request.url!.path.hasSuffix("/account") {
+                XCTAssertEqual(request.httpMethod, "DELETE")
+                XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer " + auth.token)
+                return failDeletion ? (502, Data(#"{"error":"Photo cleanup failed. Retry."}"#.utf8)) : (200, Data(#"{"ok":true}"#.utf8))
+            }
+            if request.url!.path.hasSuffix("/status") { return (200, Data(#"{"tripadvisor":false,"ai":false,"publicSharing":true}"#.utf8)) }
+            XCTFail("Deleted Keychain session must not request /me")
+            return (401, Data(#"{"error":"Deleted account"}"#.utf8))
+        }
+        try await api.authenticate(handle: "tester", name: "Test", password: "eight888", register: false)
+        do { try await api.deleteAccount(); XCTFail("Storage failure must be surfaced") } catch { }
+        XCTAssertTrue(api.isSignedIn)
+        failDeletion = false
+        try await api.deleteAccount()
+        XCTAssertFalse(api.isSignedIn); XCTAssertNil(api.account)
+        let reopened = TravelAPI(session: session, defaults: defaults)
+        try await reopened.refresh()
+        XCTAssertFalse(reopened.isSignedIn)
+        XCTAssertEqual(JourneyLibrary(url: directory.appendingPathComponent("journeys.json")).documents.count, 1)
+    }
+    func testResponseFromPreviousServerIsDiscarded() async throws {
+        let (api, session, defaults, suite) = client()
+        defer { session.invalidateAndCancel(); defaults.removePersistentDomain(forName: suite); CutoverURLProtocol.reply = nil }
+        var remote = FriendsFixtures.remote; remote.isSummary = nil
+        let payload = try JSONEncoder().encode(remote)
+        CutoverURLProtocol.reply = { _ in
+            api.baseURL = "https://another-test-server.invalid"
+            return (200, payload)
+        }
+        do { _ = try await api.document(remote.id); XCTFail("Old-server response must be discarded") }
+        catch { XCTAssertTrue(error.localizedDescription.contains("account changed")) }
+    }
+    func testDelayedDeletionCannotSignOutAReplacementSession() async throws {
+        let (api, session, defaults, suite) = client()
+        defer { session.invalidateAndCancel(); defaults.removePersistentDomain(forName: suite); CutoverURLProtocol.reply = nil }
+        var loginCount = 0
+        CutoverURLProtocol.reply = { request in
+            if request.url!.path.hasSuffix("/auth/login") {
+                loginCount += 1
+                return (200, try JSONEncoder().encode(TravelAuthResponse(token: String(repeating: loginCount == 1 ? "a" : "b", count: 80), user: FriendsFixtures.owner)))
+            }
+            if request.url!.path.hasSuffix("/account") {
+                // A different login finishes while the old DELETE is in flight.
+                try await api.authenticate(handle: "tester", name: "Test", password: "eight888", register: false)
+            }
+            return (200, Data(#"{"ok":true}"#.utf8))
+        }
+        try await api.authenticate(handle: "tester", name: "Test", password: "eight888", register: false)
+        do { try await api.deleteAccount(); XCTFail("Old DELETE must not clear a replacement session") }
+        catch { XCTAssertTrue(error.localizedDescription.contains("account changed")) }
+        XCTAssertTrue(api.isSignedIn)
+        try await api.logout()
+    }
+}
+
+@MainActor final class TripBudgetTests: XCTestCase {
+    private let a = "00000000-0000-4000-8000-000000000001"
+    private let b = "00000000-0000-4000-8000-000000000002"
+    private let c = "00000000-0000-4000-8000-000000000003"
+    private func trip() -> JourneyDocument {
+        var trip = TodayFixtures.trip
+        trip.companions = [.init(id: a, name: "Alex"), .init(id: b, name: "Blair"), .init(id: c, name: "Casey")]
+        trip.homeCurrency = "USD"; trip.budgetTarget = 1000
+        return trip
+    }
+    func testBudgetOptInSurvivesStorageAndIgnoresPricesAlone() throws {
+        var document = TodayFixtures.trip
+        document.homeCurrency = nil; document.budgetTarget = nil; document.companions = nil
+        document.events[0].cost = .init(amount: 100, currency: "USD")
+        document.events[0].isDone = true
+        XCTAssertFalse(TripBudget.isConfigured(document))
+        document.homeCurrency = "USD"
+        let restored = try JSONDecoder().decode(JourneyDocument.self, from: JSONEncoder().encode(document))
+        XCTAssertTrue(TripBudget.isConfigured(restored))
+        document.homeCurrency = nil; document.budgetTarget = 500
+        XCTAssertTrue(TripBudget.isConfigured(document), "Preserve older targets without a home currency")
+        document.budgetTarget = nil; document.companions = [.init(id: a, name: "Alex")]
+        XCTAssertTrue(TripBudget.isConfigured(document), "Existing companion settlements remain reachable")
+    }
+    func testDashboardLedgerMatchesTripTotalsAndPreservesActualRules() {
+        var trip = trip()
+        trip.events[0].cost = .init(amount: 40, currency: "EUR", isPaid: true)
+        trip.events[0].isDone = false
+        trip.events[1].cost = .init(amount: 25, currency: "USD", isPaid: false)
+        trip.events[1].isDone = true; trip.events[1].kind = .shopping
+        trip.hotels[0].cost = .init(amount: 300, currency: "USD", isPaid: true)
+        trip.flights = [FlightReservation(cost: .init(amount: 80, currency: "EUR", isPaid: false))]
+        let entries = BudgetLedger.entries(trip)
+        XCTAssertEqual(entries.count, 4)
+        XCTAssertEqual(Set(entries.map(\.id)).count, 4)
+        XCTAssertEqual(BudgetLedger.totals(entries), trip.totals)
+        XCTAssertEqual(BudgetLedger.totals(entries.filter(\.spent)), ["USD": 325])
+        XCTAssertEqual(BudgetLedger.totals(entries.filter(\.spent)), TripBudget.spent(trip))
+        XCTAssertEqual(entries.first { $0.source == .event(trip.events[1].id) }?.category, .shopping)
+        XCTAssertEqual(entries.first { $0.source == .hotel(trip.hotels[0].id) }?.category, .stays)
+        XCTAssertNil(TripBudget.converted(BudgetLedger.totals(entries), home: "USD", rates: nil))
+        trip.dateMode = .nights
+        XCTAssertTrue(BudgetLedger.entries(trip).allSatisfy { $0.date == nil })
+    }
+    func testDashboardCompanionBalancesConserveEachOriginalCurrency() {
+        var trip = trip()
+        trip.events[0].isDone = true; trip.events[1].isDone = true
+        trip.events[0].cost = .init(amount: 10, currency: "EUR", paidBy: a, splitBetween: [a, b, c])
+        trip.events[1].cost = .init(amount: 101, currency: "JPY", paidBy: b, splitBetween: [a, b, c])
+        let balances = [a, b, c].map { BudgetLedger.balance($0, in: trip) }
+        for currency in ["EUR", "JPY"] { XCTAssertEqual(balances.reduce(Decimal.zero) { $0 + ($1[currency] ?? 0) }, 0) }
+        XCTAssertEqual(balances[0]["EUR"], Decimal(string: "6.66"))
+        XCTAssertEqual(balances[1]["JPY"], 67)
+        XCTAssertTrue(BudgetLedger.balance(UUID().uuidString, in: trip).isEmpty)
+    }
+    func testOnlyDoneEventsAndPaidBookingsCountAsSpent() {
+        var trip = trip()
+        trip.events[0].cost = .init(amount: 100, currency: "EUR")
+        trip.events[1].cost = .init(amount: 50, currency: "EUR")
+        trip.hotels[0].cost = .init(amount: 300, currency: "USD")
+        XCTAssertTrue(TripBudget.spent(trip).isEmpty)
+        trip.events[0].isDone = true; trip.hotels[0].cost?.isPaid = true
+        XCTAssertEqual(TripBudget.spent(trip), ["EUR": 100, "USD": 300])
+        XCTAssertEqual(trip.totals, ["EUR": 150, "USD": 300])
+        let now = ISO8601DateFormatter().date(from: "2026-09-07T07:00:00Z")!
+        let today = TodayPlanner.items(trip, day: "2026-09-07", zone: TimeZone(identifier: "Europe/Paris")!)
+        XCTAssertTrue(today.first { $0.kind == .event }?.completed == true)
+        XCTAssertNil(TodayPlanner.nextItem(today, now: now))
+        trip.events[0].isDone = false
+        XCTAssertEqual(TripBudget.spent(trip), ["USD": 300])
+    }
+    func testEqualSplitsConserveCentsAndDoNotConvertSettlements() {
+        var trip = trip()
+        trip.events[0].isDone = true; trip.events[1].isDone = true
+        trip.events[0].cost = .init(amount: 10, currency: "EUR", paidBy: a, splitBetween: [c, b, a])
+        trip.events[1].cost = .init(amount: 101, currency: "JPY", paidBy: a, splitBetween: [a, b, c])
+        let transfers = TripBudget.settlements(trip)
+        XCTAssertEqual(transfers.filter { $0.money.currency == "EUR" }.map(\.money.amount), [Decimal(string: "3.33")!, Decimal(string: "3.33")!])
+        XCTAssertEqual(transfers.filter { $0.money.currency == "JPY" }.map(\.money.amount), [34, 33])
+        XCTAssertTrue(transfers.allSatisfy { $0.to == a })
+        trip.events[0].cost?.splitBetween = [a, b, c]
+        XCTAssertEqual(TripBudget.settlements(trip), transfers)
+    }
+    func testPayerCanCoverOthersAndBalancesNetMultipleExpenses() {
+        var trip = trip()
+        trip.events[0].isDone = true; trip.events[1].isDone = true
+        trip.events[0].cost = .init(amount: 10, currency: "USD", paidBy: a, splitBetween: [b, c])
+        trip.events[1].cost = .init(amount: 6, currency: "USD", paidBy: b, splitBetween: [a, b, c])
+        let transfers = TripBudget.settlements(trip)
+        XCTAssertEqual(transfers, [.init(from: b, to: a, money: .init(amount: 1, currency: "USD")), .init(from: c, to: a, money: .init(amount: 7, currency: "USD"))])
+        trip.events[1].isDone = false
+        XCTAssertEqual(TripBudget.settlements(trip).map(\.money.amount), [5, 5])
+    }
+    func testConversionUsesCrossRatesAndNeverSilentlyDropsMissingCurrencies() {
+        let rates = TripExchangeRates(base: "USD", rates: ["USD": 1, "EUR": Decimal(string: "0.8")!, "JPY": 100], dates: [:], fetchedAt: 0, stale: true)
+        XCTAssertEqual(TripBudget.converted(["EUR": 80, "JPY": 10000], home: "USD", rates: rates), 200)
+        XCTAssertEqual(TripBudget.converted(["USD": 100], home: "EUR", rates: rates), 80)
+        XCTAssertNil(TripBudget.converted(["GBP": 100, "USD": 5], home: "USD", rates: rates))
+        XCTAssertEqual(TripBudget.converted(["USD": 100], home: "USD", rates: nil), 100)
+        XCTAssertEqual(TripBudget.converted([:], home: "USD", rates: nil), 0)
+    }
+    func testBurnDaysIncludeTodayAndCapAtTripEnd() {
+        var trip = trip()
+        let date = { (day: String) in ISO8601DateFormatter().date(from: day + "T12:00:00Z")! }
+        XCTAssertNil(TripBudget.elapsedDays(trip, now: date("2026-09-05")))
+        XCTAssertEqual(TripBudget.elapsedDays(trip, now: date("2026-09-06")), 1)
+        XCTAssertEqual(TripBudget.elapsedDays(trip, now: date("2026-09-07")), 2)
+        XCTAssertEqual(TripBudget.elapsedDays(trip, now: date("2026-10-01")), 4)
+        trip.dateMode = .nights
+        XCTAssertNil(TripBudget.elapsedDays(trip, now: date("2026-10-01")))
+    }
+    func testLedgerRoundTripRejectsDanglingSplitsAndLegacyTripsStillDecode() throws {
+        var trip = trip(); trip.events[0].isDone = true
+        trip.events[0].cost = .init(amount: 25, currency: "USD", paidBy: a, splitBetween: [a, b])
+        XCTAssertNil(trip.validationError())
+        let restored = try JSONDecoder().decode(JourneyDocument.self, from: JSONEncoder().encode(trip))
+        XCTAssertEqual(restored, trip)
+        trip.companions?.removeAll { $0.id == b }
+        XCTAssertNotNil(trip.validationError())
+        trip = self.trip(); trip.budgetTarget = -1
+        XCTAssertNotNil(trip.validationError())
+        let old = TodayFixtures.trip
+        let legacy = try JSONDecoder().decode(JourneyDocument.self, from: JSONEncoder().encode(old))
+        XCTAssertNil(legacy.budgetTarget); XCTAssertNil(legacy.companions); XCTAssertNil(legacy.events[0].isDone)
+    }
+    func testTemplatesDiscardLedgerAndRepeatedEventsDoNotCopyCompletion() throws {
+        var trip = trip(); trip.events[0].isDone = true
+        trip.events[0].cost = .init(amount: 25, currency: "USD", paidBy: a, splitBetween: [a, b])
+        trip.hotels[0].cost = .init(amount: 100, currency: "USD", paidBy: a, splitBetween: [a, b], isPaid: true)
+        let template = try trip.templated(meta: .init(), includeCosts: true)
+        XCTAssertNil(template.companions); XCTAssertNil(template.budgetTarget)
+        XCTAssertNil(template.events[0].isDone); XCTAssertNil(template.events[0].cost?.paidBy)
+        XCTAssertNil(template.hotels[0].cost?.isPaid); XCTAssertEqual(template.events[0].cost?.amount, 25)
+        let original = trip.events[0]
+        trip.putEvent(original, on: [original.day, original.day + 1])
+        XCTAssertEqual(trip.events.filter { $0.seriesID == original.seriesID && $0.isDone == true }.count, 1)
+    }
+}
+
+@MainActor final class SeasonalityTests: XCTestCase {
+    func city(_ name: String) throws -> CitySeasonality { try XCTUnwrap(SeasonalityCatalog.shared?.city(named: name)) }
+    func assessment(_ name: String, _ from: String, _ to: String) throws -> SeasonalityAssessment {
+        try XCTUnwrap(try city(name).assessment(arrival: from, departure: to))
+    }
+    func testBundledCatalogCoversEveryCatalogCityAndTwelveMonths() throws {
+        let catalog = try XCTUnwrap(SeasonalityCatalog.shared)
+        XCTAssertEqual(catalog.schemaVersion, 1)
+        XCTAssertNotNil(SeasonalityRange.date(catalog.reviewedOn))
+        XCTAssertEqual(Set(catalog.cities.map(\.name)), Set(TravelStore.cities))
+        XCTAssertEqual(catalog.cities.count, 12)
+        XCTAssertEqual(Set(catalog.cities.map(\.id)).count, 12)
+        for city in catalog.cities {
+            XCTAssertEqual(city.months.map(\.month), Array(1...12), city.name)
+            XCTAssertTrue(city.months.contains { $0.season == .peak })
+            XCTAssertTrue(city.months.contains { $0.season == .shoulder })
+            XCTAssertTrue(city.months.allSatisfy { !$0.weather.isEmpty && !$0.rain.isEmpty })
+            XCTAssertFalse(city.notices.isEmpty); XCTAssertFalse(city.sources.isEmpty)
+            XCTAssertEqual(Set(city.notices.map(\.id)).count, city.notices.count)
+            for source in city.sources { XCTAssertEqual(source.url.scheme, "https"); XCTAssertNotNil(source.url.host) }
+            for notice in city.notices {
+                XCTAssertEqual(notice.source.scheme, "https")
+                switch notice.timing {
+                case .annual:
+                    XCTAssertNotNil(SeasonalityRange.date("2000-" + (notice.start ?? "")))
+                    XCTAssertNotNil(SeasonalityRange.date("2000-" + (notice.end ?? "")))
+                case .dated:
+                    XCTAssertFalse((notice.occurrences ?? []).isEmpty)
+                    for range in notice.occurrences ?? [] {
+                        let start = try XCTUnwrap(SeasonalityRange.date(range.start)), end = try XCTUnwrap(SeasonalityRange.date(range.end))
+                        XCTAssertLessThanOrEqual(start, end)
+                    }
+                case .checkCalendar: XCTAssertNil(notice.start); XCTAssertNil(notice.end)
+                }
+            }
+        }
+    }
+    func testCityMatchingHandlesAutocompleteAliasesWithoutSubstringFalsePositives() throws {
+        let catalog = try XCTUnwrap(SeasonalityCatalog.shared)
+        XCTAssertEqual(catalog.city(named: "  PARIS,   FRANCE  ", countryCode: "fr")?.id, "paris")
+        XCTAssertEqual(catalog.city(named: "İstanbul")?.id, "istanbul")
+        XCTAssertEqual(catalog.city(named: "Macao")?.id, "macau")
+        XCTAssertEqual(catalog.city(named: "Paris, Île-de-France, France", countryCode: "FR")?.id, "paris")
+        XCTAssertNil(catalog.city(named: "Paris Hotel, Île-de-France, France", countryCode: "FR"))
+        XCTAssertEqual(catalog.city(named: "New York, NY")?.id, "new-york")
+        XCTAssertNil(catalog.city(named: "Paris", countryCode: "US"))
+        for name in ["Paris, Texas", "Paris Hotel Las Vegas", "France", "", "Amsterdam", "London, Ontario"] { XCTAssertNil(catalog.city(named: name), name) }
+    }
+    func testAugustClosureIncludesArrivalAndDepartureBoundaries() throws {
+        for dates in [("2026-07-30", "2026-08-01"), ("2026-08-31", "2026-09-02"), ("2026-08-15", "2026-08-15")] {
+            XCTAssertTrue(try assessment("Paris", dates.0, dates.1).advisories.contains { $0.id == "paris-august" })
+        }
+        XCTAssertFalse(try assessment("Paris", "2026-09-01", "2026-09-04").advisories.contains { $0.id == "paris-august" })
+    }
+    func testAllTouchedMonthsIncludingYearBoundaryAppearInTravelOrder() throws {
+        XCTAssertEqual(try assessment("Paris", "2026-07-30", "2026-09-01").months.map(\.month), [7, 8, 9])
+        XCTAssertEqual(try assessment("Tokyo", "2026-12-30", "2027-01-04").months.map(\.month), [12, 1])
+        XCTAssertEqual(try assessment("Paris", "2026-01-01", "2027-01-01").months.count, 12)
+    }
+    func testAnnualNewYearWindowMatchesJanuaryAndDecemberOnly() throws {
+        for dates in [("2026-12-30", "2027-01-02"), ("2027-01-01", "2027-01-03")] {
+            XCTAssertTrue(try assessment("Tokyo", dates.0, dates.1).advisories.contains { $0.id == "tokyo-new-year" })
+        }
+        XCTAssertFalse(try assessment("Tokyo", "2027-06-01", "2027-06-05").advisories.contains { $0.id == "tokyo-new-year" })
+    }
+    func testGoldenWeekMatchesAcrossMonthBoundary() throws {
+        XCTAssertTrue(try assessment("Tokyo", "2027-04-28", "2027-05-02").advisories.contains { $0.id == "tokyo-golden-week" })
+        XCTAssertFalse(try assessment("Tokyo", "2027-05-10", "2027-05-15").advisories.contains { $0.id == "tokyo-golden-week" })
+    }
+    func testLunarHolidayUsesPublishedYearAndObservedDays() throws {
+        let match = try assessment("Hong Kong", "2027-02-09", "2027-02-10").advisories.first { $0.id == "hong-kong-lunar-new-year" }
+        XCTAssertNotNil(match); XCTAssertNil(match?.calendarPrompt)
+        XCTAssertFalse(try assessment("Hong Kong", "2027-02-17", "2027-02-19").advisories.contains { $0.id == "hong-kong-lunar-new-year" })
+        let unknown = try assessment("Hong Kong", "2028-02-17", "2028-02-19").advisories.first { $0.id == "hong-kong-lunar-new-year" }
+        XCTAssertEqual(unknown?.unverifiedYears, [2028])
+    }
+    func testRamadanNeverReusesPriorGregorianDates() throws {
+        let known = try assessment("Istanbul", "2026-03-01", "2026-03-04").advisories.first { $0.id == "istanbul-ramadan" }
+        XCTAssertNotNil(known); XCTAssertNil(known?.calendarPrompt)
+        XCTAssertFalse(try assessment("Istanbul", "2026-06-01", "2026-06-04").advisories.contains { $0.id == "istanbul-ramadan" })
+        let unknown = try assessment("Istanbul", "2027-03-01", "2027-03-04").advisories.first { $0.id == "istanbul-ramadan" }
+        XCTAssertEqual(unknown?.unverifiedYears, [2027])
+        let crossing = try assessment("Istanbul", "2026-12-30", "2027-01-02").advisories.first { $0.id == "istanbul-ramadan" }
+        XCTAssertEqual(crossing?.unverifiedYears, [2027])
+        XCTAssertEqual(try assessment("Dubai", "2027-01-01", "2027-01-04").advisories.first { $0.id == "dubai-ramadan" }?.unverifiedYears, [2027])
+    }
+    func testFlexibleAndInvalidDatesDoNotInventSelectedMonth() throws {
+        let paris = try city("Paris")
+        XCTAssertNil(paris.assessment(arrival: nil, departure: nil))
+        for dates in [("2026-02-30", "2026-03-02"), ("2026-09-02", "2026-09-01"), ("2026-9-01", "2026-09-03"), ("2026-01-01", "9999-01-01")] { XCTAssertNil(paris.assessment(arrival: dates.0, departure: dates.1)) }
+    }
+    func testRouteReorderReassessesProjectedDatesWithoutMutatingOriginal() throws {
+        let paris = JourneyStop(name: "Paris", arrival: "2026-08-28", nights: 2, latitude: 48.8566, longitude: 2.3522)
+        let london = JourneyStop(name: "London", arrival: "2026-08-30", nights: 5, latitude: 51.5074, longitude: -0.1278)
+        let trip = JourneyDocument(title: "Seasons", startDate: paris.arrival, endDate: london.departure, stops: [paris, london])
+        let preview = try MultiCityRouting.applying([london, paris], plan: JourneyRoutePlan(), to: trip)
+        let projected = try XCTUnwrap(preview.stops.first { $0.id == paris.id })
+        XCTAssertEqual(projected.arrival, "2026-09-02")
+        XCTAssertTrue(try assessment("Paris", paris.arrival, paris.departure).advisories.contains { $0.id == "paris-august" })
+        XCTAssertFalse(try assessment("Paris", projected.arrival, projected.departure).advisories.contains { $0.id == "paris-august" })
+        XCTAssertEqual(trip.stops.first?.arrival, "2026-08-28")
+    }
+}
+
+@MainActor final class JourneyWidgetTests: XCTestCase {
+    func testWidgetInvitationWaitsForATripAndPersistsDismissal() {
+        let suite = "WidgetDiscoveryTests." + UUID().uuidString
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let discovery = WidgetDiscovery(defaults: defaults)
+        XCTAssertFalse(discovery.shouldOffer(for: []))
+        var trip = TodayFixtures.trip
+        trip.isTemplate = true
+        XCTAssertFalse(discovery.shouldOffer(for: [trip]))
+        trip.isTemplate = nil; trip.dateMode = .nights
+        XCTAssertFalse(discovery.shouldOffer(for: [trip]))
+        trip.dateMode = .dates
+        XCTAssertTrue(discovery.shouldOffer(for: [trip]))
+        discovery.markHandled()
+        XCTAssertFalse(discovery.shouldOffer(for: [trip]))
+        XCTAssertFalse(WidgetDiscovery(defaults: defaults).shouldOffer(for: [trip, TodayFixtures.trip]))
+        XCTAssertTrue(WidgetDiscovery(defaults: defaults).handled)
+    }
+
+    func instant(_ day: String, _ hour: Int = 12, zone: String = "UTC") -> Date { WidgetCalendar.calendar(zone).date(byAdding: .hour, value: hour, to: WidgetCalendar.date(day, zone: zone)!)! }
+    func trip(_ start: String = "2026-09-08", zone: String = "Europe/Paris") -> JourneyDocument {
+        let stop = JourneyStop(name: "Paris", arrival: start, nights: 3, timeZone: zone)
+        return JourneyDocument(title: "Paris plans", startDate: start, endDate: stop.departure, stops: [stop])
+    }
+    func testProjectionExcludesUndatedTemplatesAndPastTrips() {
+        let current = trip(), future = trip("2026-10-01"), past = trip("2026-08-01")
+        var flexible = trip(); flexible.dateMode = .nights
+        var template = trip(); template.isTemplate = true
+        let snapshot = JourneyWidgetProjection.make([past, template, flexible, future, current], now: instant("2026-09-08"))
+        XCTAssertEqual(Set(snapshot.trips.map(\.id)), Set([current.id, future.id]))
+        XCTAssertEqual(snapshot.active(at: instant("2026-09-08"))?.id, current.id)
+        XCTAssertEqual(snapshot.upcoming(at: instant("2026-09-08"))?.id, future.id)
+    }
+    func testActiveSelectionAgreesWithTodayAcrossTimeZones() throws {
+        let current = trip("2026-09-09", zone: "Asia/Tokyo"), date = instant("2026-09-08", 16)
+        let snapshot = JourneyWidgetProjection.make([current], now: date, fallback: TimeZone(identifier: "America/New_York")!)
+        XCTAssertTrue(TodayPlanner.isActive(current, now: date))
+        let widget = try XCTUnwrap(snapshot.active(at: date))
+        XCTAssertEqual(widget.localDay(at: date), "2026-09-09")
+        XCTAssertEqual(widget.zone(at: date), "Asia/Tokyo")
+        XCTAssertEqual(widget.daysUntil(date), 0)
+    }
+    func testItemsAdvanceAtTheirEndAndSkipDonePlansWithoutLeakingNotes() throws {
+        var document = trip(zone: "UTC")
+        var done = JourneyEvent(stopID: document.stops[0].id, place: PlaceRecord(name: "Already done")); done.minute = 900; done.isDone = true
+        var next = JourneyEvent(stopID: document.stops[0].id, place: PlaceRecord(name: "Museum"), description: "PRIVATE NOTE"); next.minute = 780; next.durationMinutes = 60
+        document.events = [done, next]
+        document.hotels = [HotelReservation(place: PlaceRecord(name: "Hotel", category: .hotel), checkIn: "2026-09-08", checkOut: "2026-09-11", confirmation: "SECRET-BOOKING", notes: "PRIVATE HOTEL NOTE")]
+        let snapshot = JourneyWidgetProjection.make([document], now: instant("2026-09-08")), widget = try XCTUnwrap(snapshot.trips.first)
+        XCTAssertEqual(widget.remaining(at: instant("2026-09-08")).first?.title, "Museum")
+        XCTAssertFalse(widget.items(at: instant("2026-09-08")).contains { $0.title == "Already done" })
+        XCTAssertFalse(widget.remaining(at: instant("2026-09-08", 15)).contains { $0.title == "Museum" })
+        XCTAssertTrue(widget.remaining(at: instant("2026-09-08", 15)).contains { $0.title == "Check in · Hotel" && $0.start == nil })
+        let json = String(data: try JSONEncoder().encode(snapshot), encoding: .utf8)!
+        for value in ["PRIVATE NOTE", "SECRET-BOOKING", "PRIVATE HOTEL NOTE", "jpeg", "password", "splitBetween"] { XCTAssertFalse(json.contains(value)) }
+    }
+    func testBudgetUsesDoneAndPaidCostsAndSavedFX() throws {
+        var document = trip(); document.homeCurrency = "EUR"; document.budgetTarget = 600
+        var event = JourneyEvent(stopID: document.stops[0].id, place: PlaceRecord(name: "Lunch"), cost: TravelMoney(amount: 100, currency: "USD")); event.isDone = true
+        document.events = [event, JourneyEvent(stopID: document.stops[0].id, cost: TravelMoney(amount: 200, currency: "EUR"))]
+        let date = instant("2026-09-09"), rates = TripExchangeRates(base: "USD", rates: ["USD": 1, "EUR": Decimal(string: "0.9")!], dates: ["EUR": "2026-09-07"], fetchedAt: date.timeIntervalSince1970, stale: true)
+        let widget = try XCTUnwrap(JourneyWidgetProjection.make([document], now: date, rates: rates).trips.first)
+        XCTAssertEqual(widget.spent, 90); XCTAssertEqual(widget.target, 600); XCTAssertEqual(widget.burnRate(at: date), 45)
+        XCTAssertEqual(widget.rateDate, "2026-09-07")
+        XCTAssertNil(JourneyWidgetProjection.make([document], now: date).trips.first?.spent)
+    }
+    func testCountdownAndBurnRateUseCalendarDaysAcrossDST() throws {
+        let zone = "America/New_York", date = instant("2026-03-07", 23, zone: zone)
+        let document = trip("2026-03-09", zone: zone)
+        let widget = try XCTUnwrap(JourneyWidgetProjection.make([document], now: date).trips.first)
+        XCTAssertEqual(widget.daysUntil(date), 2)
+        var active = try XCTUnwrap(JourneyWidgetProjection.make([trip("2026-03-07", zone: zone)], now: date).trips.first)
+        active.spent = 300
+        XCTAssertEqual(active.burnRate(at: instant("2026-03-09", 1, zone: zone)), 100)
+    }
+    func testTimelineContainsEventBoundaryMidnightAndExpiryWithBoundedSize() throws {
+        let date = instant("2026-09-08", 22), end = date.addingTimeInterval(600)
+        var snapshot = JourneyWidgetSample.make(now: date)
+        snapshot.trips[0].days[0].items[0].end = end
+        snapshot.expiresAt = date.addingTimeInterval(1200)
+        let dates = snapshot.refreshDates(after: date)
+        XCTAssertEqual(dates.first, date); XCTAssertTrue(dates.contains(end.addingTimeInterval(1))); XCTAssertTrue(dates.contains(snapshot.expiresAt))
+        XCTAssertEqual(Set(dates).count, dates.count); XCTAssertLessThanOrEqual(dates.count, 48)
+        XCTAssertNil(snapshot.active(at: snapshot.expiresAt)); XCTAssertNil(snapshot.upcoming(at: snapshot.expiresAt))
+        var utc = JourneyWidgetProjection.make([trip(zone: "UTC")], now: date)
+        utc.expiresAt = date.addingTimeInterval(86400)
+        XCTAssertTrue(utc.refreshDates(after: date).contains(instant("2026-09-09", 0)))
+    }
+    func testAtomicSnapshotReplacementRemovalAndCorruptData() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString), url = directory.appendingPathComponent("widget.json")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let date = instant("2026-09-08")
+        try JourneyWidgetStore.write(JourneyWidgetProjection.make([trip()], now: date), to: url)
+        XCTAssertEqual(JourneyWidgetStore.read(from: url)?.trips.count, 1)
+        try JourneyWidgetStore.write(JourneyWidgetProjection.make([], now: date), to: url)
+        XCTAssertTrue(try XCTUnwrap(JourneyWidgetStore.read(from: url)).trips.isEmpty)
+        try Data("corrupt".utf8).write(to: url); XCTAssertNil(JourneyWidgetStore.read(from: url))
+        var incompatible = JourneyWidgetProjection.make([], now: date); incompatible.version = 2
+        try JourneyWidgetStore.write(incompatible, to: url); XCTAssertNil(JourneyWidgetStore.read(from: url))
+    }
+    func testDeepLinksAreExactAndRoundTripAllWidgetKinds() {
+        let id = UUID()
+        for kind in JourneyWidgetKind.allCases where kind != .profile { let link = JourneyWidgetLink(tripID: id, kind: kind); XCTAssertEqual(JourneyWidgetLink(url: link.url), link) }
+        for value in ["https://trip/\(id)?widget=SeurToday", "seur://trip/no-id?widget=SeurToday", "seur://trip/\(id)?widget=other", "seur://trip/\(id)/extra?widget=SeurToday", "seur://flights"] { XCTAssertNil(JourneyWidgetLink(url: URL(string: value)!)) }
+    }
+    func testDisplayEntriesRetainOnlySelectedTripsAndCurrentDay() throws {
+        let date = instant("2026-09-08")
+        var snapshot = JourneyWidgetProjection.make([trip(), trip("2026-09-20"), trip("2026-10-01")], now: date)
+        snapshot.trips[0].days = [.init(key: "2026-09-08", zone: "Europe/Paris", items: []), .init(key: "2026-09-09", zone: "Europe/Paris", items: [])]
+        let displayed = snapshot.displaySnapshot(at: date)
+        XCTAssertEqual(displayed.trips.count, 2)
+        XCTAssertEqual(displayed.active(at: date)?.days.map(\.key), ["2026-09-08"])
+        XCTAssertEqual(displayed.upcoming(at: date)?.startDay, "2026-09-20")
+        XCTAssertTrue(snapshot.displaySnapshot(at: snapshot.expiresAt).trips.isEmpty)
+    }
+    func testProfileUsesWholeHistoryAndMatchesStatistics() throws {
+        let date = instant("2026-09-08")
+        var past = trip("2026-08-01"); past.stops[0].countryCode = "FR"; past.title = "Summer in Paris"
+        var duplicate = past; duplicate.updatedAt = past.updatedAt - 1; duplicate.title = "Old title"
+        var template = trip("2026-07-01"); template.isTemplate = true
+        var flexible = trip(); flexible.dateMode = .nights
+        let future = (0..<15).map { trip(TravelDay.adding($0 * 4, to: "2026-10-01")) }
+        let documents = future + [past, duplicate, template, flexible]
+        let snapshot = JourneyWidgetProjection.make(documents, now: date)
+        let profile = try XCTUnwrap(snapshot.travelProfile(at: date))
+        let stats = TravelStatistics(documents: documents, now: date).summary()
+        XCTAssertEqual(snapshot.trips.count, 12)
+        XCTAssertEqual(profile.trips, 1); XCTAssertEqual(profile.countries, 1); XCTAssertEqual(profile.cities, 1)
+        XCTAssertEqual(profile.trips, stats.trips); XCTAssertEqual(profile.nights, stats.nightsAway)
+        XCTAssertEqual(profile.nightsLabel, stats.nightsLabel); XCTAssertEqual(profile.stars, stats.stars)
+        XCTAssertEqual(profile.recent.map(\.title), ["Summer in Paris"])
+        XCTAssertEqual(profile.recent.first?.endDay, "2026-08-04")
+        XCTAssertEqual(snapshot.displaySnapshot(at: date).profile, profile)
+        let historyOnly = JourneyWidgetProjection.make([past], now: date)
+        XCTAssertTrue(historyOnly.trips.isEmpty)
+        XCTAssertEqual(historyOnly.displaySnapshot(at: date).travelProfile(at: date)?.trips, 1)
+        XCTAssertEqual(JourneyWidgetProjection.make([], now: date).profile?.trips, 0)
+    }
+    func testProfileRecentTripsRespectDestinationDateAndStayBounded() throws {
+        let date = instant("2026-09-08", 16)
+        let paris = trip("2026-09-05", zone: "Europe/Paris")
+        let tokyo = trip("2026-09-05", zone: "Asia/Tokyo")
+        let past = (1...5).map { trip("2026-08-0\($0)") }
+        let profile = try XCTUnwrap(JourneyWidgetProjection.make(past + [paris, tokyo], now: date).profile)
+        XCTAssertEqual(profile.recent.count, 3)
+        XCTAssertEqual(profile.recent.map(\.endDay), ["2026-09-08", "2026-08-08", "2026-08-07"])
+    }
+    func testProfileLegacyCacheExpiryAndDedicatedLink() throws {
+        let date = instant("2026-09-08"), snapshot = JourneyWidgetSample.make(now: date)
+        var json = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(snapshot)) as? [String: Any])
+        json.removeValue(forKey: "profile")
+        let legacy = try JSONDecoder().decode(JourneyWidgetSnapshot.self, from: JSONSerialization.data(withJSONObject: json))
+        XCTAssertNil(legacy.profile); XCTAssertEqual(legacy.trips.count, 2)
+        XCTAssertNil(snapshot.travelProfile(at: snapshot.expiresAt))
+        var incompatible = snapshot; incompatible.version = 2
+        XCTAssertNil(incompatible.travelProfile(at: date))
+        XCTAssertEqual(JourneyWidgetContent(snapshot: snapshot, date: date, kind: .profile).link, JourneyWidgetProfile.url)
+        XCTAssertEqual(JourneyWidgetContent(snapshot: nil, date: date, kind: .profile).link, JourneyWidgetProfile.url)
+        XCTAssertTrue(JourneyWidgetProfile.matches(URL(string: "seur://profile")!))
+        for value in ["https://profile", "seur://profile/extra", "seur://profile?trip=abc", "seur://trip/\(UUID())?widget=SeurTravelProfile"] {
+            XCTAssertFalse(JourneyWidgetProfile.matches(URL(string: value)!))
+            XCTAssertNil(JourneyWidgetLink(url: URL(string: value)!))
+        }
+    }
+    func testWidgetAlternateAppearancesRender() throws {
+        let date = instant("2026-09-08"), sample = JourneyWidgetSample.make(now: date)
+        var busy = sample
+        busy.trips[0].title = "A long weekend discovering the French Riviera"
+        busy.trips[0].stops[0].name = "Aix-en-Provence"
+        let item = busy.trips[0].days[0].items[0]
+        busy.trips[0].days[0].items = (0..<6).map { index in
+            var next = item; next.id = "event-\(index)"; next.title = "Private tour of the gardens and historic art collection"; return next
+        }
+        var over = sample; over.trips[0].spent = 2400
+        var missing = sample; missing.trips[0].spent = nil; missing.trips[0].originalSpent = "€460 · ¥12,500"
+        var expired = sample; expired.expiresAt = date
+        let variants: [(String, JourneyWidgetSnapshot, ColorScheme, WidgetRenderingMode)] = [
+            ("Dark", sample, .dark, .fullColor), ("Empty", JourneyWidgetProjection.make([], now: date), .light, .fullColor),
+            ("Tinted", sample, .light, .accented), ("Long itinerary", busy, .light, .fullColor),
+            ("Expired", expired, .dark, .fullColor)
+        ]
+        for (label, snapshot, scheme, mode) in variants {
+            for kind in JourneyWidgetKind.allCases {
+                let large = label == "Long itinerary" && kind == .today
+                let family: WidgetFamily = large ? .systemLarge : label == "Dark" || label == "Tinted" ? .systemMedium : .systemSmall
+                let width: CGFloat = family == .systemSmall ? 170 : 360, height: CGFloat = large ? 390 : 170
+                let view = JourneyWidgetContent(snapshot: snapshot, date: date, kind: kind, previewFamily: family)
+                    .padding(16).frame(width: width, height: height).background { JourneyWidgetBackground(kind: kind) }
+                    .background(Color(uiColor: .systemBackground)).environment(\.colorScheme, scheme).environment(\.widgetRenderingMode, mode)
+                let renderer = ImageRenderer(content: view); renderer.scale = 2
+                let attachment = XCTAttachment(image: try XCTUnwrap(renderer.uiImage)); attachment.name = "\(label) \(kind.rawValue)"; attachment.lifetime = .keepAlways; add(attachment)
+            }
+        }
+        for (label, snapshot) in [("Over target", over), ("Missing FX", missing)] {
+            let view = JourneyWidgetContent(snapshot: snapshot, date: date, kind: .budget, previewFamily: .systemSmall)
+                .padding(16).frame(width: 170, height: 170).background { JourneyWidgetBackground(kind: .budget) }.environment(\.colorScheme, .dark)
+            let renderer = ImageRenderer(content: view); renderer.scale = 2
+            let attachment = XCTAttachment(image: try XCTUnwrap(renderer.uiImage)); attachment.name = label; attachment.lifetime = .keepAlways; add(attachment)
+        }
+        let attributes = FlightActivityAttributes(watchID: "preview", flightNumber: "BA178", origin: "JFK", destination: "LHR")
+        let state = FlightActivityAttributes.ContentState(status: "En route", departure: date.addingTimeInterval(-3600).timeIntervalSince1970, arrival: date.addingTimeInterval(3600).timeIntervalSince1970, departureTime: "08:10 EDT", arrivalTime: "20:05 BST", gate: "B32", terminal: "5", delayMinutes: 15, phase: "airborne", updatedAt: date.timeIntervalSince1970)
+        let view = SeurFlightWidgetCard(attributes: attributes, state: state, stale: false, date: date).frame(width: 360)
+        let renderer = ImageRenderer(content: view); renderer.scale = 2
+        let attachment = XCTAttachment(image: try XCTUnwrap(renderer.uiImage)); attachment.name = "Flight Live Activity"; attachment.lifetime = .keepAlways; add(attachment)
+    }
+    func testWidgetLayoutsRenderAllSupportedShapes() throws {
+        let date = instant("2026-09-08"), snapshot = JourneyWidgetSample.make(now: date)
+        let shapes: [(JourneyWidgetKind, WidgetFamily, CGFloat, CGFloat)] = [(.profile, .systemSmall, 170, 170), (.profile, .systemMedium, 360, 170), (.profile, .systemLarge, 360, 390), (.today, .systemSmall, 170, 170), (.today, .systemMedium, 360, 170), (.today, .systemLarge, 360, 390), (.nextTrip, .systemSmall, 170, 170), (.nextTrip, .systemMedium, 360, 170), (.budget, .systemSmall, 170, 170), (.budget, .systemMedium, 360, 170), (.today, .accessoryRectangular, 160, 80), (.nextTrip, .accessoryCircular, 76, 76)]
+        for (kind, family, width, height) in shapes {
+            let padding: CGFloat = family == .accessoryRectangular || family == .accessoryCircular ? 0 : 16
+            let content = JourneyWidgetContent(snapshot: snapshot, date: date, kind: kind, previewFamily: family).padding(padding).frame(width: width, height: height).background {
+                if padding == 0 { Color(uiColor: .systemBackground) } else { JourneyWidgetBackground(kind: kind) }
+            }.environment(\.colorScheme, .light)
+            let renderer = ImageRenderer(content: content); renderer.scale = 2
+            let image = try XCTUnwrap(renderer.uiImage)
+            XCTAssertEqual(image.size.width, width); XCTAssertEqual(image.size.height, height)
+            let attachment = XCTAttachment(image: image); attachment.name = "Widget \(kind.rawValue) \(family)"; attachment.lifetime = .keepAlways; add(attachment)
+        }
     }
 }

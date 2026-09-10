@@ -41,6 +41,9 @@ enum PlaceCategory: String, Codable, CaseIterable, Identifiable {
 struct TravelMoney: Codable, Hashable {
     var amount: Decimal = 0
     var currency = "USD"
+    var paidBy: String?
+    var splitBetween: [String]?
+    var isPaid: Bool?
     var formatted: String { amount.formatted(.currency(code: currency)) }
     static let currencies = ["USD", "EUR", "GBP", "JPY", "THB", "SGD", "HKD", "AED", "CNY", "TRY", "MYR", "AUD", "CAD", "CHF"]
 }
@@ -130,6 +133,7 @@ struct JourneyEvent: Codable, Hashable, Identifiable {
     var attendees: String?
     var routeLegID: String?
     var routeMode: RouteMode?
+    var isDone: Bool?
     var isPlaceVisit: Bool { kind == nil || kind == .place }
     var displayTitle: String { isPlaceVisit ? place.name : (title ?? "") }
     var categoryTitle: String { if let routeMode, routeLegID != nil { return routeMode.title + " · Planning allowance" }; return isPlaceVisit ? place.category.title : (kind?.title ?? "Event") }
@@ -209,6 +213,9 @@ struct JourneyDocument: Codable, Hashable, Identifiable {
     var routePlan: JourneyRoutePlan?
     var isTemplate: Bool?
     var templateMeta: TemplateMeta?
+    var budgetTarget: Decimal?
+    var homeCurrency: String?
+    var companions: [TripCompanion]?
     /// Older trips stored a destination and dates without a route. Reuse those choices.
     @discardableResult mutating func preparePlanningRoute() -> Bool {
         guard stops.isEmpty, !destination.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
@@ -253,8 +260,12 @@ struct JourneyDocument: Codable, Hashable, Identifiable {
         for (index, day) in days.sorted().enumerated() {
             var copy = event; copy.day = day
             if let existing = events.first(where: { $0.seriesID == event.seriesID && $0.stopID == event.stopID && $0.day == day }) {
+                if day != event.day { copy.isDone = existing.isDone }
                 copy.id = existing.id; events.removeAll { $0.id == existing.id }
-            } else if index > 0 { copy.id = UUID() }
+            } else {
+                if day != event.day { copy.isDone = nil }
+                if index > 0 { copy.id = UUID() }
+            }
             events.append(copy)
         }
     }
@@ -283,6 +294,7 @@ struct JourneyDocument: Codable, Hashable, Identifiable {
         return trip
     }
     func validationError() -> String? {
+        if let error = TripBudget.validationError(self) { return error }
         if let meta = templateMeta, meta.tagline.count > 250 || meta.tags.count > 8 || meta.tags.contains(where: { $0.count > 30 }) || meta.suggestedSeason.count > 120 { return "Shorten the template description or tags." }
         if routePlan?.valid == false { return "Check the saved route planning choices." }
         if title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return "Give your journey a title." }
@@ -353,6 +365,9 @@ struct JourneyLibraryArchive: Codable { var version = 1; var documents: [Journey
         self.url = url ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent(testing ? "AurumUITestTravel/library.json" : "AurumTravel/library.json")
         if url == nil && testing && !ProcessInfo.processInfo.arguments.contains("--preserve-state") { try? FileManager.default.removeItem(at: self.url) }
         #if DEBUG
+        if url == nil && testing && ProcessInfo.processInfo.arguments.contains("--trip-card-testing") && !ProcessInfo.processInfo.arguments.contains("--preserve-state") { documents = TripCardFixtures.documents; return }
+        if url == nil && testing && ProcessInfo.processInfo.arguments.contains("--widget-testing") && !ProcessInfo.processInfo.arguments.contains("--preserve-state") { documents = [WidgetAppFixtures.trip]; return }
+        if url == nil && testing && ProcessInfo.processInfo.arguments.contains("--seasonality-testing") && !ProcessInfo.processInfo.arguments.contains("--preserve-state") { documents = [SeasonalityFixtures.trip]; return }
         if url == nil && testing && ProcessInfo.processInfo.arguments.contains("--today-testing") && !ProcessInfo.processInfo.arguments.contains("--preserve-state") { documents = [TodayFixtures.trip]; return }
         if url == nil && testing && ProcessInfo.processInfo.arguments.contains("--routing-testing") && !ProcessInfo.processInfo.arguments.contains("--preserve-state") { documents = [MultiCityRouteFixtures.trip]; return }
         if url == nil && FlightMapFixtures.enabled && !ProcessInfo.processInfo.arguments.contains("--preserve-state") { documents = [FlightMapFixtures.trip]; return }
