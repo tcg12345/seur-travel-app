@@ -1,3 +1,7 @@
+import { sanitizedGuide, guidePDF, guideTags } from "./guides.ts";
+import { cityPhoto, cityPhotoQuery } from "./city-photos.ts";
+import { pexelsCityPhoto } from "./pexels-city-photos.ts";
+import { googleCityPhoto } from "./google-city-photos.ts";
 import { accountAuth, authOptions } from "./account-auth.ts";
 import {
   decodePhoto,
@@ -39,6 +43,8 @@ import {
 } from "./flights.ts";
 import { recapSnapshot } from "./recaps.ts";
 import { sanitizedTemplate, templateSummary } from "./templates.ts";
+import { deleteAccount } from "./account-deletion.ts";
+import { exchangeRates } from "./exchange-rates.ts";
 import { concierge } from "./concierge.ts";
 import { notificationWorker, pushConfigured, watches } from "./notifications.ts";
 import { sharedLines, sharePDF } from "./shared.ts";
@@ -203,6 +209,37 @@ export async function handler(req: Request): Promise<Response> {
       if (templateMatch[1]) { requireValue(values.length > 0, "This template is no longer public.", 404); return json(values[0]); }
       return json(values.map(templateSummary));
     }
+    const publicGuide = path.match(/^\/v1\/guides(?:\/([a-fA-F0-9-]{36})(?:\/(pdf))?)?$/);
+    if (publicGuide && method === "GET") {
+      requireValue(!publicGuide[1] || uuid(publicGuide[1]), "Invalid guide ID.");
+      const actor = req.headers.has("Authorization") ? await account(req) : null;
+      const search = q.get("q") ?? "", tag = q.get("tag") ?? "", skip = Number(q.get("offset") ?? 0);
+      requireValue(search.length <= 150 && (!tag || guideTags.includes(tag)) && Number.isInteger(skip) && skip >= 0 && skip <= 10000, "Invalid guide filters.");
+      await limit("guides-read:" + network, 60);
+      const values = await rpc("travel_guides_read", {actor,target:publicGuide[1] ?? null,search,tag,skip});
+      if (!publicGuide[1]) return json(values);
+      requireValue(values.length, "This guide is no longer published.", 404);
+      if (publicGuide[2] === "pdf") return new Response(new Uint8Array(await guidePDF(values[0])), {headers:{...headers,"Content-Type":"application/pdf","Content-Disposition":"inline; filename=seur-guide.pdf"}});
+      return json(values[0]);
+    }
+    if (path === "/v1/cities/pexels-photo" && method === "GET") {
+      const city = cityPhotoQuery(q.get("city") ?? "");
+      await limit("pexels-city-photo-network:" + network, 30);
+      return json(await pexelsCityPhoto(city));
+    }
+    // Separate route protects older apps that permanently retain Commons covers.
+    if (path === "/v1/cities/google-photo" && method === "GET") {
+      const city = cityPhotoQuery(q.get("city") ?? "");
+      await limit("google-city-photo-network:" + network, 20);
+      await limit("google-city-photo-global", 500, 86400);
+      return json(await googleCityPhoto(city));
+    }
+    if (path === "/v1/cities/photo" && method === "GET") {
+      const city = cityPhotoQuery(q.get("city") ?? "");
+      await limit("city-photo-network:" + network, 20);
+      await limit("city-photo-global", 500, 86400);
+      return json(await cityPhoto(city));
+    }
     if (path === "/v1/status" && method === "GET") {
       return json({
         backend: "supabase",
@@ -213,6 +250,10 @@ export async function handler(req: Request): Promise<Response> {
         ai: configured("OPENAI_API_KEY"),
         flightNotifications: pushConfigured(),
         publicSharing: true,
+        cityPhotos: true,
+        googleCityPhotos: configured("GOOGLE_PLACES_API_KEY"),
+        pexelsCityPhotos: configured("PEXELS_API_KEY"),
+        travelGuides: true,
       });
     }
     let body: any = {};
@@ -286,6 +327,41 @@ export async function handler(req: Request): Promise<Response> {
       return json({ ok: true });
     }
     const uid = await account(req);
+    const ownGuide = path.match(/^\/v1\/my-guides(?:\/([a-fA-F0-9-]{36}))?$/);
+    if (ownGuide && method === "GET") {
+      const skip=Number(q.get("offset") ?? 0);
+      requireValue((!ownGuide[1] || uuid(ownGuide[1])) && Number.isInteger(skip) && skip>=0 && skip<=10000,"Invalid guide request.");
+      const values=await rpc("travel_guides_read", {actor:uid,own:true,target:ownGuide[1] ?? null,skip});
+      if(!ownGuide[1]) return json(values);
+      requireValue(values.length,"Guide unavailable.",404);return json(values[0]);
+    }
+    const guideWrite=path.match(/^\/v1\/guides\/([a-fA-F0-9-]{36})(?:\/(unpublish|report))?$/);
+    if(guideWrite && (method === "PUT" || method === "POST")) {
+      requireValue(uuid(guideWrite[1]), "Invalid guide ID.");
+      await limit("guides-write:"+uid,10);
+      if(method === "PUT" && !guideWrite[2]) {
+        const guide=sanitizedGuide(body.guide);
+        requireValue(guide.id.toLowerCase()===guideWrite[1].toLowerCase() && Number.isInteger(body.expectedRevision) && body.expectedRevision>=0,"Invalid guide version.");
+        return json(await rpc("travel_guide_publish",{actor:uid,doc:guide,expected:body.expectedRevision}));
+      }
+      if(method === "POST" && guideWrite[2] === "unpublish") {
+        requireValue(Number.isInteger(body.expectedRevision)&&body.expectedRevision>0,"Invalid guide version.");
+        return json(await rpc("travel_guide_unpublish",{actor:uid,target:guideWrite[1],expected:body.expectedRevision}));
+      }
+      if(method === "POST" && guideWrite[2] === "report") {
+        requireValue(["Spam","Inappropriate content","Inaccurate information","Copyright concern"].includes(body.reason),"Choose a report reason.");
+        return json(await rpc("travel_guide_report",{actor:uid,target:guideWrite[1],reason:body.reason}));
+      }
+    }
+    const guideBlock=path.match(/^\/v1\/guide-authors\/([a-fA-F0-9-]{36})\/block$/);
+    if(guideBlock && method === "POST") {
+      requireValue(uuid(guideBlock[1]) && typeof body.blocked === "boolean","Choose a block preference.");
+      return json(await rpc("travel_guide_block",{actor:uid,author:guideBlock[1],blocked:body.blocked}));
+    }
+    if (path === "/v1/exchange-rates" && method === "GET") {
+      await limit("fx-account:" + uid, 20);
+      return json(await exchangeRates());
+    }
     if (path === "/v1/me" && method === "PUT") {
       requireValue(typeof body.name === "string" && body.name.trim().length > 0 && body.name.length <= 100, "Enter your name.");
       requireValue(typeof body.handle === "string" && /^[a-z0-9_]{3,32}$/.test(body.handle), "Choose a username with 3–32 letters, numbers or underscores.");
@@ -310,12 +386,7 @@ export async function handler(req: Request): Promise<Response> {
       return json(await watches(uid, method, method === "GET" ? { installationID: q.get("installationID") } : body, await digest(req.headers.get("Authorization")!.slice(7))));
     }
     if (path === "/v1/account" && method === "DELETE") {
-      const docs = await platform(
-        "/rest/v1/travel_documents?select=body&owner_id=eq." + uid,
-      );
-      await platform("/auth/v1/admin/users/" + uid, "DELETE");
-      await removePhotos(docs.flatMap((d: any) => paths(d.body)));
-      return json({ ok: true });
+      return json(await deleteAccount(uid));
     }
     if (path === "/v1/my-flights" && method === "GET") {
       const rows = await platform(

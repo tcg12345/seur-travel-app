@@ -19,11 +19,12 @@ struct TravelAccountPage: View {
     @State private var password = ""
     @State private var email = ""
     @State private var emailForm = false
+    @State private var registrationStep = 0
+    @AccessibilityFocusState private var registrationTitleFocused: Bool
     @State private var pendingEmail: String?
     @State private var verificationCode = ""
     @State private var resendAfter = Date.distantPast
     @State private var showPassword = false
-    @State private var options: AccountAuthOptions?
     @State private var appleNonce = ""
     @State private var googleSession = GoogleSignInSession()
     @State private var editingProfile = false
@@ -74,10 +75,15 @@ struct TravelAccountPage: View {
         .background(Color.canvas).scrollDismissesKeyboard(.interactively)
         .navigationTitle(api.isSignedIn ? "Your account" : "")
         .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(onboardingBack == nil)
         .toolbar(.hidden, for: .tabBar)
-        .toolbarBackground(.hidden, for: .navigationBar)
+        .toolbarBackground(emailForm ? .visible : .hidden, for: .navigationBar)
         .toolbar {
-            if let onboardingBack {
+            if emailForm && pendingEmail == nil && !api.isSignedIn {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Back", action: emailBack).disabled(loading).accessibilityIdentifier("account-step-back")
+                }
+            } else if let onboardingBack {
                 ToolbarItem(placement: .cancellationAction) { Button("Back", action: onboardingBack).disabled(loading).accessibilityIdentifier("onboarding-account-back") }
             }
             ToolbarItem(placement: .confirmationAction) {
@@ -87,9 +93,9 @@ struct TravelAccountPage: View {
             }
         }
         .interactiveDismissDisabled(loading)
-        .onChange(of: register) { focus = nil; password = ""; pendingEmail = nil; message = nil }
+        .onChange(of: register) { registrationStep = 0; focus = nil; password = ""; showPassword = false; pendingEmail = nil; message = nil }
         .onDisappear { password = ""; appleNonce = "" }
-        .task { try? await api.refresh(); options = try? await api.authOptions(); if api.isSignedIn { await loadCloud() } }
+        .task { try? await api.refresh(); if api.isSignedIn { await loadCloud() } }
         .sheet(isPresented: $editingProfile) { AccountProfileEditor() }
         .confirmationDialog("Delete your cloud account and all cloud trips?", isPresented: $confirmingDeletion, titleVisibility: .visible) {
             Button("Delete account", role: .destructive) { Task { loading = true; defer { loading = false }; do { try await api.deleteAccount(); cloud = []; justAuthenticated = false } catch { message = error.localizedDescription } } }
@@ -98,39 +104,46 @@ struct TravelAccountPage: View {
     }
 
     private var guestPage: some View {
+        ScrollViewReader { proxy in
         ScrollView {
             VStack(spacing: 0) {
-                ZStack(alignment: .bottomLeading) {
-                    GeometryReader { geometry in
-                        Image("bangkok").resizable().scaledToFill()
-                            .frame(width: geometry.size.width, height: geometry.size.height).clipped()
-                    }
-                    LinearGradient(colors: [.black.opacity(0.05), .black.opacity(0.65)], startPoint: .top, endPoint: .bottom)
-                    VStack(alignment: .leading, spacing: 12) {
-                        HStack(spacing: 10) {
-                            SeurLogo(size: 34)
-                            Text("SEUR").font(.subheadline.weight(.medium)).tracking(5)
+                if !emailForm {
+                    ZStack(alignment: .bottomLeading) {
+                        GeometryReader { geometry in
+                            Image("bangkok").resizable().scaledToFill()
+                                .frame(width: geometry.size.width, height: geometry.size.height).clipped()
                         }
-                        Text("Made for the journey.").font(.system(.title, design: .serif)).fixedSize(horizontal: false, vertical: true)
-                    }.foregroundStyle(.white).padding(24)
+                        LinearGradient(colors: [.black.opacity(0.08), .black.opacity(0.6)], startPoint: .top, endPoint: .bottom)
+                        accountWordmark.foregroundStyle(.white).padding(22)
+                    }
+                    .frame(height: typeSize.isAccessibilitySize ? 170 : 154)
+                    .clipShape(.rect(cornerRadius: 24))
+                    .padding(.horizontal, 24).accessibilityHidden(true)
                 }
-                .frame(height: typeSize.isAccessibilitySize ? 200 : 135)
-                .clipShape(.rect(cornerRadius: 28))
-                .padding(.horizontal, 16).accessibilityElement(children: .combine)
 
                 VStack(alignment: .leading, spacing: 24) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(register ? "Your journey starts here." : "Welcome back.")
-                            .font(.system(.largeTitle, design: .serif)).tracking(-0.8)
-                            .fixedSize(horizontal: false, vertical: true).accessibilityAddTraits(.isHeader)
-                        Text(register ? "Save your trips. Keep your discoveries." : "Your next journey is waiting.")
-                            .font(.subheadline).foregroundStyle(.secondary)
+                    if emailForm { accountWordmark.foregroundStyle(Color.bronze).accessibilityHidden(true) }
+                    if emailForm && register {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("STEP \(registrationStep + 1) OF 3 · CREATE ACCOUNT")
+                                .font(.caption2.weight(.medium)).tracking(1.5).foregroundStyle(Color.bronze)
+                            HStack(spacing: 6) {
+                                ForEach(0..<3) { step in
+                                    Capsule().fill(step <= registrationStep ? Color.bronze : Color.bronze.opacity(0.15)).frame(height: 3)
+                                }
+                            }.accessibilityHidden(true)
+                        }.accessibilityElement(children: .ignore)
+                            .accessibilityLabel("Create account, step \(registrationStep + 1) of 3")
+                            .accessibilityIdentifier("account-registration-progress")
                     }
-                    Picker("Account", selection: $register) {
-                        Text("Sign in").tag(false)
-                        Text("Create account").tag(true)
-                    }.pickerStyle(.segmented).accessibilityIdentifier("account-mode").disabled(loading)
-
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text(emailForm ? (register ? registrationTitle : "Welcome back.") : "Welcome to Seur.")
+                            .font(.system(.largeTitle, design: .serif)).tracking(-0.8).dynamicTypeSize(...DynamicTypeSize.accessibility1)
+                            .fixedSize(horizontal: false, vertical: true).accessibilityAddTraits(.isHeader)
+                            .accessibilityFocused($registrationTitleFocused)
+                        Text(emailForm ? (register ? registrationSubtitle : "Sign in to pick up where you left off.") : "Sign in or create an account to keep your journeys together.")
+                            .font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    }
                     if !emailForm {
                         VStack(spacing: 12) {
                             socialButtons
@@ -151,33 +164,30 @@ struct TravelAccountPage: View {
                             }.buttonStyle(PressStyle()).dynamicTypeSize(...DynamicTypeSize.xxxLarge).disabled(loading).accessibilityIdentifier("account-email-option")
                         }
                     } else {
-                        if !register { Text("You can use your email or existing username.").font(.caption).foregroundStyle(.secondary) }
                         VStack(spacing: 0) {
-                            if register {
-                                field("Your name", icon: "person") { TextField("Display name", text: $name).textContentType(.name).focused($focus, equals: .name).accessibilityIdentifier("account-name") }
+                            if register && registrationStep == 0 {
+                                field("Your name", icon: "person") { TextField("Display name", text: $name).textContentType(.name).focused($focus, equals: .name).submitLabel(.next).onSubmit { focus = .handle }.accessibilityIdentifier("account-name") }
                                 Divider().padding(.leading, 52)
-                                field("Username", icon: "at") { TextField("How friends find you", text: $handle).textContentType(.username).textInputAutocapitalization(.never).autocorrectionDisabled().focused($focus, equals: .handle).accessibilityIdentifier("account-handle") }
-                                Divider().padding(.leading, 52)
+                                field("Username", icon: "at") { TextField("How friends find you", text: $handle).textContentType(.username).textInputAutocapitalization(.never).autocorrectionDisabled().focused($focus, equals: .handle).submitLabel(.next).onSubmit { submit() }.accessibilityIdentifier("account-handle") }
                             }
-                            field(register ? "Email" : "Email or username", icon: "envelope") {
-                                TextField(register ? "you@example.com" : "Email or username", text: $email).textContentType(.username).keyboardType(.emailAddress).textInputAutocapitalization(.never).autocorrectionDisabled().focused($focus, equals: .email).submitLabel(.next).onSubmit { focus = .password }.accessibilityIdentifier("account-email")
+                            if !register || registrationStep == 1 {
+                                field(register ? "Email" : "Email or username", icon: "envelope") {
+                                    TextField(register ? "Email" : "Email or username", text: $email, prompt: Text(verbatim: register ? "you@example.com" : "Email or username").foregroundStyle(.secondary)).textContentType(register ? .emailAddress : .username).keyboardType(.emailAddress).textInputAutocapitalization(.never).autocorrectionDisabled().focused($focus, equals: .email).submitLabel(.next).onSubmit { if register { submit() } else { focus = .password } }.accessibilityIdentifier("account-email")
+                                }
                             }
-                            Divider().padding(.leading, 52)
-                            field("Password", icon: "lock") {
-                                HStack {
-                                    Group { if showPassword { TextField(register ? "At least 8 characters" : "Password", text: $password) } else { SecureField(register ? "At least 8 characters" : "Password", text: $password) } }
-                                        .textContentType(register ? .newPassword : .password).focused($focus, equals: .password).submitLabel(.go).onSubmit { submit() }.accessibilityIdentifier("account-password")
-                                    Button { showPassword.toggle() } label: { Image(systemName: showPassword ? "eye.slash" : "eye").foregroundStyle(.secondary) }.accessibilityLabel(showPassword ? "Hide password" : "Show password")
+                            if !register { Divider().padding(.leading, 52) }
+                            if !register || registrationStep == 2 {
+                                field("Password", icon: "lock") {
+                                    HStack {
+                                        Group { if showPassword { TextField(register ? "At least 8 characters" : "Password", text: $password) } else { SecureField(register ? "At least 8 characters" : "Password", text: $password) } }
+                                            .textContentType(register ? .newPassword : .password).focused($focus, equals: .password).submitLabel(.go).onSubmit { submit() }.accessibilityIdentifier("account-password")
+                                        Button { showPassword.toggle() } label: { Image(systemName: showPassword ? "eye.slash" : "eye").font(.system(size: 20)).foregroundStyle(.secondary).frame(minWidth: 44, minHeight: 44) }.accessibilityLabel(showPassword ? "Hide password" : "Show password")
+                                    }
                                 }
                             }
                         }.cardSurface(cornerRadius: 24).disabled(loading)
-                        if register { Text("We’ll send a verification email before signing you in. Passwords need at least 8 characters.").font(.caption).foregroundStyle(.secondary) }
-                        else if AccountSignIn.validEmail(email.trimmingCharacters(in: .whitespacesAndNewlines)) {
-                            Button("Finish verifying your email") {
-                                pendingEmail = email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-                                verificationCode = ""; message = nil
-                            }.font(.subheadline).disabled(loading)
-                        }
+                        if register { Text(registrationHint).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true) }
+
                     }
                     if let message {
                         Label(message, systemImage: "exclamationmark.circle").font(.subheadline).foregroundStyle(.red)
@@ -187,22 +197,70 @@ struct TravelAccountPage: View {
                         HStack(spacing: 12) {
                             Spacer()
                             if loading { ProgressView().tint(.white) }
-                            Text(loading ? "Connecting…" : register ? "Create account & verify email" : "Sign in").fontWeight(.semibold)
+                            Text(loading ? "Connecting…" : register ? (registrationStep < 2 ? "Continue" : "Create account") : "Sign in").fontWeight(.semibold)
                             if !loading { Image(systemName: "arrow.right") }
                             Spacer()
-                        }.padding(.vertical, 14).frame(minHeight: 48)
+                        }.padding(.vertical, 14).frame(minHeight: 48).dynamicTypeSize(...DynamicTypeSize.accessibility1)
                     }.buttonStyle(.glassProminent).tint(Color.bronze).disabled(loading).accessibilityIdentifier("account-submit")
-                        if !register && AccountSignIn.validEmail(email.trimmingCharacters(in: .whitespacesAndNewlines)) { Button("Need to verify your email?") { pendingEmail = email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(); message = nil }.font(.subheadline).disabled(loading) }
-                        Button("Other sign-in options") { emailForm = false; focus = nil; message = nil }.font(.subheadline).disabled(loading)
+                        if !register && AccountSignIn.validEmail(email.trimmingCharacters(in: .whitespacesAndNewlines)) { Button("Need to verify your email?") { pendingEmail = email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(); verificationCode = ""; message = nil }.font(.subheadline).disabled(loading) }
+                        if !register || registrationStep == 0 {
+                            VStack(spacing: 16) {
+                                Button { register.toggle() } label: {
+                                    Text("\(Text(register ? "Already have an account? " : "New to Seur? ").foregroundStyle(.secondary))\(Text(register ? "Sign in" : "Create an account").foregroundStyle(Color.bronze).bold())")
+                                }.font(.subheadline).buttonStyle(.plain).disabled(loading).accessibilityIdentifier("account-mode-link")
+                                if !register { Button { emailBack() } label: {
+                                    Label("Other sign-in options", systemImage: "arrow.left").font(.subheadline)
+                                }.disabled(loading).accessibilityIdentifier("account-other-options") }
+                            }.frame(maxWidth: .infinity).padding(.top, 2)
+                        }
+                    }
+                    if !emailForm {
+                        HStack(spacing: 8) {
+                            ProgressView().controlSize(.small)
+                            Text("Connecting securely…").font(.caption).foregroundStyle(.secondary)
+                        }.frame(maxWidth: .infinity).opacity(loading ? 1 : 0).accessibilityHidden(!loading)
                     }
                 }.padding(.horizontal, 24).padding(.top, 28).padding(.bottom, 32)
+            }.id("account-start")
+        }.scrollEdgeEffectHidden(!emailForm, for: .top).accessibilityIdentifier("account-full-page")
+            .onChange(of: emailForm) { proxy.scrollTo("account-start", anchor: .top) }
+            .onChange(of: register) { proxy.scrollTo("account-start", anchor: .top) }
+            .onChange(of: registrationStep) {
+                proxy.scrollTo("account-start", anchor: .top)
+                registrationTitleFocused = true
             }
-        }.scrollEdgeEffectHidden(true, for: .top).accessibilityIdentifier("account-full-page")
+        }
+    }
+
+    private var registrationTitle: String {
+        ["Let’s get to know you.", "Where can we reach you?", "Secure your account."][registrationStep]
+    }
+    private var registrationSubtitle: String {
+        ["Start with your name and a username for friends to find you.", "Use the email you’d like to sign in with.", "Choose a password to protect your account."][registrationStep]
+    }
+    private var registrationHint: String {
+        switch registrationStep {
+        case 0: return "Usernames use 3–32 letters, numbers or underscores."
+        case 1: return "We’ll send a verification email after you create your account."
+        default: return "Use at least 8 characters. Next, we’ll verify \(email.trimmingCharacters(in: .whitespacesAndNewlines))."
+        }
+    }
+    private func emailBack() {
+        focus = nil; message = nil
+        if register && registrationStep > 0 { registrationStep -= 1 }
+        else { emailForm = false; password = ""; showPassword = false }
+    }
+
+    private var accountWordmark: some View {
+        HStack(spacing: 12) {
+            SeurLogo(size: 32)
+            Text("SEUR").font(.system(size: 13, weight: .medium)).tracking(5)
+        }
     }
 
     private func field<Content: View>(_ title: String, icon: String, @ViewBuilder content: () -> Content) -> some View {
         HStack(alignment: .center, spacing: 14) {
-            Image(systemName: icon).font(.body.weight(.light)).foregroundStyle(Color.bronze).frame(width: 20).accessibilityHidden(true)
+            Image(systemName: icon).font(.system(size: 20, weight: .light)).foregroundStyle(Color.bronze).frame(width: 20).accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 7) {
                 Text(title).font(.caption.weight(.medium)).foregroundStyle(.secondary)
                 content().font(.body)
@@ -211,7 +269,7 @@ struct TravelAccountPage: View {
     }
     private var socialButtons: some View {
         VStack(spacing: 12) {
-            SignInWithAppleButton(register ? .signUp : .signIn) { request in
+            SignInWithAppleButton(.continue) { request in
                 do { appleNonce = try AccountSignIn.randomToken(); request.requestedScopes = [.fullName, .email]; request.nonce = AccountSignIn.nonceHash(appleNonce); request.state = appleNonce; loading = true; message = nil }
                 catch { message = error.localizedDescription; appleNonce = "" }
             } onCompletion: { result in
@@ -229,9 +287,8 @@ struct TravelAccountPage: View {
             }
             .signInWithAppleButtonStyle(colorScheme == .dark ? .white : .black)
             .frame(height: 52).clipShape(.rect(cornerRadius: 16))
-            .disabled(loading || options?.apple != true).accessibilityIdentifier("account-apple")
-            if options?.google == true {
-                Button { Task { await googleSignIn() } } label: {
+            .disabled(loading).accessibilityIdentifier("account-apple")
+            Button { Task { await googleSignIn() } } label: {
                     HStack(spacing: 12) {
                         Image("GoogleSignIn").resizable().scaledToFit().frame(width: 20, height: 20).accessibilityHidden(true)
                         Text("Continue with Google").font(.body.weight(.medium)).lineLimit(1).minimumScaleFactor(0.8)
@@ -241,9 +298,6 @@ struct TravelAccountPage: View {
                         .overlay { RoundedRectangle(cornerRadius: 16).strokeBorder(Color(red: 0.455, green: 0.467, blue: 0.459), lineWidth: 1) }
                         .contentShape(.rect(cornerRadius: 16))
                 }.buttonStyle(PressStyle()).dynamicTypeSize(...DynamicTypeSize.xxxLarge).disabled(loading).accessibilityIdentifier("account-google")
-            }
-            if loading { ProgressView().controlSize(.small).accessibilityLabel("Signing in") }
-            if options == nil { Button("Reload sign-in options") { Task { options = try? await api.authOptions() } }.font(.caption).foregroundStyle(.secondary) }
         }
     }
     private var verificationPage: some View {
@@ -283,18 +337,26 @@ struct TravelAccountPage: View {
         guard !loading else { return }; message = nil
         let address = email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let username = handle.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !password.isEmpty else { message = "Enter your password."; focus = .password; return }
         if register {
-            guard AccountSignIn.validEmail(address) else { message = "Enter a valid email address."; focus = .email; return }
-            guard username.range(of: "^[a-z0-9_]{3,32}$", options: .regularExpression) != nil else { message = "Choose a username with 3–32 letters, numbers or underscores."; focus = .handle; return }
-            guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && name.count <= 100 else { message = "Enter your name (up to 100 characters)."; focus = .name; return }
+            guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && name.count <= 100 else {
+                registrationStep = 0; message = "Enter your name (up to 100 characters)."; focus = .name; return
+            }
+            guard username.range(of: "^[a-z0-9_]{3,32}$", options: .regularExpression) != nil else {
+                registrationStep = 0; message = "Choose a username with 3–32 letters, numbers or underscores."; focus = .handle; return
+            }
+            if registrationStep == 0 { focus = nil; registrationStep = 1; return }
+            guard AccountSignIn.validEmail(address) else { registrationStep = 1; message = "Enter a valid email address."; focus = .email; return }
+            if registrationStep == 1 { focus = nil; registrationStep = 2; return }
             guard (8...256).contains(password.count) else { message = "Use a password with 8–256 characters."; focus = .password; return }
-        } else if !AccountSignIn.validEmail(address) && address.range(of: "^[a-z0-9_]{3,32}$", options: .regularExpression) == nil { message = "Enter your email or existing username."; focus = .email; return }
+        } else {
+            guard !password.isEmpty else { message = "Enter your password."; focus = .password; return }
+            guard AccountSignIn.validEmail(address) || address.range(of: "^[a-z0-9_]{3,32}$", options: .regularExpression) != nil else { message = "Enter your email or existing username."; focus = .email; return }
+        }
         focus = nil; loading = true
         Task { @MainActor in
             defer { loading = false }
             do {
-                if register { try await api.signUpEmail(address, name: name.trimmingCharacters(in: .whitespacesAndNewlines), handle: username, password: password); pendingEmail = address; resendAfter = .now.addingTimeInterval(60) }
+                if register { try await api.signUpEmail(address, name: name.trimmingCharacters(in: .whitespacesAndNewlines), handle: username, password: password); pendingEmail = address; password = ""; showPassword = false; resendAfter = .now.addingTimeInterval(60) }
                 else if address.contains("@") { try await api.signInEmail(address, password: password); await authenticated() }
                 else { try await api.authenticate(handle: address, name: "", password: password, register: false); await authenticated() }
             } catch { message = error.localizedDescription }
@@ -880,6 +942,7 @@ struct SharedJourneyPreview: View {
     @State private var loading = false
     @State private var imported = false
     @State private var error: String?
+    @State private var refreshID = UUID()
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 24) {
@@ -905,12 +968,15 @@ struct SharedJourneyPreview: View {
                 if let error { Label(error, systemImage: "exclamationmark.circle").font(.subheadline).foregroundStyle(.secondary); Button("Try again") { Task { await refresh() } } }
             }.padding(24)
         }.background(Color.canvas).navigationTitle("Shared itinerary").navigationBarTitleDisplayMode(.inline)
-            .task(id: remote.id) { await refresh() }.refreshable { await refresh() }
+            .task(id: remote.id + "|" + api.baseURL + "|" + (api.account?.id ?? "")) { await refresh() }.refreshable { await refresh() }
     }
     private func refresh() async {
-        loading = true; defer { loading = false }
-        do { let value = try await api.document(remote.id); guard !Task.isCancelled else { return }; loaded = value; error = nil }
-        catch { loaded = nil; self.error = error.localizedDescription }
+        let requestID = UUID(); refreshID = requestID
+        loaded = nil; imported = false; error = nil
+        guard api.isSignedIn else { loading = false; error = "Sign in to view this shared itinerary."; return }
+        loading = true; defer { if refreshID == requestID { loading = false } }
+        do { let value = try await api.document(remote.id); guard !Task.isCancelled, refreshID == requestID else { return }; loaded = value; error = nil }
+        catch { guard refreshID == requestID else { return }; loaded = nil; self.error = error.localizedDescription }
     }
 }
 
@@ -918,6 +984,7 @@ private struct SharedItineraryContent: View {
     let document: JourneyDocument
     var body: some View {
         VStack(alignment: .leading, spacing: 24) {
+            if TripBudget.isConfigured(document) { TripBudgetCard(document: document, editable: false) }
             if !document.flights.isEmpty {
                 Text("Flights").font(.headline)
                 ForEach(document.flights) { flight in

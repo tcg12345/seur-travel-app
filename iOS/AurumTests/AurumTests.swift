@@ -9,6 +9,27 @@ import XCTest
         defaults.removePersistentDomain(forName: "com.aurum.travel.unittests")
         store = TravelStore(defaults: defaults)
     }
+    func testWishlistSelectedPlaceSurvivesSaveAndLegacyDataStillDecodes() throws {
+        let old = Data(#"{"id":"legacy","name":"A museum","destination":"London","kind":"Things to do","website":""}"#.utf8)
+        let legacy = try JSONDecoder().decode(WishlistIdea.self, from: old)
+        XCTAssertNil(legacy.selectedPlace)
+        XCTAssertEqual(legacy.record.name, "A museum")
+        let place = PlaceRecord(id: "apple-landmark", name: "Tower Bridge", category: .landmark, city: "London", address: "Tower Bridge Road", latitude: 51.505, longitude: -0.075, source: "Apple Maps")
+        var value = WishlistIdea(name: place.name, destination: place.city, kind: .sights, selectedPlace: place)
+        XCTAssertTrue(store.wishlist.saveIdea(value, details: WishlistDetails()))
+        let restored = try XCTUnwrap(TravelStore(defaults: defaults).wishlistEntries.first)
+        XCTAssertEqual(restored.kind, .sights)
+        XCTAssertEqual(restored.place.id, place.id)
+        XCTAssertEqual(restored.place.latitude, place.latitude)
+        XCTAssertEqual(restored.place.address, place.address)
+        value.destination = "Paris"
+        XCTAssertTrue(store.wishlist.saveIdea(value, details: WishlistDetails()))
+        XCTAssertNil(store.wishlistEntries.first?.place.latitude)
+        XCTAssertEqual(WishlistSaveType.hotel.kind.category, .hotel)
+        XCTAssertEqual(WishlistSaveType.restaurant.kind.category, .restaurant)
+        XCTAssertEqual(WishlistSaveType.activity.kind.category, .attraction)
+        XCTAssertEqual(WishlistSaveType.sight.kind.category, .landmark)
+    }
     func testWishlistBookmarksUnifyAndRemoveWithoutDuplicateDining() throws {
         let hotel = try XCTUnwrap(store.featured.first)
         let restaurant = RestaurantPlace(hotel: hotel, venue: hotel.venues[0])

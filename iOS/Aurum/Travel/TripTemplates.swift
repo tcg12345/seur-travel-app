@@ -24,14 +24,18 @@ extension JourneyDocument {
         template.templateMeta?.includesCosts = includeCosts; template.templateMeta?.includesRatings = includeRatings
         template.templateMeta?.sourceTitle = title
         template.routePlan = nil
+        template.budgetTarget = nil; template.homeCurrency = nil; template.companions = nil
         template.events = events.map { item in
             var event = item; event.attendees = nil; event.description = ""; event.links = []
             event.place.overview = ""; event.routeLegID = nil; event.routeMode = nil
+            event.isDone = nil
+            if let cost = event.cost { event.cost = TravelMoney(amount: cost.amount, currency: cost.currency) }
             if !includeCosts { event.cost = nil }; return event
         }
         template.hotels = hotels.map { hotel in
             var hotel = hotel; hotel.checkOutTime = nil; hotel.confirmation = ""; hotel.notes = ""; hotel.overview = ""; hotel.roomType = ""
             hotel.guests = 2; hotel.rooms = 1; hotel.place.overview = ""
+            if let cost = hotel.cost { hotel.cost = TravelMoney(amount: cost.amount, currency: cost.currency) }
             if !includeCosts { hotel.cost = nil }; return hotel
         }
         // Air tickets are personal and date-specific. Their route remains represented by the stops.

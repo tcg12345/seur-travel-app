@@ -27,6 +27,9 @@ struct TripCreationView: View {
                     DatePicker("Return", selection: $returnDate, in: earliestReturn...latestReturn, displayedComponents: .date).accessibilityIdentifier("trip-return-date")
                 }
                 }
+                Section {
+                    SeasonalityCard(city: destination, countryCode: TravelStatistics.countryCode(selectedLocation?.countryCode) ?? TravelStatistics.countryCode(selectedLocation?.country), arrival: wishlist ? nil : TravelDay.key(departure), departure: wishlist ? nil : TravelDay.key(returnDate))
+                }
                 if let error { Section { Text(error).foregroundStyle(.red) } }
             }.scrollDismissesKeyboard(.interactively).scrollContentBackground(.hidden).background(Color.canvas)
                 .navigationTitle(wishlist ? "Plan a wishlist trip" : "Create a trip").navigationBarTitleDisplayMode(.inline)
@@ -75,6 +78,7 @@ struct JourneyEditor: View {
                             DayField(title: "From", value: Binding(get: { document.startDate ?? TravelDay.key(.now) }, set: { document.startDate = $0 }))
                             DayField(title: "To", value: Binding(get: { document.endDate ?? TravelDay.key(.now) }, set: { document.endDate = $0 }))
                         }
+                        SeasonalityCard(city: document.destination, arrival: document.dateMode == .dates ? document.startDate : nil, departure: document.dateMode == .dates ? document.endDate : nil)
                         Text("Start with a destination or a memory. Add route stops whenever you’re ready to plan individual days.").font(.caption).foregroundStyle(.secondary)
                     }
                 }
@@ -149,6 +153,9 @@ private struct StopEditor: View {
                         Stepper("\(stop.nights) nights", value: $stop.nights, in: 1...365).accessibilityIdentifier("stop-nights")
                     }
                 }
+                Section {
+                    SeasonalityCard(city: stop.name, countryCode: stop.countryCode ?? TravelStatistics.countryCode(stop.country), arrival: mode == .dates ? stop.arrival : nil, departure: mode == .dates ? stop.departure : nil)
+                }
             }.scrollDismissesKeyboard(.interactively).scrollContentBackground(.hidden).background(Color.canvas).navigationTitle("A place to linger").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .cancellationAction) { TripEditorBackButton() }; ToolbarItem(placement: .confirmationAction) { Button("Add to route") { save(stop); dismiss() }.disabled(stop.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty).accessibilityIdentifier("stop-save") } }
         }
@@ -216,10 +223,11 @@ struct JourneyEventEditor: View {
                             Toggle("Set duration", isOn: Binding(get: { event.durationMinutes != nil }, set: { event.durationMinutes = $0 ? 60 : nil })).accessibilityIdentifier("event-duration-toggle")
                             if event.durationMinutes != nil { Stepper("\(event.durationMinutes ?? 60) minutes", value: Binding(get: { event.durationMinutes ?? 60 }, set: { event.durationMinutes = $0 }), in: 1...1440, step: 15); if let end = event.endTimeLabel { LabeledContent("Ends", value: end).foregroundStyle(.secondary) } }
                         }
-                        MoneyFields(cost: $event.cost)
+                        MoneyFields(cost: $event.cost, companions: document?.companions ?? [], showsPaid: false)
                         if event.cost != nil && days.count > 1 { Text("This price is counted once for each selected day.").font(.caption).foregroundStyle(.secondary) }
                     }
                 }
+                Section { Toggle("Done · include in spent", isOn: Binding(get: { event.isDone == true }, set: { event.isDone = $0 })).accessibilityIdentifier("event-done") }
                 if let error { Section { Text(error).foregroundStyle(.red) } }
                 if document?.events.contains(where: { $0.id == event.id }) == true { Section { Button("Delete this occurrence", role: .destructive) { delete = true } } }
             }.scrollDismissesKeyboard(.interactively).scrollContentBackground(.hidden).background(Color.canvas).navigationTitle(event.isPlaceVisit ? (event.place.category == .restaurant ? "Your restaurant visit" : "Your activity") : event.categoryTitle).navigationBarTitleDisplayMode(.inline)
@@ -290,7 +298,7 @@ struct HotelReservationEditor: View {
                     DisclosureGroup("Booking details", isExpanded: $bookingDetails) {
                         TextField("Room or suite type", text: $reservation.roomType)
                         TextField("Confirmation number", text: $reservation.confirmation).textInputAutocapitalization(.characters)
-                        MoneyFields(cost: $reservation.cost)
+                        MoneyFields(cost: $reservation.cost, companions: library.documents.first { $0.id == documentID }?.companions ?? [])
                         TextField("Special requests or booking notes", text: $reservation.notes, axis: .vertical).lineLimit(2...6)
                     }
                 } footer: { Text("Save the stay now. You can add your confirmation and other booking details later.") }
@@ -333,7 +341,7 @@ struct FlightReservationEditor: View {
                 Section("Flight") { TextField("Airline", text: $reservation.airline).accessibilityIdentifier("booking-airline"); TextField("Flight number · e.g. BA178", text: $reservation.flightNumber).textInputAutocapitalization(.characters); InlineFlightSchedule(reservation: $reservation) }
                 Section("Departure · airport local time") { LocationAutocompleteField("Departure airport / code", text: $reservation.departureAirport, kind: .airport, identifier: "booking-departure", onEdit: { reservation.departureLatitude = nil; reservation.departureLongitude = nil; reservation.departureZone = "" }) { selected in reservation.departureLatitude = selected.place.latitude; reservation.departureLongitude = selected.place.longitude; reservation.departureZone = selected.timeZone }; DayField(title: "Date", value: $reservation.departureDay); LocalTimeField(title: "Departure time", value: $reservation.departureTime) }
                 Section("Arrival · airport local time") { LocationAutocompleteField("Arrival airport / code", text: $reservation.arrivalAirport, kind: .airport, identifier: "booking-arrival", onEdit: { reservation.arrivalLatitude = nil; reservation.arrivalLongitude = nil; reservation.arrivalZone = "" }) { selected in reservation.arrivalLatitude = selected.place.latitude; reservation.arrivalLongitude = selected.place.longitude; reservation.arrivalZone = selected.timeZone }; DayField(title: "Date", value: $reservation.arrivalDay); LocalTimeField(title: "Arrival time", value: $reservation.arrivalTime) }
-                Section("Booking") { MoneyFields(cost: $reservation.cost); TextField("Booking link", text: $reservation.bookingLink).keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled(); TextField("Notes", text: $reservation.notes, axis: .vertical).lineLimit(3...6) }
+                Section("Booking") { MoneyFields(cost: $reservation.cost, companions: library.documents.first { $0.id == documentID }?.companions ?? []); TextField("Booking link", text: $reservation.bookingLink).keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled(); TextField("Notes", text: $reservation.notes, axis: .vertical).lineLimit(3...6) }
                 Section { Text("Times are stored exactly as airport-local values, including overnight and date-line crossings. Confirm them against your airline booking.").font(.caption).foregroundStyle(.secondary) }
                 if let error { Section { Text(error).foregroundStyle(.red) } }
                 if library.documents.first(where: { $0.id == documentID })?.flights.contains(where: { $0.id == reservation.id }) == true || (documentID == nil && api.savedFlights.contains(where: { $0.id == reservation.id })) { Section { Button("Remove flight record", role: .destructive) { delete = true } } }
@@ -454,11 +462,32 @@ struct DayField: View {
 }
 struct MoneyFields: View {
     @Binding var cost: TravelMoney?
+    var companions: [TripCompanion] = []
+    var showsPaid = true
     var body: some View {
         Toggle("Include a price", isOn: Binding(get: { cost != nil }, set: { cost = $0 ? TravelMoney() : nil }))
         if cost != nil {
             TextField("Amount", value: Binding(get: { cost?.amount ?? 0 }, set: { cost?.amount = $0 }), format: .number).keyboardType(.decimalPad).accessibilityIdentifier("money-amount")
             Picker("Currency", selection: Binding(get: { cost?.currency ?? "USD" }, set: { cost?.currency = $0 })) { ForEach(TravelMoney.currencies, id: \.self) { Text($0) } }.pickerStyle(.menu)
+            if showsPaid { Toggle("Paid · include in spent", isOn: Binding(get: { cost?.isPaid == true }, set: { cost?.isPaid = $0 })).accessibilityIdentifier("cost-paid") }
+            if !companions.isEmpty {
+                Toggle("Split with companions", isOn: Binding(get: { cost?.paidBy != nil }, set: { enabled in
+                    cost?.paidBy = enabled ? companions.first?.id : nil
+                    cost?.splitBetween = enabled ? companions.map(\.id) : nil
+                })).accessibilityIdentifier("cost-split")
+                if cost?.paidBy != nil {
+                    Picker("Who paid", selection: Binding(get: { cost?.paidBy ?? "" }, set: { cost?.paidBy = $0 })) { ForEach(companions) { Text($0.name).tag($0.id) } }
+                    ForEach(companions) { person in
+                        Toggle("Split between · " + person.name, isOn: Binding(get: { cost?.splitBetween?.contains(person.id) == true }, set: { included in
+                            var ids = cost?.splitBetween ?? []
+                            if included { if !ids.contains(person.id) { ids.append(person.id) } }
+                            else if ids.count > 1 { ids.removeAll { $0 == person.id } }
+                            cost?.splitBetween = ids
+                        }))
+                    }
+                    Text("Split equally. Included in settlement once this event is done or this booking is paid.").font(.caption).foregroundStyle(.secondary)
+                }
+            } else { Text("Add companions in the trip budget to split this cost.").font(.caption).foregroundStyle(.secondary) }
         }
     }
 }

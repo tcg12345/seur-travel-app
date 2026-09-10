@@ -247,7 +247,7 @@ struct ConciergeView: View {
             Text("Build a day-by-day itinerary, find the right neighborhood, compare options or refine a trip you’re already planning.").font(.subheadline).foregroundStyle(.secondary)
             if !available { NavigationLink("Sign in to start planning") { TravelAccountView() }.buttonStyle(.glassProminent) }
             ForEach(starters, id: \.2) { title, prompt, icon in
-                Button { send(prompt) } label: { HStack(spacing: 14) { Image(systemName: icon).foregroundStyle(Color.bronze).frame(width: 24); Text(title).font(.subheadline).foregroundStyle(.primary); Spacer(); Image(systemName: "arrow.up.left").font(.caption) }.padding(17).cardSurface(cornerRadius: 20) }.buttonStyle(PressStyle()).disabled(!available).accessibilityIdentifier("concierge-prompt-" + icon)
+                Button { send(prompt) } label: { HStack(spacing: 14) { Image(systemName: icon).foregroundStyle(Color.bronze).frame(width: 24); Text(title).font(.subheadline).foregroundStyle(.primary); Spacer() }.padding(17).cardSurface(cornerRadius: 20) }.buttonStyle(PressStyle()).disabled(!available).accessibilityIdentifier("concierge-prompt-" + icon)
             }
         }
     }

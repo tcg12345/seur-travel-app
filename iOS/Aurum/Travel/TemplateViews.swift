@@ -188,6 +188,13 @@ struct UseTemplateSheet: View {
             Form {
                 Section { Text(document.title).font(.headline); Text("\(document.nights) nights · Your copy is private and fully editable.").font(.subheadline).foregroundStyle(.secondary) }
                 Section("When do you leave?") { DatePicker("Departure", selection: $departure, displayedComponents: .date).accessibilityIdentifier("template-departure") }
+                if let scheduled = try? document.usingTemplate(departure: TravelDay.key(departure)) {
+                    Section("Seasons along your route") {
+                        ForEach(scheduled.stops) { stop in
+                            SeasonalityCard(city: stop.name, countryCode: stop.countryCode ?? TravelStatistics.countryCode(stop.country), arrival: stop.arrival, departure: stop.departure)
+                        }
+                    }
+                }
                 if let error { Text(error).foregroundStyle(.red) }
             }.navigationTitle("Make it your trip").navigationBarTitleDisplayMode(.inline)
                 .toolbar {

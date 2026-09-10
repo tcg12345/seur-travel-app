@@ -1,6 +1,14 @@
-# Travel wishlist
+# Wishlist
 
-Travel has Trips and Wishlist sections. The navigation-bar plus offers **Create a trip** and **Use a template**; templates open in a separate browser. Wishlist’s **Add idea** action creates an undated personal idea.
+## Save trips and places
+
+The empty wishlist asks **What would you like to save?** and offers six compact choices: **Trip, Destination, Hotel, Restaurant, Activity, Sight**. The former oversized “Add your first idea” card is removed. The same choices live in the top-right plus menu once content is saved; Explore destinations remains a secondary menu action. Choice tiles become a single column at accessibility text sizes.
+
+Trip opens the existing complete itinerary planner with flexible dates and nights per stop. The other five choices open a category-specific search with the existing destination/Apple Maps autocomplete. An optional city narrows place searches. Selecting a result goes to a short review; users can also continue with a typed name when an activity or place is not listed. One **Save to wishlist** button completes the flow. Notes, collection, website and Top pick are behind an optional disclosure.
+
+Resolved place IDs, addresses, coordinates and source are retained for later trip planning. Changing a saved place's name, destination or type clears stale resolved-location metadata. Existing wishlist archives still decode: the new selected-place field is optional, old kind raw values remain unchanged, and Sights is an additional type. No backend migration is needed.
+
+Saved content is grouped into **Trip plans** and **Saved places**, with search and a single filter menu shown only when useful. Existing bookmarked hotels, restaurants, cities and Explore places continue appearing automatically. Legacy custom items remain editable; no saved data is removed.
 
 ## Saving and organizing
 
@@ -24,7 +32,7 @@ Implementation: `Travel/WishlistModels.swift`, `Travel/WishlistViews.swift`, the
 
 ## Full wishlist trip plans
 
-Wishlist → Trip plans → Plan a trip creates a complete JourneyDocument with `dateMode = .nights`. Add destinations and choose nights per stop, then plan activities, restaurants, hotel stays and flight ideas using relative days. No calendar date is required. Hotels use check-in/check-out day selectors; flight ideas are editable itinerary items until actual dates are chosen.
+Wishlist → Trip (or plus → Trip) creates a complete JourneyDocument with `dateMode = .nights`. Add destinations and choose nights per stop, then plan activities, restaurants, hotel stays and flight ideas using relative days. No calendar date is required. Hotels use check-in/check-out day selectors; flight ideas are editable itinerary items until actual dates are chosen.
 
 Regular trip creation and route editing expose arrival/departure dates only. The timing mode switch and dated-stop nights stepper are removed. Existing non-template length-of-stay documents appear in Wishlist automatically; the archive format is unchanged.
 

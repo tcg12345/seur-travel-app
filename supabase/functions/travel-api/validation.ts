@@ -105,6 +105,13 @@ export function money(v: any) {
     typeof v.currency === "string" && /^[A-Z]{3}$/.test(v.currency),
     "Invalid currency.",
   );
+  requireValue(v.isPaid == null || typeof v.isPaid === 'boolean', 'Invalid paid flag.');
+  if (v.paidBy != null || v.splitBetween != null) {
+    requireValue(uuid(v.paidBy) && v.paidBy === v.paidBy.toLowerCase() && Array.isArray(v.splitBetween) &&
+      v.splitBetween.length > 0 && v.splitBetween.length <= 40 &&
+      v.splitBetween.every((id: any) => uuid(id) && id === id.toLowerCase()) &&
+      new Set(v.splitBetween).size === v.splitBetween.length, 'Choose a payer and unique split companions.');
+  }
 }
 export function decodePhoto(v: any): Uint8Array {
   requireValue(
@@ -153,6 +160,16 @@ export function validateDocument(d: any) {
     "Journey end precedes start.",
   );
   requireValue(finite(d.updatedAt), "Invalid updated timestamp.");
+  requireValue(d.budgetTarget == null || finite(d.budgetTarget) && d.budgetTarget >= 0 && d.budgetTarget <= 1e9, 'Invalid budget target.');
+  requireValue(d.homeCurrency == null || ['USD','EUR','GBP','JPY','THB','SGD','HKD','AED','CNY','TRY','MYR','AUD','CAD','CHF'].includes(d.homeCurrency), 'Invalid home currency.');
+  const companions = d.companions ?? [];
+  requireValue(Array.isArray(companions) && companions.length <= 40, 'Use up to 40 companions.');
+  for (const c of companions) {
+    requireValue(object(c) && uuid(c.id) && c.id === c.id.toLowerCase(), 'Invalid companion.');
+    text(c.name, 'companion name', 100);
+  }
+  const companionIDs = new Set(companions.map((c: any) => c.id));
+  requireValue(companionIDs.size === companions.length, 'Duplicate companion.');
   for (
     const [k, limit] of Object.entries({
       stops: 40,
@@ -201,6 +218,7 @@ export function validateDocument(d: any) {
     }
   }
   for (const e of d.events) {
+    requireValue(e.isDone == null || typeof e.isDone === 'boolean', 'Invalid completion flag.');
     requireValue(
       stops.has(e.stopID) && Number.isInteger(e.day) && e.day >= 0 &&
         e.day <= stops.get(e.stopID).nights,
@@ -270,6 +288,10 @@ export function validateDocument(d: any) {
       "Invalid booking link.",
     );
     money(f.cost);
+  }
+  for (const entry of [...d.events, ...d.hotels, ...d.flights]) {
+    const cost = entry.cost;
+    if (cost?.paidBy != null) requireValue(companionIDs.has(cost.paidBy) && cost.splitBetween.every((id: string) => companionIDs.has(id)), 'Cost split references a missing companion.');
   }
   let total = 0;
   for (const p of d.places) {

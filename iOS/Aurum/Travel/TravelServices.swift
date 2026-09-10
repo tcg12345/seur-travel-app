@@ -4,7 +4,7 @@ import Security
 
 struct TravelAccount: Codable, Identifiable, Hashable { var id: String; var handle: String; var name: String }
 struct TravelAuthResponse: Codable { var token: String; var user: TravelAccount }
-struct TravelServiceStatus: Codable { var tripadvisor: Bool; var ai: Bool; var publicSharing: Bool; var googlePlaces: Bool?; var flightTracking: Bool?; var flightHistory: Bool? }
+struct TravelServiceStatus: Codable { var tripadvisor: Bool; var ai: Bool; var publicSharing: Bool; var googlePlaces: Bool?; var flightTracking: Bool?; var flightHistory: Bool?; var cityPhotos: Bool?; var googleCityPhotos: Bool?; var pexelsCityPhotos: Bool?; var travelGuides: Bool? }
 struct GooglePlaceSuggestion: Codable, Identifiable { var id: String; var title: String; var subtitle: String }
 struct TravelFriend: Codable, Identifiable { var id: String; var handle: String; var name: String; var status: String; var incoming: Bool }
 struct RemoteJourney: Codable, Identifiable { var id: String; var owner: TravelAccount; var document: JourneyDocument; var revision: Int; var isSummary: Bool? }
@@ -40,8 +40,10 @@ private struct EmptyReply: Codable { var ok: Bool }
     var savedFlightsError: String?
     private var token: String?
     private let googleAutocomplete = GoogleAutocompleteRequests()
-    private let defaults = UserDefaults.standard
-    init() {
+    private let defaults: UserDefaults
+    private let session: URLSession
+    init(session: URLSession = .shared, defaults: UserDefaults = .standard) {
+        self.session = session; self.defaults = defaults
         let fallback = "https://bwrodcxmdzrpyrshrlfd.supabase.co/functions/v1/travel-api"
         let saved = defaults.string(forKey: "aurum.backendURL") ?? ""
         // Move existing simulator installs to the cloud while retaining local journeys.
@@ -58,6 +60,7 @@ private struct EmptyReply: Codable { var ok: Bool }
         token = Self.readToken(for: baseURL)
         #if DEBUG
         if FriendsFixtures.enabled { account = FriendsFixtures.owner; token = "friends-fixture-only" }
+        if GuideTestBackend.enabled { account = GuideTestBackend.author; token = "guides-fixture-only" }
         #endif
     }
     var isSignedIn: Bool { account != nil && token != nil }
@@ -81,6 +84,21 @@ private struct EmptyReply: Codable { var ok: Bool }
         guard baseURL == server else { throw JourneyError.message("The account server changed. Please sign in again.") }
         try Self.writeToken(response.token, for: server)
         token = response.token; account = response.user; savedFlights = []; savedFlightsError = nil
+    }
+    func guides(search: String = "", tag: String = "", offset: Int = 0) async throws -> [PublishedGuide] { try await request("/v1/guides", query: ["q": search, "tag": tag, "offset": String(offset)]) }
+    func guide(_ id: UUID, own: Bool = false) async throws -> PublishedGuide { try await request((own ? "/v1/my-guides/" : "/v1/guides/") + id.uuidString) }
+    func myGuides(offset: Int = 0) async throws -> [PublishedGuide] { try await request("/v1/my-guides", query: ["offset": String(offset)]) }
+    func publishGuide(_ guide: TravelGuide, revision: Int) async throws -> PublishedGuide {
+        struct Body: Encodable { var guide: TravelGuide; var expectedRevision: Int }
+        return try await request("/v1/guides/" + guide.id.uuidString, method: "PUT", encodable: Body(guide: guide, expectedRevision: revision))
+    }
+    func unpublishGuide(_ id: UUID, revision: Int) async throws -> PublishedGuide { try await request("/v1/guides/" + id.uuidString + "/unpublish", method: "POST", body: ["expectedRevision": revision]) }
+    func reportGuide(_ id: UUID, reason: String) async throws { let _: EmptyReply = try await request("/v1/guides/" + id.uuidString + "/report", method: "POST", body: ["reason": reason]) }
+    func blockGuideAuthor(_ id: String, blocked: Bool) async throws { let _: EmptyReply = try await request("/v1/guide-authors/" + id + "/block", method: "POST", body: ["blocked": blocked]) }
+    func guideShareURL(_ id: UUID) -> URL? { URL(string: baseURL + "/v1/guides/" + id.uuidString + "/pdf") }
+    func pexelsCityPhoto(_ city: String) async throws -> CityPhotoResponse {
+        guard BundledDestinationCover.cover(city: city) == nil, !PlaceSearchTestPolicy.blocksPaidRequests else { return CityPhotoResponse(photo: nil) }
+        return try await request("/v1/cities/pexels-photo", query: ["city": city])
     }
     func authOptions() async throws -> AccountAuthOptions { try await request("/v1/auth/options") }
     func signUpEmail(_ email: String, name: String, handle: String, password: String) async throws {
@@ -120,13 +138,13 @@ private struct EmptyReply: Codable { var ok: Bool }
     }
     func deleteAccount() async throws {
         let _: EmptyReply = try await request("/v1/account", method: "DELETE", body: [:])
-        await FlightNotifications.shared.clearLocalActivities()
         Self.deleteToken(for: baseURL); token = nil; account = nil; savedFlights = []; savedFlightsError = nil
+        await FlightNotifications.shared.clearLocalActivities()
     }
     func logout() async throws {
         if token != nil { let _: EmptyReply = try await request("/v1/auth/logout", method: "POST", body: [:]) }
-        await FlightNotifications.shared.clearLocalActivities()
         Self.deleteToken(for: baseURL); token = nil; account = nil; savedFlights = []; savedFlightsError = nil
+        await FlightNotifications.shared.clearLocalActivities()
     }
     func loadSavedFlights() async {
         #if DEBUG
@@ -258,7 +276,12 @@ private struct EmptyReply: Codable { var ok: Bool }
     func template(_ id: UUID) async throws -> RemoteJourney { try await request("/v1/templates/\(id.uuidString)") }
     func recordTemplateUse(_ id: UUID, clone: UUID) async throws { let _: EmptyReply = try await request("/v1/templates/\(id.uuidString)/uses", method: "POST", body: ["cloneID": clone.uuidString]) }
     func documents(feed: Bool = false) async throws -> [RemoteJourney] { try await request(feed ? "/v1/feed" : "/v1/documents") }
-    func document(_ id: String) async throws -> RemoteJourney { try await request("/v1/documents/\(id)") }
+    func exchangeRates() async throws -> TripExchangeRates { try await request("/v1/exchange-rates") }
+    func document(_ id: String) async throws -> RemoteJourney {
+        let remote: RemoteJourney = try await request("/v1/documents/\(id)")
+        guard remote.isSummary != true else { throw JourneyError.message("The full journey could not be downloaded. Please try again.") }
+        return remote
+    }
     func upload(_ document: JourneyDocument) async throws -> RemoteJourney { try await request("/v1/documents/\(document.id.uuidString)", method: "PUT", encodable: document) }
     func deleteDocument(_ id: String) async throws { let _: EmptyReply = try await request("/v1/documents/\(id)", method: "DELETE") }
     func recapLink(_ payload: RecapShareRequest) async throws -> TravelLink { try await perform("/v1/recaps", method: "POST", data: JSONEncoder().encode(payload), timeout: 90) }
@@ -287,6 +310,10 @@ private struct EmptyReply: Codable { var ok: Bool }
     }
     private func perform<T: Decodable>(_ path: String, method: String, data: Data?, query: [String: String] = [:], timeout: TimeInterval = 40) async throws -> T {
         #if DEBUG
+        if GuideTestBackend.enabled {
+            guard let response = try GuideTestBackend.response(path: path, method: method, data: data) else { throw JourneyError.message("UI test fixture endpoint unavailable.") }
+            return try JSONDecoder().decode(T.self, from: response)
+        }
         if FriendsFixtures.enabled { return try JSONDecoder().decode(T.self, from: FriendsFixtures.response(path, method: method)) }
         #endif
         guard var url = URLComponents(string: baseURL.trimmingCharacters(in: .whitespacesAndNewlines)), let host = url.host,
@@ -298,7 +325,9 @@ private struct EmptyReply: Codable { var ok: Bool }
         var request = URLRequest(url: address); request.httpMethod = method; request.httpBody = data; request.timeoutInterval = timeout
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         if let requestToken { request.setValue("Bearer " + requestToken, forHTTPHeaderField: "Authorization") }
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await session.data(for: request)
+        try Task.checkCancellation()
+        guard token == requestToken && baseURL == requestServer else { throw JourneyError.message("The account changed. Please try again.") }
         guard let response = response as? HTTPURLResponse else { throw JourneyError.message("The server did not return an HTTP response.") }
         guard (200..<300).contains(response.statusCode) else {
             if response.statusCode == 401 && token == requestToken && baseURL == requestServer {

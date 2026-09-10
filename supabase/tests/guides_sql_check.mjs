@@ -1,0 +1,33 @@
+// Run with a pinned PGlite 0.5.8 installation; see iOS/TravelGuides.md.
+const {PGlite} = await import(process.env.GUIDE_PGLITE_MODULE ?? '@electric-sql/pglite');
+import {readFileSync} from 'node:fs';
+import assert from 'node:assert/strict';
+const db=new PGlite();
+await db.exec(`create role anon;create role authenticated;create role service_role bypassrls;create schema auth;create table auth.users(id uuid primary key);create table public.travel_profiles(id uuid primary key references auth.users(id) on delete cascade,handle text,name text);create function public.travel_user(x uuid) returns jsonb language sql as $$select jsonb_build_object('id',id,'handle',handle,'name',name) from public.travel_profiles where id=x$$;grant usage on schema public to service_role;grant select on public.travel_profiles to service_role;grant execute on function public.travel_user(uuid) to service_role;`);
+await db.exec(readFileSync(process.cwd()+'/supabase/migrations/20260909183248_travel_guides.sql','utf8'));
+const a='00000000-0000-4000-8000-000000000001',b='00000000-0000-4000-8000-000000000002',id='00000000-0000-4000-8000-000000000010';
+await db.query('insert into auth.users values($1),($2)',[a,b]);await db.query(`insert into travel_profiles values($1,'alice','Alice'),($2,'bob','Bob')`,[a,b]);
+const guide={id,title:'Paris at your pace',destination:'Paris',introduction:'An original introduction.',tags:['Art & culture'],sections:[{id:'00000000-0000-4000-8000-000000000011',title:'First morning',note:'',places:[{id:'00000000-0000-4000-8000-000000000012',note:'A favorite',place:{name:'Eiffel Tower',city:'Paris',category:'landmark'}}]}]};
+async function q(sql,args=[]){return (await db.query(sql,args)).rows[0]?.value;}
+await db.exec('set role service_role');
+assert.equal((await q('select travel_guides_read() as value')).length,0);
+let value=await q('select travel_guide_publish($1,$2,0) as value',[a,guide]);assert.equal(value.revision,1);assert.equal(value.author.id,a);
+let summary=(await q('select travel_guides_read() as value'))[0];assert.equal(summary.placeCount,1);assert.equal(summary.guide.sections.length,0);
+await assert.rejects(()=>q('select travel_guide_publish($1,$2,1) as value',[b,guide]),/another traveler/);
+await assert.rejects(()=>q('select travel_guide_publish($1,$2,0) as value',[a,guide]),/changed/);
+await q('select travel_guide_report($1,$2,$3) as value',[b,id,'Spam']);
+await q('select travel_guide_block($1,$2,true) as value',[b,a]);assert.equal((await q('select travel_guides_read($1) as value',[b])).length,0);
+assert.equal((await q('select travel_guides_read() as value')).length,1);
+await q('select travel_guide_block($1,$2,false) as value',[b,a]);assert.equal((await q('select travel_guides_read($1) as value',[b])).length,1);
+await assert.rejects(()=>q('select travel_guide_unpublish($1,$2,1) as value',[b,id]),/unavailable/);
+value=await q('select travel_guide_unpublish($1,$2,1) as value',[a,id]);assert.equal(value.revision,2);assert.equal(value.isPublished,false);assert.equal((await q('select travel_guides_read() as value')).length,0);
+assert.equal((await q('select travel_guides_read($1,null,true) as value',[a])).length,1);
+value=await q('select travel_guide_publish($1,$2,2) as value',[a,guide]);assert.equal(value.revision,3);
+await db.query('update travel_guides set hidden=true where id=$1',[id]);assert.equal((await q('select travel_guides_read() as value')).length,0);
+await assert.rejects(()=>q('select travel_guide_publish($1,$2,3) as value',[a,guide]),/review/);
+await db.exec('reset role;set role anon');await assert.rejects(()=>q('select * from travel_guides'),/permission denied/);await assert.rejects(()=>q('select travel_guides_read()'),/permission denied/);
+await db.exec('reset role;set role authenticated');await assert.rejects(()=>q('select travel_guide_publish($1,$2,3)',[a,guide]),/permission denied/);
+await db.exec('reset role');
+assert.equal((await db.query("select count(*)::int as n from pg_class where relname in ('travel_guides','travel_guide_reports','travel_guide_blocks') and relrowsecurity")).rows[0].n,3);
+await db.query('delete from auth.users where id=$1',[a]);assert.equal((await db.query('select count(*)::int as n from travel_guides')).rows[0].n,0);assert.equal((await db.query('select count(*)::int as n from travel_guide_reports')).rows[0].n,0);
+console.log('Guide SQL validation passed: publication, ownership, revisions, summaries, unpublish, report, block, moderation, RLS/grants, account deletion.');await db.close();

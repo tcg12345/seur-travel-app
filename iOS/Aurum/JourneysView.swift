@@ -211,6 +211,10 @@ struct ProfileView: View {
                     WeatherSettingsToggle()
                 }.font(.subheadline).padding(22).cardSurface(cornerRadius: 25)
                 VStack(alignment: .leading, spacing: 16) {
+                    NavigationLink { WidgetHelpView() } label: {
+                        Label("Widgets", systemImage: "square.grid.2x2").frame(maxWidth: .infinity, alignment: .leading)
+                    }.accessibilityIdentifier("profile-widgets")
+                    Divider()
                     Button { preferences = true } label: { Label("Your travel preferences", systemImage: "slider.horizontal.3").frame(maxWidth: .infinity, alignment: .leading) }.accessibilityIdentifier("profile-preferences")
                     Divider()
                     Button { membership = true } label: {

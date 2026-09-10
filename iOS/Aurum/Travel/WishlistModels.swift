@@ -2,12 +2,13 @@ import Foundation
 import Observation
 
 enum WishlistKind: String, Codable, CaseIterable, Identifiable {
-    case destinations = "Destinations", stays = "Stays", dining = "Dining", experiences = "Things to do", ideas = "Other ideas"
+    case destinations = "Destinations", stays = "Stays", dining = "Dining", experiences = "Things to do", sights = "Sights", ideas = "Other ideas"
+    var title: String { switch self { case .stays: "Hotels"; case .dining: "Restaurants"; case .experiences: "Activities"; case .ideas: "Other places"; default: rawValue } }
     var id: String { rawValue }
-    var symbol: String { switch self { case .destinations: "globe.europe.africa"; case .stays: "bed.double"; case .dining: "fork.knife"; case .experiences: "sparkles"; case .ideas: "lightbulb" } }
-    var category: PlaceCategory { switch self { case .destinations, .ideas: .other; case .stays: .hotel; case .dining: .restaurant; case .experiences: .attraction } }
+    var symbol: String { switch self { case .destinations: "globe.europe.africa"; case .stays: "bed.double"; case .dining: "fork.knife"; case .experiences: "sparkles"; case .sights: "building.columns"; case .ideas: "lightbulb" } }
+    var category: PlaceCategory { switch self { case .destinations, .ideas: .other; case .stays: .hotel; case .dining: .restaurant; case .experiences: .attraction; case .sights: .landmark } }
     static func forPlace(_ place: PlaceRecord) -> Self {
-        switch place.category { case .hotel: .stays; case .restaurant, .bar, .cafe: .dining; case .other: .ideas; default: .experiences }
+        switch place.category { case .hotel: .stays; case .restaurant, .bar, .cafe: .dining; case .landmark, .monument, .museum: .sights; case .other: .ideas; default: .experiences }
     }
 }
 
@@ -17,9 +18,16 @@ struct WishlistIdea: Codable, Identifiable {
     var destination = ""
     var kind: WishlistKind = .experiences
     var website = ""
-    var record: PlaceRecord { PlaceRecord(id: id, name: name, category: kind.category, city: kind == .destinations ? name : destination, website: website, source: "Wishlist idea") }
+    var selectedPlace: PlaceRecord?
+    var record: PlaceRecord {
+        if var place = selectedPlace {
+            place.name = name; place.category = kind.category; place.website = website
+            place.city = kind == .destinations ? name : destination
+            return place
+        }
+        return PlaceRecord(id: id, name: name, category: kind.category, city: kind == .destinations ? name : destination, website: website, source: "Wishlist idea") }
     var validationError: String? {
-        if name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return "Give your idea a name." }
+        if name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return "Enter a name for this place." }
         if !website.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && validatedURL(website.trimmingCharacters(in: .whitespacesAndNewlines)) == nil { return "Use a full website link starting with https:// or http://." }
         return nil
     }
@@ -64,8 +72,10 @@ struct WishlistDetails: Codable, Equatable {
         clean.name = clean.name.trimmingCharacters(in: .whitespacesAndNewlines)
         clean.destination = clean.destination.trimmingCharacters(in: .whitespacesAndNewlines)
         clean.website = clean.website.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let old = ideas.first(where: { $0.id == clean.id }),
+           old.name != clean.name || old.destination != clean.destination || old.kind != clean.kind { clean.selectedPlace = nil }
         if ideas.contains(where: { $0.id != clean.id && $0.name.foldedCityText == clean.name.foldedCityText && $0.destination.foldedCityText == clean.destination.foldedCityText && $0.kind == clean.kind }) {
-            error = "That idea is already in your wishlist. Open it to add notes or change its collection."; return false
+            error = "That place is already in your wishlist. Open it to add notes or change its collection."; return false
         }
         var next = ideas.filter { $0.id != clean.id }; next.append(clean)
         var metadata = details; var value = info; value.collection = value.collection.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -95,14 +105,19 @@ struct WishlistEntry: Identifiable {
     let kind: WishlistKind
     var title: String { place.name }
     var subtitle: String {
-        if kind == .destinations { return city?.country ?? (customIdea?.destination.isEmpty == false ? customIdea!.destination : "Destination idea") }
-        return place.city.isEmpty ? kind.rawValue : place.city
+        if kind == .destinations { return city?.country ?? (customIdea?.destination.isEmpty == false ? customIdea!.destination : "Destination") }
+        return place.city.isEmpty ? kind.title : place.city
     }
     var tripDestination: String {
         if kind == .destinations { return customIdea?.destination.isEmpty == false ? title + ", " + customIdea!.destination : title }
         return place.city
     }
-    var city: ExploreCity? { if case .city(let city) = source { city } else { nil } }
+    var city: ExploreCity? {
+        if case .city(let city) = source { return city }
+        if kind == .destinations, let idea = customIdea, let place = idea.selectedPlace,
+           place.hasCoordinate { return ExploreCity(name: idea.name, country: idea.destination, latitude: place.latitude!, longitude: place.longitude!) }
+        return nil
+    }
     func isPlanned(in document: JourneyDocument) -> Bool {
         if kind == .destinations { return document.stops.contains { $0.name.foldedCityText == tripDestination.foldedCityText } }
         return document.events.contains { $0.place.id == place.id && $0.place.source == place.source } || document.hotels.contains { $0.place.id == place.id && $0.place.source == place.source }
@@ -134,7 +149,7 @@ extension TravelStore {
         let term = query.trimmingCharacters(in: .whitespacesAndNewlines)
         return wishlistEntries.filter { entry in
             let info = wishlist.info(entry.id)
-            return (kind == nil || entry.kind == kind) && (collection == nil || info.collection == collection) && (!topPicks || info.topPick) && (term.isEmpty || [entry.title, entry.subtitle, info.notes, info.collection, entry.kind.rawValue].joined(separator: " ").localizedCaseInsensitiveContains(term))
+            return (kind == nil || entry.kind == kind) && (collection == nil || info.collection == collection) && (!topPicks || info.topPick) && (term.isEmpty || [entry.title, entry.subtitle, info.notes, info.collection, entry.kind.rawValue, entry.kind.title].joined(separator: " ").localizedCaseInsensitiveContains(term))
         }.sorted { a, b in
             switch sort {
             case .newest:

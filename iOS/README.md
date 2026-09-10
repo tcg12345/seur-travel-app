@@ -4,15 +4,17 @@ A native SwiftUI travel app for **iOS 26 and later**, designed around hotel dini
 
 ## Open and run
 
-1. Open `Aurum.xcodeproj` in Xcode 26 or later.
-2. Choose the **Aurum** scheme and an iPhone running iOS 26+.
+1. Open `Seur.xcodeproj` in Xcode 26 or later.
+2. Choose the **Seur** scheme and an iPhone running iOS 26+.
 3. Press Run.
 
-The app works in Simulator without an Apple developer account. To install on your physical iPhone, choose your Apple development team under **Aurum → Signing & Capabilities**, then select your connected iPhone. TestFlight and App Store distribution require signing and provisioning through your Apple Developer account.
+The project, app target and shared run scheme are named Seur. Existing source folders, the internal Swift module and test targets retain their Aurum names; bundle identifiers and saved-data keys are unchanged.
+
+The app works in Simulator without an Apple developer account. To install on your physical iPhone, choose your Apple development team under **Seur → Signing & Capabilities**, then select your connected iPhone. TestFlight and App Store distribution require signing and provisioning through your Apple Developer account.
 
 Simulator builds used for account testing and installation must retain code signing (`CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=-`) so the app has its application identifier for Keychain session storage. Do not install a simulator build produced with `CODE_SIGNING_ALLOWED=NO`; reserve that option for compile-only physical-device checks.
 
-Guests can open **Discover → profile → Sign in / Create account**, or use **Sign in** at the top of Travel. Both routes open a full native account page, with travel photography, an adaptive form, and no sheet or tab bar covering the fields. Contextual sign-in from friends, sharing, and flight search also uses a full-screen page. Accounts use a Seur username and password; signing in preserves local trips.
+Guests can open **Discover → profile → Sign in / Create account**, or use **Sign in** at the top of Travel. Both routes open one native welcome page with aligned Apple, Google and email options. Provider buttons are present immediately, independent of status/configuration requests; the server checks provider availability when sign-in is attempted. Email sign-in uses a compact form; registration uses three pages for name/username, email and password, with progress and Back navigation. The text link between sign-in and registration preserves email while clearing the password. New email accounts require verification; existing usernames remain supported for sign-in. Contextual sign-in from friends, sharing, and flight search uses the same page. Signing in preserves local trips.
 
 There are no external Swift packages. Offline travel planning works immediately. The Supabase backend enables accounts, friends, cloud copies, private photos, provider search and sharing; see [the cloud setup](../supabase/README.md). The app defaults to the deployed HTTPS service.
 
@@ -57,7 +59,7 @@ Photos are bundled for Mandarin Oriental Bangkok, The Peninsula Paris, and The S
 
 ## Testing
 
-The shared Aurum scheme includes XCTest unit and UI test targets. Press **Command-U** in Xcode.
+The shared Seur scheme includes XCTest unit and UI test targets. Press **Command-U** in Xcode.
 
 Unit tests cover catalog integrity, city/cuisine search, sorting, persistence, duplicate/invalid itinerary prevention, URL validation, flight handoff, and comparison limits. UI tests cover hotel navigation, saved places, itinerary creation, search, dining planning, and flight validation. UI tests use a dedicated UserDefaults suite and do not clear the normal app’s plans.
 
@@ -130,3 +132,15 @@ The dedicated Friends tab contains shared trip discovery, invitations, friend pr
 ## Travel wishlist
 
 Travel now includes a Wishlist section for saved places, destinations and personal ideas. Add notes, organize collections, mark Top picks, search/filter and turn ideas into existing or new trips. The wishlist uses existing bookmarks and private on-device storage. See [Wishlist.md](Wishlist.md) for behavior and storage details.
+
+## Trip budget and companion splits
+
+Budgeting is optional: choose **••• → Add budget** on a trip, then expand its compact summary and open the **budget tracker**. The dedicated dashboard includes a spending ring, category breakdown, itinerary-day chart, searchable history, quick expense entry, and daily home-currency estimates. Add companions from friends, conversation members or by name, then choose who paid and who shares each cost. Companion balances and **Settle up** keep original currencies separate throughout and after the trip. Today actions let you mark an event done and update spending immediately. [Usage, conversion and sharing details](TripBudget.md).
+
+City seasonality is bundled for the twelve catalog cities and appears beside trip dates and projected multi-city stops. Compare peak/shoulder months, broad weather bands, holiday periods and possible closures offline. Moving holidays explicitly prompt for unverified years. See [Seasonality.md](Seasonality.md) for coverage, sources and the JSON maintenance contract.
+
+Home Screen widgets now include Today in Seur, Next Trip, Trip Budget and Travel Profile, with Lock Screen variants for Today/Next Trip. Open **Discover → Your workspace → Widgets** for previews and placement instructions; a one-time invitation also appears after saving a dated trip. They use an offline App Group snapshot of local trips. See [Widgets.md](Widgets.md) for refresh behavior, supported sizes and the required App Group signing setup.
+
+Trip cards now use destination photo covers, clear dates and quieter summaries in list and grid layouts. See [TripCards.md](TripCards.md) for the one-time Commons lookup, permanent on-device covers, credits, fallbacks and the deployed photo endpoint.
+
+Traveler-created guides are available from **Travel → Guides** and **Discover → Travel guides**. Users can write private drafts, organize recommendations into chapters, preview and publish, save guides offline, and add recommendations to a trip. See [TravelGuides.md](TravelGuides.md) for the Wanderlog research, usage, privacy boundaries, and deployed backend behavior.

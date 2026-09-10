@@ -2,6 +2,17 @@ import SwiftUI
 import MapKit
 
 struct TravelHubView: View {
+    @Environment(WidgetDiscovery.self) private var widgetDiscovery
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var visible = false
+    @State private var widgetInvitation = false
+    private var widgetInvitationReady: Bool {
+        let args = ProcessInfo.processInfo.arguments
+        let testingAllowed = !args.contains("--ui-testing") || args.contains("--widget-discovery-testing")
+        return testingAllowed && visible && scenePhase == .active && section == "Trips" && query.isEmpty
+            && !newJourney && !browsingTemplates && !account && library.error == nil
+            && widgetDiscovery.shouldOffer(for: library.documents)
+    }
     @Environment(TravelAPI.self) private var api
     @Environment(JourneyLibrary.self) private var library
     @Environment(TravelStore.self) private var store
@@ -9,6 +20,8 @@ struct TravelHubView: View {
     @State private var grid = false
     @State private var newJourney = false
     @State private var browsingTemplates = false
+    @State private var creatingGuide = false
+    @State private var browsingGuides = false
     @State private var account = false
     @State private var filter = "All"
     @State private var section = "Trips"
@@ -16,7 +29,7 @@ struct TravelHubView: View {
     private var documents: [JourneyDocument] {
         library.trips.filter { (query.isEmpty || ($0.title + " " + $0.routeLabel).localizedCaseInsensitiveContains(query)) && (filter == "All" || $0.visibility.title == filter) }.sorted { $0.updatedAt > $1.updatedAt }
     }
-    var body: some View {
+    private var page: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 if section == "Trips" && query.isEmpty { TodayHubView() }
@@ -29,9 +42,10 @@ struct TravelHubView: View {
                             }.fixedSize(horizontal: true, vertical: false)
                         }.buttonStyle(.plain).accessibilityIdentifier("travel-section-" + title).accessibilityAddTraits(section == title ? .isSelected : [])
                     }
-                    Spacer()
+                    Spacer(minLength: 0)
+                    Button { browsingGuides = true } label: { Label("Guides", systemImage: "book.closed").font(.subheadline).foregroundStyle(Color.bronze) }.accessibilityIdentifier("travel-guides")
                 }
-                if section == "Wishlist" { WishlistContent(query: query) }
+                if section == "Wishlist" { WishlistContent(query: $query) }
                 else { Group {
                     if query.isEmpty { TravelStatsPreview(compact: true) }
                     if !library.trips.isEmpty { HStack {
@@ -50,9 +64,9 @@ struct TravelHubView: View {
                             }
                         }.frame(maxWidth: .infinity).padding(.vertical, 30).padding(.horizontal, 15).cardSurface(cornerRadius: 28)
                     } else {
-                        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 14), count: grid ? 2 : 1), spacing: 16) {
+                        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 14, alignment: .top), count: grid ? 2 : 1), spacing: 16) {
                             ForEach(documents) { document in
-                                NavigationLink { JourneyDetailView(id: document.id) } label: { JourneyCard(document: document, compact: grid) }.buttonStyle(PressStyle())
+                                JourneyCard(document: document, compact: grid)
                             }
                         }
                     }
@@ -60,51 +74,50 @@ struct TravelHubView: View {
                         NavigationLink { TripsView() } label: { Label("Earlier saved plans · \(store.plans.count)", systemImage: "tray.full").font(.subheadline).frame(maxWidth: .infinity).padding(18).cardSurface(cornerRadius: 22) }
                     }
                 } }
+
             }.padding(22)
+        }.scrollDismissesKeyboard(.interactively)
+    }
+    var body: some View {
+        Group {
+            if section == "Trips" { page.searchable(text: $query, prompt: "Search trips or destinations") }
+            else { page }
         }.background(Color.canvas).navigationTitle("Travel").navigationBarTitleDisplayMode(.inline)
-            .searchable(text: $query, prompt: section == "Wishlist" ? "Search ideas, destinations or notes" : "Search trips or destinations")
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) { Button { account = true } label: { if api.isSignedIn { Image(systemName: "person.crop.circle") } else { Text("Sign in").font(.subheadline.weight(.medium)) } }.accessibilityLabel("Travel account") }
-                ToolbarItem(placement: .topBarTrailing) {
+                if section == "Trips" { ToolbarItem(placement: .topBarTrailing) {
                     Menu {
                         Button("Create a trip", systemImage: "plus") { newJourney = true }
                             .accessibilityIdentifier("travel-create-blank")
+                        Button("Create a guide", systemImage: "book.closed") { creatingGuide = true }
                         Button("Use a template", systemImage: "doc.on.doc") {
                             section = "Trips"; query = ""; browsingTemplates = true
                         }.accessibilityIdentifier("travel-use-template")
                     } label: { Image(systemName: "plus") }
                         .accessibilityLabel("New trip").accessibilityIdentifier("travel-new-trip")
-                }
+                } }
             }
+            .sheet(isPresented: $creatingGuide) { GuideStartView() }
+            .navigationDestination(isPresented: $browsingGuides) { GuideHubView() }
             .sheet(isPresented: $newJourney) { TripCreationView(onCreated: { _ in section = "Trips"; query = "" }) }
+            .sheet(isPresented: $widgetInvitation) {
+                WidgetInvitationView(documents: library.documents).onAppear { widgetDiscovery.markHandled() }
+            }
+            .onAppear { visible = true }
+            .onDisappear { visible = false }
+            .task(id: widgetInvitationReady) {
+                guard widgetInvitationReady else { return }
+                do { try await Task.sleep(for: .seconds(1)) } catch { return }
+                guard !Task.isCancelled, widgetInvitationReady else { return }
+                // Give creation/dismissal transitions time to finish, and never interrupt another sheet.
+                let window = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+                    .flatMap(\.windows).first(where: \.isKeyWindow)
+                guard let root = window?.rootViewController, root.presentedViewController == nil else { return }
+                widgetInvitation = true
+            }
             .navigationDestination(isPresented: $browsingTemplates) { TemplateBrowseView() }
             .navigationDestination(isPresented: $account) { TravelAccountPage() }
             .alert("Travel", isPresented: Binding(get: { library.error != nil }, set: { if !$0 { library.error = nil } })) { Button("OK") { library.error = nil } } message: { Text(library.error ?? "") }
-    }
-}
-
-private struct JourneyCard: View {
-    let document: JourneyDocument
-    var compact = false
-    private var accent: Color { Color.brandInk }
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            ZStack(alignment: .bottomLeading) {
-                LinearGradient(colors: [accent, accent.opacity(0.75)], startPoint: .topLeading, endPoint: .bottomTrailing)
-                Image(systemName: "airplane").font(.system(size: compact ? 70 : 100, weight: .ultraLight)).rotationEffect(.degrees(-15)).foregroundStyle(.white.opacity(0.12)).frame(maxWidth: .infinity, alignment: .trailing).padding(15)
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(document.routeLabel.isEmpty ? "Your journey" : document.routeLabel).font(.system(compact ? .title3 : .title2, design: .serif)).lineLimit(2)
-                }.foregroundStyle(.white).padding(20)
-            }.frame(height: compact ? 138 : 150)
-            VStack(alignment: .leading, spacing: 12) {
-                Text(document.title).font(.system(.title3, design: .serif)).foregroundStyle(.primary).lineLimit(2)
-                Text("\(document.planCount) plans · \(document.places.count) journal places" + (document.nights > 0 ? " · \(document.nights) nights" : "")).font(.caption).foregroundStyle(.secondary)
-                HStack {
-                    Label(document.visibility.title, systemImage: document.visibility == .private ? "lock" : "person.2").font(.caption2).foregroundStyle(.secondary)
-                    Spacer()
-                }
-            }.padding(19)
-        }.cardSurface(cornerRadius: 27).clipShape(.rect(cornerRadius: 27))
     }
 }
 
@@ -114,12 +127,15 @@ struct JourneyDetailView: View {
     @Environment(JourneyLibrary.self) private var library
     @Environment(\.dismiss) private var dismiss
     let id: UUID
+    var initialMode: String? = nil
     @State private var mode = "Agenda"
     @State private var choseInitialMode = false
     @State private var chapter = "Plan"
     @State private var selectedDay: String?
     @State private var chooseDates = false
     @State private var editInfo = false
+    @State private var makingGuide = false
+    @State private var editBudget = false
     @State private var routing = false
     @State private var event: JourneyEvent?
     @State private var addingPlan = false
@@ -164,11 +180,11 @@ struct JourneyDetailView: View {
                             }.buttonStyle(.glass).accessibilityIdentifier("recap-ready")
                         }
                         tripNavigation
-                        if chapter == "Plan" { if mode == "Today" { TodayView(document: document) } else { itinerary(document) } } else if chapter == "Recap" { TripRecapView(document: document) { chapter = "Journal"; journalPlanPicker = true } } else { journal(document) }
+                        if chapter == "Plan" { if mode == "Today" { TodayView(document: document); TripBudgetCard(document: document) } else { itinerary(document) } } else if chapter == "Recap" { TripRecapView(document: document) { chapter = "Journal"; journalPlanPicker = true }; TripBudgetCard(document: document) } else { journal(document) }
                     }.padding(22)
                 }.background(Color.canvas)
                     .accessibilityIdentifier("journey-scroll")
-                    .onAppear { if !choseInitialMode { mode = TodayPlanner.isActive(document, now: TodayClock.now()) ? "Today" : "Agenda"; choseInitialMode = true } }
+                    .onAppear { if !choseInitialMode { mode = initialMode ?? (TodayPlanner.isActive(document, now: TodayClock.now()) ? "Today" : "Agenda"); choseInitialMode = true } }
                     .onScrollGeometryChange(for: CGFloat.self) { geometry in
                         max(0, geometry.contentOffset.y + geometry.contentInsets.top)
                     } action: { _, offset in
@@ -181,7 +197,10 @@ struct JourneyDetailView: View {
                         ToolbarItem(placement: .topBarTrailing) { Button { share = true } label: { Image(systemName: "square.and.arrow.up") }.accessibilityLabel("Share journey") }
                         ToolbarItem(placement: .topBarTrailing) {
                             Menu {
+                                Button("Create a travel guide", systemImage: "book.closed") { makingGuide = true }.accessibilityIdentifier("trip-create-guide")
                                 Button("Edit journey", systemImage: "pencil") { editInfo = true }
+                                Button(TripBudget.isConfigured(document) ? "Edit budget & companions" : "Add budget", systemImage: "chart.pie") { editBudget = true }
+                                    .accessibilityIdentifier("trip-budget-setup")
                                 Button("Log a visit from your plan", systemImage: "square.and.pencil") {
                                     chapter = "Journal"; journalPlanPicker = true
                                 }.accessibilityIdentifier("trip-journal-planned")
@@ -206,7 +225,9 @@ struct JourneyDetailView: View {
                         guard library.documents.first(where: { $0.id == id }) == document else { return "This trip changed while you were planning. Close and reopen the route planner to use the latest version." }
                         return library.save(updated) ? nil : library.error
                     } }
+                    .sheet(isPresented: $makingGuide) { GuideStartView(trip: document) }
                     .sheet(isPresented: $editInfo) { JourneyEditor(document: document) }
+                    .sheet(isPresented: $editBudget) { TripBudgetEditor(documentID: id) }
                     .sheet(isPresented: $chooseDates) { WishlistScheduleView(documentID: id) }
                     .sheet(isPresented: $addingPlan) { TripAddFlowView(documentID: id, day: addingDay) }
                     .sheet(item: $event) { JourneyEventEditor(documentID: id, event: $0) }
@@ -352,6 +373,10 @@ struct JourneyDetailView: View {
                                 }.padding(18).cardSurface(cornerRadius: 22)
                             }.buttonStyle(PressStyle()).accessibilityIdentifier("agenda-event-\(day.localDay)")
                             .contextMenu {
+                                Button(item.isDone == true ? "Mark not done" : "Mark done", systemImage: item.isDone == true ? "arrow.uturn.backward" : "checkmark.circle") {
+                                    guard var current = document, let index = current.events.firstIndex(where: { $0.id == item.id }) else { return }
+                                    current.events[index].isDone = item.isDone != true; _ = library.save(current)
+                                }
                                 if item.isPlaceVisit {
                                     Button("Log or rate visit", systemImage: "star.bubble") { rated = d.places.first(where: { $0.place.id == item.place.id && $0.place.source == item.place.source }) ?? RatedPlace(place: item.place) }
                                 }
@@ -364,13 +389,7 @@ struct JourneyDetailView: View {
                 }
             }
             if mode == "Map" || (d.hotels.isEmpty && d.flights.isEmpty) { bookingSection(d, conflicts: conflicts) }
-            VStack(alignment: .leading, spacing: 14) {
-                SectionHeading(title: "Budget")
-                priceRows(d.eventTotals, label: "Events")
-                Divider()
-                priceRows(d.totals, label: "Total planned cost")
-                DisclosureGroup("How totals work") { Text("Repeated events count once per day. Currencies stay separate. Only added prices count.").font(.caption).foregroundStyle(.secondary) }.font(.caption)
-            }.padding(21).cardSurface(cornerRadius: 25)
+            TripBudgetCard(document: d)
         }
     }
     private func bookingSection(_ d: JourneyDocument, conflicts: [JourneyConflicts.Warning]) -> some View {
@@ -394,9 +413,6 @@ struct JourneyDetailView: View {
                 }.frame(maxWidth: .infinity, alignment: .leading)
             }.padding(.horizontal, 4).padding(.bottom, 4)
         }.buttonStyle(.plain).accessibilityIdentifier("agenda-conflict-" + warning.id)
-    }
-    private func priceRows(_ totals: [String: Decimal], label: String) -> some View {
-        VStack(alignment: .leading, spacing: 8) { Text(label).font(.subheadline.weight(.medium)); if totals.isEmpty { Text("No prices added").font(.caption).foregroundStyle(.secondary) }; ForEach(totals.keys.sorted(), id: \.self) { currency in HStack { Text(currency).foregroundStyle(.secondary); Spacer(); Text(TravelMoney(amount: totals[currency]!, currency: currency).formatted) }.font(.subheadline) } }
     }
     private func bookingRow(_ name: String, subtitle: String, symbol: String, cost: TravelMoney?) -> some View {
         HStack(spacing: 16) { Image(systemName: symbol).font(.title2.weight(.light)).foregroundStyle(Color.bronze); VStack(alignment: .leading, spacing: 7) { Text(name).font(.system(.headline, design: .serif)).foregroundStyle(.primary); Text(subtitle).font(.caption).foregroundStyle(.secondary); if let cost { Text(cost.formatted).font(.caption).foregroundStyle(Color.bronze) } }.frame(maxWidth: .infinity, alignment: .leading) }.padding(19).cardSurface(cornerRadius: 23)
@@ -659,6 +675,7 @@ struct AddTripDestinationView: View {
             Form {
                 Section { LocationAutocompleteField("Destination", text: $destination, identifier: "add-trip-destination", onEdit: { selection = nil }) { selection = $0 } }
                 Section("Travel dates") { DayField(title: "Arrival", value: $start); DayField(title: "Departure", value: $end) }
+                Section { SeasonalityCard(city: destination, countryCode: TravelStatistics.countryCode(selection?.countryCode) ?? TravelStatistics.countryCode(selection?.country), arrival: start, departure: end) }
                 if let error { Text(error).foregroundStyle(.red) }
             }.scrollContentBackground(.hidden).background(Color.canvas).navigationTitle("Where will this happen?").navigationBarTitleDisplayMode(.inline)
                 .toolbar {

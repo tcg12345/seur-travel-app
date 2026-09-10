@@ -1,0 +1,1450 @@
+{
+  "schemaVersion": 1,
+  "reviewedOn": "2026-09-08",
+  "cities": [
+    {
+      "id": "paris",
+      "name": "Paris",
+      "countryCode": "FR",
+      "aliases": [
+        "Paris, France"
+      ],
+      "months": [
+        {
+          "month": 1,
+          "season": "quieter",
+          "weather": "Cold",
+          "rain": "Showery"
+        },
+        {
+          "month": 2,
+          "season": "quieter",
+          "weather": "Cold",
+          "rain": "Showery"
+        },
+        {
+          "month": 3,
+          "season": "shoulder",
+          "weather": "Cool",
+          "rain": "Showery"
+        },
+        {
+          "month": 4,
+          "season": "shoulder",
+          "weather": "Mild",
+          "rain": "Showery"
+        },
+        {
+          "month": 5,
+          "season": "peak",
+          "weather": "Mild",
+          "rain": "Showery"
+        },
+        {
+          "month": 6,
+          "season": "peak",
+          "weather": "Warm",
+          "rain": "Showery"
+        },
+        {
+          "month": 7,
+          "season": "peak",
+          "weather": "Warm",
+          "rain": "Showery"
+        },
+        {
+          "month": 8,
+          "season": "peak",
+          "weather": "Warm",
+          "rain": "Showery"
+        },
+        {
+          "month": 9,
+          "season": "shoulder",
+          "weather": "Mild",
+          "rain": "Showery"
+        },
+        {
+          "month": 10,
+          "season": "shoulder",
+          "weather": "Mild",
+          "rain": "Showery"
+        },
+        {
+          "month": 11,
+          "season": "quieter",
+          "weather": "Cool",
+          "rain": "Showery"
+        },
+        {
+          "month": 12,
+          "season": "peak",
+          "weather": "Cold",
+          "rain": "Showery"
+        }
+      ],
+      "sources": [
+        {
+          "title": "Paris tourism: climate",
+          "url": "https://parisjetaime.com/eng/article/climate-a098"
+        },
+        {
+          "title": "Paris by Mouth: August restaurant openings",
+          "url": "https://parisbymouth.com/where-to-eat-in-paris-in-august/"
+        }
+      ],
+      "notices": [
+        {
+          "id": "paris-august",
+          "title": "August restaurant holidays",
+          "detail": "Some independent restaurants and shops take summer holidays. Paris stays open; confirm individual venue dates before building a dining itinerary.",
+          "timing": "annual",
+          "start": "08-01",
+          "end": "08-31",
+          "source": "https://parisbymouth.com/where-to-eat-in-paris-in-august/"
+        },
+        {
+          "id": "paris-summer",
+          "title": "Summer crowds & heat",
+          "detail": "Popular sights can be busy and heatwaves can affect outdoor plans. Reserve major attractions and leave room for indoor breaks.",
+          "timing": "annual",
+          "start": "06-01",
+          "end": "08-31",
+          "source": "https://parisjetaime.com/eng/article/climate-a098"
+        }
+      ]
+    },
+    {
+      "id": "london",
+      "name": "London",
+      "countryCode": "GB",
+      "aliases": [
+        "London, UK",
+        "London, United Kingdom",
+        "London, England"
+      ],
+      "months": [
+        {
+          "month": 1,
+          "season": "quieter",
+          "weather": "Cold",
+          "rain": "Showery"
+        },
+        {
+          "month": 2,
+          "season": "quieter",
+          "weather": "Cold",
+          "rain": "Showery"
+        },
+        {
+          "month": 3,
+          "season": "shoulder",
+          "weather": "Cool",
+          "rain": "Showery"
+        },
+        {
+          "month": 4,
+          "season": "shoulder",
+          "weather": "Mild",
+          "rain": "Showery"
+        },
+        {
+          "month": 5,
+          "season": "shoulder",
+          "weather": "Mild",
+          "rain": "Showery"
+        },
+        {
+          "month": 6,
+          "season": "peak",
+          "weather": "Warm",
+          "rain": "Showery"
+        },
+        {
+          "month": 7,
+          "season": "peak",
+          "weather": "Warm",
+          "rain": "Showery"
+        },
+        {
+          "month": 8,
+          "season": "peak",
+          "weather": "Warm",
+          "rain": "Showery"
+        },
+        {
+          "month": 9,
+          "season": "shoulder",
+          "weather": "Mild",
+          "rain": "Showery"
+        },
+        {
+          "month": 10,
+          "season": "shoulder",
+          "weather": "Cool",
+          "rain": "Showery"
+        },
+        {
+          "month": 11,
+          "season": "quieter",
+          "weather": "Cool",
+          "rain": "Showery"
+        },
+        {
+          "month": 12,
+          "season": "peak",
+          "weather": "Cold",
+          "rain": "Showery"
+        }
+      ],
+      "sources": [
+        {
+          "title": "Visit London: when to visit",
+          "url": "https://www.visitlondon.com/things-to-do/visiting-london-for-the-first-time/best-time-to-visit"
+        },
+        {
+          "title": "Visit London: Christmas Day",
+          "url": "https://www.visitlondon.com/things-to-do/whats-on/christmas/things-to-do-in-london-on-christmas-day"
+        }
+      ],
+      "notices": [
+        {
+          "id": "london-christmas",
+          "title": "Christmas Day closures",
+          "detail": "Most attractions close and regular London public transport usually does not run on Christmas Day. Check the year’s TfL service plan and book meals ahead.",
+          "timing": "annual",
+          "start": "12-25",
+          "end": "12-25",
+          "source": "https://www.visitlondon.com/things-to-do/whats-on/christmas/things-to-do-in-london-on-christmas-day"
+        },
+        {
+          "id": "london-summer",
+          "title": "Summer visitor peak",
+          "detail": "Longer days and school holidays bring crowds to major attractions. Book popular timed tickets ahead.",
+          "timing": "annual",
+          "start": "07-01",
+          "end": "08-31",
+          "source": "https://www.visitlondon.com/things-to-do/visiting-london-for-the-first-time/best-time-to-visit"
+        }
+      ]
+    },
+    {
+      "id": "tokyo",
+      "name": "Tokyo",
+      "countryCode": "JP",
+      "aliases": [
+        "Tokyo, Japan",
+        "東京"
+      ],
+      "months": [
+        {
+          "month": 1,
+          "season": "quieter",
+          "weather": "Cold",
+          "rain": "Drier"
+        },
+        {
+          "month": 2,
+          "season": "shoulder",
+          "weather": "Cold",
+          "rain": "Drier"
+        },
+        {
+          "month": 3,
+          "season": "peak",
+          "weather": "Cool",
+          "rain": "Showery"
+        },
+        {
+          "month": 4,
+          "season": "peak",
+          "weather": "Mild",
+          "rain": "Showery"
+        },
+        {
+          "month": 5,
+          "season": "shoulder",
+          "weather": "Warm",
+          "rain": "Showery"
+        },
+        {
+          "month": 6,
+          "season": "quieter",
+          "weather": "Warm",
+          "rain": "Rainy season"
+        },
+        {
+          "month": 7,
+          "season": "quieter",
+          "weather": "Hot & humid",
+          "rain": "Wet"
+        },
+        {
+          "month": 8,
+          "season": "quieter",
+          "weather": "Hot & humid",
+          "rain": "Showery"
+        },
+        {
+          "month": 9,
+          "season": "shoulder",
+          "weather": "Warm & humid",
+          "rain": "Wet; storms possible"
+        },
+        {
+          "month": 10,
+          "season": "peak",
+          "weather": "Mild",
+          "rain": "Showery"
+        },
+        {
+          "month": 11,
+          "season": "peak",
+          "weather": "Cool",
+          "rain": "Drier"
+        },
+        {
+          "month": 12,
+          "season": "shoulder",
+          "weather": "Cold",
+          "rain": "Drier"
+        }
+      ],
+      "sources": [
+        {
+          "title": "Japan tourism: seasonal travel",
+          "url": "https://www.japan.travel/en/gc/tips/"
+        },
+        {
+          "title": "Tokyo tourism: spring",
+          "url": "https://www.gotokyo.org/en/story/guide/spring/index.html"
+        }
+      ],
+      "notices": [
+        {
+          "id": "tokyo-golden-week",
+          "title": "Golden Week",
+          "detail": "A busy domestic travel period: reserve trains and hotels early. Core holidays run from late April into early May; substitute holidays and weekends can extend the rush.",
+          "timing": "annual",
+          "start": "04-29",
+          "end": "05-05",
+          "source": "https://www.japan.travel/en/gc/tips/"
+        },
+        {
+          "id": "tokyo-obon",
+          "title": "Obon travel period",
+          "detail": "Mid-August family travel can strain trains and hotels. Some small businesses take holidays; local observance dates vary.",
+          "timing": "annual",
+          "start": "08-13",
+          "end": "08-16",
+          "source": "https://www.japan.travel/en/gc/tips/"
+        },
+        {
+          "id": "tokyo-new-year",
+          "title": "New Year opening hours",
+          "detail": "Many businesses and some attractions close around New Year. Confirm restaurant and museum schedules.",
+          "timing": "annual",
+          "start": "12-29",
+          "end": "01-03",
+          "source": "https://www.japan.travel/en/gc/tips/"
+        },
+        {
+          "id": "tokyo-blossom",
+          "title": "Cherry blossom demand",
+          "detail": "Late March and early April can be especially busy. Bloom timing varies with weather; these dates are a planning window.",
+          "timing": "annual",
+          "start": "03-20",
+          "end": "04-10",
+          "source": "https://www.gotokyo.org/en/story/guide/spring/index.html"
+        }
+      ]
+    },
+    {
+      "id": "new-york",
+      "name": "New York",
+      "countryCode": "US",
+      "aliases": [
+        "New York City",
+        "NYC",
+        "New York, NY",
+        "New York, USA",
+        "New York, United States",
+        "New York, NY, United States"
+      ],
+      "months": [
+        {
+          "month": 1,
+          "season": "quieter",
+          "weather": "Cold",
+          "rain": "Rain or snow"
+        },
+        {
+          "month": 2,
+          "season": "quieter",
+          "weather": "Cold",
+          "rain": "Rain or snow"
+        },
+        {
+          "month": 3,
+          "season": "shoulder",
+          "weather": "Cool",
+          "rain": "Showery"
+        },
+        {
+          "month": 4,
+          "season": "shoulder",
+          "weather": "Mild",
+          "rain": "Showery"
+        },
+        {
+          "month": 5,
+          "season": "shoulder",
+          "weather": "Warm",
+          "rain": "Showery"
+        },
+        {
+          "month": 6,
+          "season": "peak",
+          "weather": "Warm",
+          "rain": "Showery"
+        },
+        {
+          "month": 7,
+          "season": "peak",
+          "weather": "Hot & humid",
+          "rain": "Thunderstorms possible"
+        },
+        {
+          "month": 8,
+          "season": "peak",
+          "weather": "Hot & humid",
+          "rain": "Thunderstorms possible"
+        },
+        {
+          "month": 9,
+          "season": "shoulder",
+          "weather": "Warm",
+          "rain": "Showery"
+        },
+        {
+          "month": 10,
+          "season": "shoulder",
+          "weather": "Mild",
+          "rain": "Showery"
+        },
+        {
+          "month": 11,
+          "season": "peak",
+          "weather": "Cool",
+          "rain": "Showery"
+        },
+        {
+          "month": 12,
+          "season": "peak",
+          "weather": "Cold",
+          "rain": "Rain or snow"
+        }
+      ],
+      "sources": [
+        {
+          "title": "NYC tourism: weather",
+          "url": "https://www.nyctourism.com/weather-climate/"
+        },
+        {
+          "title": "NYC tourism: winter holidays",
+          "url": "https://www.business.nyctourism.com/travel-trade/articles/winter-holidays-in-nyc"
+        }
+      ],
+      "notices": [
+        {
+          "id": "ny-holidays",
+          "title": "Winter holiday crowds",
+          "detail": "Holiday displays and celebrations draw visitors. Allow extra time around Midtown; confirm holiday restaurant and attraction hours.",
+          "timing": "annual",
+          "start": "12-01",
+          "end": "01-01",
+          "source": "https://www.business.nyctourism.com/travel-trade/articles/winter-holidays-in-nyc"
+        },
+        {
+          "id": "ny-new-year",
+          "title": "New Year’s Eve street restrictions",
+          "detail": "Times Square celebrations can disrupt local access. Check event access rules and transport changes before planning dinner nearby.",
+          "timing": "annual",
+          "start": "12-31",
+          "end": "12-31",
+          "source": "https://www.business.nyctourism.com/travel-trade/articles/winter-holidays-in-nyc"
+        }
+      ]
+    },
+    {
+      "id": "bangkok",
+      "name": "Bangkok",
+      "countryCode": "TH",
+      "aliases": [
+        "Bangkok, Thailand",
+        "Krung Thep"
+      ],
+      "months": [
+        {
+          "month": 1,
+          "season": "peak",
+          "weather": "Warm",
+          "rain": "Drier"
+        },
+        {
+          "month": 2,
+          "season": "peak",
+          "weather": "Hot",
+          "rain": "Drier"
+        },
+        {
+          "month": 3,
+          "season": "shoulder",
+          "weather": "Hot",
+          "rain": "Drier"
+        },
+        {
+          "month": 4,
+          "season": "shoulder",
+          "weather": "Very hot",
+          "rain": "Thunderstorms possible"
+        },
+        {
+          "month": 5,
+          "season": "quieter",
+          "weather": "Hot & humid",
+          "rain": "Wet"
+        },
+        {
+          "month": 6,
+          "season": "quieter",
+          "weather": "Hot & humid",
+          "rain": "Wet"
+        },
+        {
+          "month": 7,
+          "season": "quieter",
+          "weather": "Hot & humid",
+          "rain": "Wet"
+        },
+        {
+          "month": 8,
+          "season": "quieter",
+          "weather": "Hot & humid",
+          "rain": "Wet"
+        },
+        {
+          "month": 9,
+          "season": "quieter",
+          "weather": "Hot & humid",
+          "rain": "Wet"
+        },
+        {
+          "month": 10,
+          "season": "shoulder",
+          "weather": "Hot & humid",
+          "rain": "Wet"
+        },
+        {
+          "month": 11,
+          "season": "peak",
+          "weather": "Warm",
+          "rain": "Showery"
+        },
+        {
+          "month": 12,
+          "season": "peak",
+          "weather": "Warm",
+          "rain": "Drier"
+        }
+      ],
+      "sources": [
+        {
+          "title": "Thailand tourism: climate",
+          "url": "https://thai.tourismthailand.org/Plan-Your-Trip/Weather"
+        },
+        {
+          "title": "Thailand tourism: April & Songkran",
+          "url": "https://www.tourismthailand.org/Articles/thailand-april"
+        }
+      ],
+      "notices": [
+        {
+          "id": "bangkok-songkran",
+          "title": "Songkran",
+          "detail": "Mid-April water celebrations bring crowds and local street restrictions. Protect valuables from water and confirm transport around festival areas.",
+          "timing": "annual",
+          "start": "04-13",
+          "end": "04-15",
+          "source": "https://www.tourismthailand.org/Articles/thailand-april"
+        },
+        {
+          "id": "bangkok-rain",
+          "title": "Rainy-season flexibility",
+          "detail": "Leave slack for heavy showers and traffic delays, especially for airport transfers. Keep indoor alternatives for outdoor plans.",
+          "timing": "annual",
+          "start": "05-01",
+          "end": "10-31",
+          "source": "https://thai.tourismthailand.org/Plan-Your-Trip/Weather"
+        }
+      ]
+    },
+    {
+      "id": "singapore",
+      "name": "Singapore",
+      "countryCode": "SG",
+      "aliases": [
+        "Singapore, Singapore"
+      ],
+      "months": [
+        {
+          "month": 1,
+          "season": "peak",
+          "weather": "Hot & humid",
+          "rain": "Wet"
+        },
+        {
+          "month": 2,
+          "season": "peak",
+          "weather": "Hot & humid",
+          "rain": "Showery"
+        },
+        {
+          "month": 3,
+          "season": "shoulder",
+          "weather": "Hot & humid",
+          "rain": "Showery"
+        },
+        {
+          "month": 4,
+          "season": "shoulder",
+          "weather": "Hot & humid",
+          "rain": "Thunderstorms possible"
+        },
+        {
+          "month": 5,
+          "season": "shoulder",
+          "weather": "Hot & humid",
+          "rain": "Thunderstorms possible"
+        },
+        {
+          "month": 6,
+          "season": "peak",
+          "weather": "Hot & humid",
+          "rain": "Showery"
+        },
+        {
+          "month": 7,
+          "season": "peak",
+          "weather": "Hot & humid",
+          "rain": "Showery"
+        },
+        {
+          "month": 8,
+          "season": "shoulder",
+          "weather": "Hot & humid",
+          "rain": "Showery"
+        },
+        {
+          "month": 9,
+          "season": "shoulder",
+          "weather": "Hot & humid",
+          "rain": "Showery"
+        },
+        {
+          "month": 10,
+          "season": "shoulder",
+          "weather": "Hot & humid",
+          "rain": "Thunderstorms possible"
+        },
+        {
+          "month": 11,
+          "season": "shoulder",
+          "weather": "Hot & humid",
+          "rain": "Wet"
+        },
+        {
+          "month": 12,
+          "season": "peak",
+          "weather": "Hot & humid",
+          "rain": "Wet"
+        }
+      ],
+      "sources": [
+        {
+          "title": "Singapore tourism: essential information",
+          "url": "https://www.visitsingapore.com/travel-tips/essential-travel-information/"
+        },
+        {
+          "title": "Singapore Ministry of Manpower: holidays",
+          "url": "https://www.mom.gov.sg/employment-practices/public-holidays"
+        },
+        {
+          "title": "Singapore weather service: climate",
+          "url": "https://www.weather.gov.sg/climate-climate-of-singapore/"
+        }
+      ],
+      "notices": [
+        {
+          "id": "singapore-lunar-new-year",
+          "title": "Chinese New Year",
+          "detail": "Some family-run eateries and shops close while celebrations attract crowds. Confirm opening times; major malls and attractions may have special hours.",
+          "timing": "dated",
+          "occurrences": [
+            {
+              "start": "2026-02-17",
+              "end": "2026-02-18"
+            },
+            {
+              "start": "2027-02-06",
+              "end": "2027-02-08"
+            }
+          ],
+          "source": "https://www.mom.gov.sg/employment-practices/public-holidays"
+        },
+        {
+          "id": "singapore-hari-raya",
+          "title": "Hari Raya & Ramadan hours",
+          "detail": "Ramadan bazaars and Hari Raya can change dining routines and opening hours. Check the local Muslim calendar and individual venues for your year.",
+          "timing": "checkCalendar",
+          "source": "https://www.mom.gov.sg/employment-practices/public-holidays"
+        }
+      ]
+    },
+    {
+      "id": "hong-kong",
+      "name": "Hong Kong",
+      "countryCode": "HK",
+      "aliases": [
+        "Hong Kong, Hong Kong",
+        "Hong Kong, China",
+        "Hong Kong SAR"
+      ],
+      "months": [
+        {
+          "month": 1,
+          "season": "shoulder",
+          "weather": "Cool",
+          "rain": "Drier"
+        },
+        {
+          "month": 2,
+          "season": "peak",
+          "weather": "Cool",
+          "rain": "Showery"
+        },
+        {
+          "month": 3,
+          "season": "shoulder",
+          "weather": "Mild",
+          "rain": "Showery"
+        },
+        {
+          "month": 4,
+          "season": "shoulder",
+          "weather": "Warm",
+          "rain": "Showery"
+        },
+        {
+          "month": 5,
+          "season": "quieter",
+          "weather": "Hot & humid",
+          "rain": "Wet"
+        },
+        {
+          "month": 6,
+          "season": "quieter",
+          "weather": "Hot & humid",
+          "rain": "Wet"
+        },
+        {
+          "month": 7,
+          "season": "quieter",
+          "weather": "Hot & humid",
+          "rain": "Wet"
+        },
+        {
+          "month": 8,
+          "season": "quieter",
+          "weather": "Hot & humid",
+          "rain": "Wet"
+        },
+        {
+          "month": 9,
+          "season": "shoulder",
+          "weather": "Hot & humid",
+          "rain": "Wet"
+        },
+        {
+          "month": 10,
+          "season": "peak",
+          "weather": "Warm",
+          "rain": "Drier"
+        },
+        {
+          "month": 11,
+          "season": "peak",
+          "weather": "Mild",
+          "rain": "Drier"
+        },
+        {
+          "month": 12,
+          "season": "peak",
+          "weather": "Cool",
+          "rain": "Drier"
+        }
+      ],
+      "sources": [
+        {
+          "title": "Hong Kong Observatory: climate",
+          "url": "https://www.weather.gov.hk/en/cis/climahk.htm"
+        },
+        {
+          "title": "Hong Kong government: holidays",
+          "url": "https://www.gov.hk/en/about/abouthk/holiday/"
+        }
+      ],
+      "notices": [
+        {
+          "id": "hong-kong-lunar-new-year",
+          "title": "Lunar New Year",
+          "detail": "Independent businesses may close and celebrations attract crowds. Check restaurant bookings and transport arrangements.",
+          "timing": "dated",
+          "occurrences": [
+            {
+              "start": "2026-02-17",
+              "end": "2026-02-19"
+            },
+            {
+              "start": "2027-02-06",
+              "end": "2027-02-09"
+            }
+          ],
+          "source": "https://www.gov.hk/en/about/abouthk/holiday/"
+        },
+        {
+          "id": "hong-kong-storms",
+          "title": "Tropical cyclone disruption",
+          "detail": "Storm signals can affect ferries, flights and outdoor attractions. Check official warnings closer to travel.",
+          "timing": "annual",
+          "start": "05-01",
+          "end": "11-30",
+          "source": "https://www.weather.gov.hk/en/cis/climahk.htm"
+        }
+      ]
+    },
+    {
+      "id": "dubai",
+      "name": "Dubai",
+      "countryCode": "AE",
+      "aliases": [
+        "Dubai, UAE",
+        "Dubai, United Arab Emirates"
+      ],
+      "months": [
+        {
+          "month": 1,
+          "season": "peak",
+          "weather": "Warm",
+          "rain": "Occasional rain"
+        },
+        {
+          "month": 2,
+          "season": "peak",
+          "weather": "Warm",
+          "rain": "Occasional rain"
+        },
+        {
+          "month": 3,
+          "season": "peak",
+          "weather": "Warm",
+          "rain": "Occasional rain"
+        },
+        {
+          "month": 4,
+          "season": "shoulder",
+          "weather": "Hot",
+          "rain": "Drier"
+        },
+        {
+          "month": 5,
+          "season": "quieter",
+          "weather": "Very hot",
+          "rain": "Drier"
+        },
+        {
+          "month": 6,
+          "season": "quieter",
+          "weather": "Very hot",
+          "rain": "Drier"
+        },
+        {
+          "month": 7,
+          "season": "quieter",
+          "weather": "Very hot & humid",
+          "rain": "Drier"
+        },
+        {
+          "month": 8,
+          "season": "quieter",
+          "weather": "Very hot & humid",
+          "rain": "Drier"
+        },
+        {
+          "month": 9,
+          "season": "quieter",
+          "weather": "Very hot",
+          "rain": "Drier"
+        },
+        {
+          "month": 10,
+          "season": "shoulder",
+          "weather": "Hot",
+          "rain": "Drier"
+        },
+        {
+          "month": 11,
+          "season": "peak",
+          "weather": "Warm",
+          "rain": "Drier"
+        },
+        {
+          "month": 12,
+          "season": "peak",
+          "weather": "Warm",
+          "rain": "Occasional rain"
+        }
+      ],
+      "sources": [
+        {
+          "title": "Dubai tourism: weather",
+          "url": "https://www.visitdubai.com/en/plan-your-trip/weather-in-dubai"
+        },
+        {
+          "title": "Dubai tourism: Ramadan",
+          "url": "https://www.visitdubai.com/en/festivals-and-events/ramadan-in-dubai/faqs"
+        },
+        {
+          "title": "Dubai tourism: daytime dining",
+          "url": "https://www.visitdubai.com/articles/open-restaurants-in-ramadan"
+        }
+      ],
+      "notices": [
+        {
+          "id": "dubai-heat",
+          "title": "Summer heat",
+          "detail": "Plan outdoor time early or late and allow for indoor breaks. Seasonal outdoor attractions may close for summer; check each venue.",
+          "timing": "annual",
+          "start": "05-01",
+          "end": "09-30",
+          "source": "https://www.visitdubai.com/en/plan-your-trip/weather-in-dubai"
+        },
+        {
+          "id": "dubai-ramadan",
+          "title": "Ramadan hours",
+          "detail": "Hours can shift toward the evening and iftar bookings get busy. Daytime dining remains available at many venues. Dates depend on the local lunar calendar; confirm your year.",
+          "timing": "checkCalendar",
+          "source": "https://www.visitdubai.com/en/festivals-and-events/ramadan-in-dubai/faqs"
+        }
+      ]
+    },
+    {
+      "id": "shanghai",
+      "name": "Shanghai",
+      "countryCode": "CN",
+      "aliases": [
+        "Shanghai, China",
+        "上海"
+      ],
+      "months": [
+        {
+          "month": 1,
+          "season": "quieter",
+          "weather": "Cold",
+          "rain": "Showery"
+        },
+        {
+          "month": 2,
+          "season": "quieter",
+          "weather": "Cold",
+          "rain": "Showery"
+        },
+        {
+          "month": 3,
+          "season": "shoulder",
+          "weather": "Cool",
+          "rain": "Showery"
+        },
+        {
+          "month": 4,
+          "season": "peak",
+          "weather": "Mild",
+          "rain": "Showery"
+        },
+        {
+          "month": 5,
+          "season": "peak",
+          "weather": "Warm",
+          "rain": "Showery"
+        },
+        {
+          "month": 6,
+          "season": "shoulder",
+          "weather": "Hot & humid",
+          "rain": "Plum rains"
+        },
+        {
+          "month": 7,
+          "season": "quieter",
+          "weather": "Hot & humid",
+          "rain": "Wet"
+        },
+        {
+          "month": 8,
+          "season": "quieter",
+          "weather": "Hot & humid",
+          "rain": "Wet; storms possible"
+        },
+        {
+          "month": 9,
+          "season": "shoulder",
+          "weather": "Warm",
+          "rain": "Showery"
+        },
+        {
+          "month": 10,
+          "season": "peak",
+          "weather": "Mild",
+          "rain": "Showery"
+        },
+        {
+          "month": 11,
+          "season": "shoulder",
+          "weather": "Cool",
+          "rain": "Drier"
+        },
+        {
+          "month": 12,
+          "season": "shoulder",
+          "weather": "Cold",
+          "rain": "Drier"
+        }
+      ],
+      "sources": [
+        {
+          "title": "Shanghai government: climate",
+          "url": "https://english.shanghai.gov.cn/en-Overview/20241225/ce046a2a1e754fde8c02804d6d66db18.html"
+        },
+        {
+          "title": "China: published holiday schedule",
+          "url": "https://english.beijing.gov.cn/workinginbeijing/laborrights/publicholidays/"
+        }
+      ],
+      "notices": [
+        {
+          "id": "shanghai-spring-festival",
+          "title": "Spring Festival travel rush",
+          "detail": "Holiday travel can fill trains and hotels. Some independent restaurants close; check opening times and book transfers early.",
+          "timing": "dated",
+          "occurrences": [
+            {
+              "start": "2026-02-15",
+              "end": "2026-02-23"
+            }
+          ],
+          "source": "https://english.beijing.gov.cn/workinginbeijing/laborrights/publicholidays/"
+        },
+        {
+          "id": "shanghai-golden-week",
+          "title": "National Day Golden Week",
+          "detail": "Early October is a major domestic travel peak. The exact holiday allocation and make-up working days vary by year; check the published schedule.",
+          "timing": "annual",
+          "start": "10-01",
+          "end": "10-07",
+          "source": "https://english.beijing.gov.cn/workinginbeijing/laborrights/publicholidays/"
+        },
+        {
+          "id": "shanghai-may-holiday",
+          "title": "May Day holiday",
+          "detail": "Expect busy attractions and domestic transport during the published holiday break.",
+          "timing": "dated",
+          "occurrences": [
+            {
+              "start": "2026-05-01",
+              "end": "2026-05-05"
+            }
+          ],
+          "source": "https://english.beijing.gov.cn/workinginbeijing/laborrights/publicholidays/"
+        }
+      ]
+    },
+    {
+      "id": "istanbul",
+      "name": "Istanbul",
+      "countryCode": "TR",
+      "aliases": [
+        "İstanbul",
+        "Istanbul, Türkiye",
+        "Istanbul, Turkey"
+      ],
+      "months": [
+        {
+          "month": 1,
+          "season": "quieter",
+          "weather": "Cold",
+          "rain": "Wet; snow possible"
+        },
+        {
+          "month": 2,
+          "season": "quieter",
+          "weather": "Cold",
+          "rain": "Wet; snow possible"
+        },
+        {
+          "month": 3,
+          "season": "shoulder",
+          "weather": "Cool",
+          "rain": "Showery"
+        },
+        {
+          "month": 4,
+          "season": "shoulder",
+          "weather": "Mild",
+          "rain": "Showery"
+        },
+        {
+          "month": 5,
+          "season": "shoulder",
+          "weather": "Warm",
+          "rain": "Showery"
+        },
+        {
+          "month": 6,
+          "season": "peak",
+          "weather": "Warm",
+          "rain": "Drier"
+        },
+        {
+          "month": 7,
+          "season": "peak",
+          "weather": "Hot",
+          "rain": "Drier"
+        },
+        {
+          "month": 8,
+          "season": "peak",
+          "weather": "Hot",
+          "rain": "Drier"
+        },
+        {
+          "month": 9,
+          "season": "shoulder",
+          "weather": "Warm",
+          "rain": "Showery"
+        },
+        {
+          "month": 10,
+          "season": "shoulder",
+          "weather": "Mild",
+          "rain": "Showery"
+        },
+        {
+          "month": 11,
+          "season": "quieter",
+          "weather": "Cool",
+          "rain": "Wet"
+        },
+        {
+          "month": 12,
+          "season": "quieter",
+          "weather": "Cold",
+          "rain": "Wet"
+        }
+      ],
+      "sources": [
+        {
+          "title": "Türkiye meteorological service: Istanbul",
+          "url": "https://www.mgm.gov.tr/VERIDEGERLENDIRME/il-ve-ilceler-istatistik.aspx?k=&m=ISTANBUL"
+        },
+        {
+          "title": "Diyanet: 2026 religious calendar",
+          "url": "https://vakithesaplama.diyanet.gov.tr/icerik.php?icerik=153"
+        }
+      ],
+      "notices": [
+        {
+          "id": "istanbul-ramadan",
+          "title": "Ramadan hours",
+          "detail": "Allow for evening dining demand around iftar. Check individual opening hours and mosque visitor access around prayers; the city continues to welcome visitors.",
+          "timing": "dated",
+          "occurrences": [
+            {
+              "start": "2026-02-19",
+              "end": "2026-03-19"
+            }
+          ],
+          "source": "https://vakithesaplama.diyanet.gov.tr/icerik.php?icerik=153"
+        },
+        {
+          "id": "istanbul-eid",
+          "title": "Ramadan Bayram holiday",
+          "detail": "Public holidays may affect shops and attraction schedules. Confirm venue hours and transport before fixing your plans.",
+          "timing": "dated",
+          "occurrences": [
+            {
+              "start": "2026-03-20",
+              "end": "2026-03-22"
+            }
+          ],
+          "source": "https://vakithesaplama.diyanet.gov.tr/icerik.php?icerik=153"
+        }
+      ]
+    },
+    {
+      "id": "macau",
+      "name": "Macau",
+      "countryCode": "MO",
+      "aliases": [
+        "Macao",
+        "Macao, China",
+        "Macau, China",
+        "Macao SAR",
+        "Macau SAR"
+      ],
+      "months": [
+        {
+          "month": 1,
+          "season": "shoulder",
+          "weather": "Cool",
+          "rain": "Drier"
+        },
+        {
+          "month": 2,
+          "season": "peak",
+          "weather": "Cool",
+          "rain": "Showery"
+        },
+        {
+          "month": 3,
+          "season": "shoulder",
+          "weather": "Mild",
+          "rain": "Showery"
+        },
+        {
+          "month": 4,
+          "season": "shoulder",
+          "weather": "Warm",
+          "rain": "Showery"
+        },
+        {
+          "month": 5,
+          "season": "quieter",
+          "weather": "Hot & humid",
+          "rain": "Wet"
+        },
+        {
+          "month": 6,
+          "season": "quieter",
+          "weather": "Hot & humid",
+          "rain": "Wet"
+        },
+        {
+          "month": 7,
+          "season": "quieter",
+          "weather": "Hot & humid",
+          "rain": "Wet"
+        },
+        {
+          "month": 8,
+          "season": "quieter",
+          "weather": "Hot & humid",
+          "rain": "Wet"
+        },
+        {
+          "month": 9,
+          "season": "shoulder",
+          "weather": "Hot & humid",
+          "rain": "Wet"
+        },
+        {
+          "month": 10,
+          "season": "peak",
+          "weather": "Warm",
+          "rain": "Drier"
+        },
+        {
+          "month": 11,
+          "season": "peak",
+          "weather": "Mild",
+          "rain": "Drier"
+        },
+        {
+          "month": 12,
+          "season": "peak",
+          "weather": "Cool",
+          "rain": "Drier"
+        }
+      ],
+      "sources": [
+        {
+          "title": "Macao tourism: practical information",
+          "url": "https://www.macaotourism.gov.mo/en/article/before-you-travel/practical-info"
+        },
+        {
+          "title": "Macao tourism: Chinese New Year",
+          "url": "https://www.macaotourism.gov.mo/en/events/calendar/chinese-new-year"
+        },
+        {
+          "title": "Macao tourism: typhoons",
+          "url": "https://www.macaotourism.gov.mo/en/travelessential/useful-info/what-you-need-to-know-about-typhoon-season"
+        }
+      ],
+      "notices": [
+        {
+          "id": "macau-lunar-new-year",
+          "title": "Chinese New Year",
+          "detail": "Celebrations bring crowds while some shops and offices close. Confirm restaurant openings and allow extra time for border crossings.",
+          "timing": "dated",
+          "occurrences": [
+            {
+              "start": "2026-02-17",
+              "end": "2026-02-19"
+            }
+          ],
+          "source": "https://www.macaotourism.gov.mo/en/events/calendar/chinese-new-year"
+        },
+        {
+          "id": "macau-storms",
+          "title": "Typhoon-season transport",
+          "detail": "Storm warnings can interrupt ferries, flights and outdoor plans. Check official warnings and transport notices before travelling.",
+          "timing": "annual",
+          "start": "05-01",
+          "end": "11-30",
+          "source": "https://www.macaotourism.gov.mo/en/article/before-you-travel/practical-info"
+        }
+      ]
+    },
+    {
+      "id": "kuala-lumpur",
+      "name": "Kuala Lumpur",
+      "countryCode": "MY",
+      "aliases": [
+        "Kuala Lumpur, Malaysia",
+        "KL"
+      ],
+      "months": [
+        {
+          "month": 1,
+          "season": "shoulder",
+          "weather": "Hot & humid",
+          "rain": "Showery"
+        },
+        {
+          "month": 2,
+          "season": "peak",
+          "weather": "Hot & humid",
+          "rain": "Showery"
+        },
+        {
+          "month": 3,
+          "season": "shoulder",
+          "weather": "Hot & humid",
+          "rain": "Showery"
+        },
+        {
+          "month": 4,
+          "season": "shoulder",
+          "weather": "Hot & humid",
+          "rain": "Thunderstorms possible"
+        },
+        {
+          "month": 5,
+          "season": "shoulder",
+          "weather": "Hot & humid",
+          "rain": "Thunderstorms possible"
+        },
+        {
+          "month": 6,
+          "season": "peak",
+          "weather": "Hot & humid",
+          "rain": "Showery"
+        },
+        {
+          "month": 7,
+          "season": "peak",
+          "weather": "Hot & humid",
+          "rain": "Showery"
+        },
+        {
+          "month": 8,
+          "season": "shoulder",
+          "weather": "Hot & humid",
+          "rain": "Showery"
+        },
+        {
+          "month": 9,
+          "season": "shoulder",
+          "weather": "Hot & humid",
+          "rain": "Showery"
+        },
+        {
+          "month": 10,
+          "season": "quieter",
+          "weather": "Hot & humid",
+          "rain": "Wet; thunderstorms"
+        },
+        {
+          "month": 11,
+          "season": "quieter",
+          "weather": "Hot & humid",
+          "rain": "Wet; thunderstorms"
+        },
+        {
+          "month": 12,
+          "season": "peak",
+          "weather": "Hot & humid",
+          "rain": "Wet"
+        }
+      ],
+      "sources": [
+        {
+          "title": "Malaysia meteorological service: climate",
+          "url": "https://www.met.gov.my/en/iklim/maklumat-iklim/"
+        },
+        {
+          "title": "Malaysia tourism: Ramadan bazaars",
+          "url": "https://www.malaysia.travel/explore/12-ramadhan-bazaars-not-to-be-missed-in-kl-selangor"
+        },
+        {
+          "title": "Malaysia tourism: Kuala Lumpur attractions",
+          "url": "https://www.malaysia.travel/explore/top-places-to-visit-in-kuala-lumpur"
+        }
+      ],
+      "notices": [
+        {
+          "id": "kl-ramadan",
+          "title": "Ramadan bazaars & hours",
+          "detail": "Ramadan brings lively food bazaars and busy pre-iftar travel. Confirm dining and visitor hours with individual venues, and check local Ramadan and Hari Raya dates for your year.",
+          "timing": "checkCalendar",
+          "source": "https://www.malaysia.travel/explore/12-ramadhan-bazaars-not-to-be-missed-in-kl-selangor"
+        },
+        {
+          "id": "kl-lunar-new-year",
+          "title": "Chinese New Year & holiday openings",
+          "detail": "Check the Malaysian holiday calendar for your year and confirm independent shop and restaurant opening days around Chinese New Year.",
+          "timing": "checkCalendar",
+          "source": "https://www.malaysia.gov.my/calendar"
+        },
+        {
+          "id": "kl-thunderstorms",
+          "title": "Wetter transition months",
+          "detail": "October and November often bring thunderstorms. Keep indoor alternatives and allow extra time for road transfers.",
+          "timing": "annual",
+          "start": "10-01",
+          "end": "11-30",
+          "source": "https://www.met.gov.my/en/iklim/maklumat-iklim/"
+        }
+      ]
+    }
+  ]
+}

@@ -1,4 +1,5 @@
 import SwiftUI
+import UserNotifications
 
 struct AppEntryView: View {
     @Environment(OnboardingStore.self) private var onboarding
@@ -30,7 +31,9 @@ struct OnboardingView: View {
             else if step == 4 {
                 OnboardingAccountView(signingIn: signingIn, onBack: { move(to: accountReturnStep) }, onContinue: { move(to: 5) })
             } else if step == 5 {
-                MembershipPreviewView(onBack: { move(to: 4) }, onFinish: finish)
+                MembershipPreviewView(onBack: { move(to: 4) }, onFinish: { move(to: 6) })
+            } else if step == 6 {
+                OnboardingNotificationsView(onBack: { move(to: 5) }, onContinue: finish)
             } else { preferences }
         }
         .background(Color.canvas)
@@ -93,8 +96,8 @@ struct OnboardingView: View {
                 Button(review ? "Done" : "Skip") { if review { dismiss() } else { move(to: 4) } }.font(.subheadline).frame(minWidth: 42, minHeight: 44).accessibilityIdentifier("onboarding-skip")
             }.padding(.horizontal, 24).padding(.top, 8)
             HStack(spacing: 7) {
-                ForEach(1...(review ? 3 : 5), id: \.self) { value in Capsule().fill(value <= step ? Color.bronze : Color.bronze.opacity(0.15)).frame(height: 3) }
-            }.padding(.horizontal, 27).padding(.top, 20).padding(.bottom, 6).accessibilityElement(children: .ignore).accessibilityLabel("Step \(step) of \(review ? 3 : 5)")
+                ForEach(1...(review ? 3 : 6), id: \.self) { value in Capsule().fill(value <= step ? Color.bronze : Color.bronze.opacity(0.15)).frame(height: 3) }
+            }.padding(.horizontal, 27).padding(.top, 20).padding(.bottom, 6).accessibilityElement(children: .ignore).accessibilityLabel("Step \(step) of \(review ? 3 : 6)")
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
                     VStack(alignment: .leading, spacing: 12) {
@@ -211,6 +214,85 @@ private struct OnboardingAccountView: View {
     var body: some View {
         NavigationStack {
             TravelAccountPage(register: !signingIn, onboardingBack: onBack, onboardingContinue: onContinue)
+        }
+    }
+}
+
+
+private struct OnboardingNotificationsView: View {
+    var onBack: () -> Void
+    var onContinue: () -> Void
+    @State private var permission = OnboardingNotificationPermission()
+    @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.openURL) private var openURL
+    @Environment(\.dynamicTypeSize) private var typeSize
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Button(action: onBack) { Image(systemName: "arrow.left").font(.system(size: 18, weight: .medium)).frame(width: 42, height: 42) }
+                    .buttonStyle(.glass).buttonBorderShape(.circle).accessibilityLabel("Previous step")
+                    .accessibilityIdentifier("onboarding-notifications-back")
+                Spacer()
+                Text("YOUR SEUR").font(.caption2.weight(.semibold)).tracking(3).foregroundStyle(Color.bronze).dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+                Spacer()
+                Color.clear.frame(width: 42, height: 42).accessibilityHidden(true)
+            }.padding(.horizontal, 24).padding(.top, 8)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 26) {
+                    if !typeSize.isAccessibilitySize {
+                    ZStack {
+                        Circle().stroke(Color.bronze.opacity(0.12), lineWidth: 1).frame(width: 154, height: 154)
+                        Circle().fill(Color.bronze.opacity(0.08)).frame(width: 112, height: 112)
+                        Image(systemName: permission.isAllowed ? "bell.badge.fill" : "bell.badge")
+                            .font(.system(size: 42, weight: .light)).foregroundStyle(Color.bronze)
+                    }.frame(maxWidth: .infinity).padding(.vertical, 12).accessibilityHidden(true)
+                    }
+                    VStack(alignment: .leading, spacing: 12) {
+                        Eyebrow(text: "06 / Stay in the know").dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+                        Editorial("A little heads-up.\nA smoother journey.", size: 36).dynamicTypeSize(...DynamicTypeSize.accessibility1)
+                            .accessibilityAddTraits(.isHeader).accessibilityIdentifier("onboarding-notifications-title")
+                        Text("Get timely updates for the flights you choose to follow.")
+                            .font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    }
+                    VStack(alignment: .leading, spacing: 18) {
+                        notificationBenefit("Flight updates", detail: "Keep up with delays and schedule changes.", symbol: "airplane")
+                        Divider()
+                        notificationBenefit("Your choice, always", detail: "Follow the flights that matter to you. Change notification settings anytime.", symbol: "slider.horizontal.3")
+                    }.padding(20).cardSurface(cornerRadius: 24)
+                    VStack(alignment: .leading, spacing: 12) {
+                        Label(permission.isAllowed ? "Notifications are on" : permission.status == .denied ? "Notifications are off" : "Notifications are optional", systemImage: permission.isAllowed ? "checkmark.circle" : "bell")
+                            .font(.subheadline.weight(.medium)).foregroundStyle(Color.bronze)
+                            .accessibilityIdentifier("onboarding-notification-status")
+                        if permission.status == .denied {
+                            Text("You can turn them on later in Settings.").font(.caption).foregroundStyle(.secondary)
+                            Button("Open notification settings") {
+                                if let url = URL(string: UIApplication.openNotificationSettingsURLString) { openURL(url) }
+                            }.font(.subheadline).accessibilityIdentifier("onboarding-notification-settings")
+                        }
+                        if let error = permission.error {
+                            Text(error).font(.caption).foregroundStyle(.secondary)
+                            Button("Try again") { Task { await permission.requestOnArrival() } }.disabled(permission.busy)
+                        }
+                    }
+                }.padding(26)
+            }.scrollIndicators(.hidden)
+            Button(action: onContinue) {
+                HStack { Text("Explore Seur"); Spacer(); Image(systemName: "arrow.right") }.onboardingPrimary()
+            }.buttonStyle(PressStyle()).accessibilityIdentifier("onboarding-notifications-continue")
+                .padding(.horizontal, 24).padding(.top, 12).padding(.bottom, 12)
+        }.background(Color.canvas)
+            .task { await permission.requestOnArrival() }
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .active { Task { await permission.refresh() } }
+            }
+    }
+    private func notificationBenefit(_ title: String, detail: String, symbol: String) -> some View {
+        HStack(alignment: .top, spacing: 14) {
+            Image(systemName: symbol).font(.title3.weight(.light)).foregroundStyle(Color.bronze).frame(width: 24)
+            VStack(alignment: .leading, spacing: 5) {
+                Text(title).font(.subheadline.weight(.semibold))
+                Text(detail).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 }
