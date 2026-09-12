@@ -326,7 +326,9 @@ struct WishlistDetailView: View {
                     } else { Text(info.notes).font(.body).textSelection(.enabled).accessibilityIdentifier("wishlist-notes-display") }
                     if !info.collection.isEmpty { Label(info.collection, systemImage: "folder").font(.subheadline).foregroundStyle(Color.bronze) }
                 }
-                if case .idea = entry.source {
+                if entry.place.id.hasPrefix("liteapi:") {
+                    NavigationLink("View hotel details") { LiveHotelDetailView(hotel: .bookmark(entry.place)) }.accessibilityIdentifier("wishlist-source")
+                } else if case .idea = entry.source {
                     if let url = validatedURL(entry.place.website) { Link(destination: url) { Label("Open saved link", systemImage: "arrow.up.right").labelStyle(.titleOnly) }.font(.subheadline) }
                 } else {
                     NavigationLink { sourceDetail(entry) } label: {

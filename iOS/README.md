@@ -144,3 +144,33 @@ Home Screen widgets now include Today in Seur, Next Trip, Trip Budget and Travel
 Trip cards now use destination photo covers, clear dates and quieter summaries in list and grid layouts. See [TripCards.md](TripCards.md) for the one-time Commons lookup, permanent on-device covers, credits, fallbacks and the deployed photo endpoint.
 
 Traveler-created guides are available from **Travel → Guides** and **Discover → Travel guides**. Users can write private drafts, organize recommendations into chapters, preview and publish, save guides offline, and add recommendations to a trip. See [TravelGuides.md](TravelGuides.md) for the Wanderlog research, usage, privacy boundaries, and deployed backend behavior.
+
+### LiteAPI hotel discovery
+
+The native Home and Stays search now use the authenticated hotel-content endpoints on the default Supabase backend. Sign in to browse the sandbox collection beyond the bundled CSV; the offline stay-and-dine collection remains available. Hotel details include property and room galleries, amenities and paginated guest reviews. Saving and Add to trip create planning records, not reservations.
+
+The backend reads `LITEAPI_SANDBOX_KEY` exclusively from its server secret store. Never add it to the iOS target or an Info.plist. `/v1/status` reports hotel configuration and explicitly reports `hotelBooking: false`. Dated sandbox prices and room packages are now available. Checkout and flights remain later stages documented in [LiteAPIDesign.md](LiteAPIDesign.md).
+
+Global Search now opens **Explore**: cities, destination photography, recent places, Dining, Things to do and Guides. Open a city and choose **Find a hotel** to enter dates → guests → results. The Stays shortcut remains an explicit hotel entry. Calendar, guests, nationality, filters, room review and sandbox checkout use full-page navigation, with automatic progression after complete inputs, draft-preserving cancellation, subtle haptics and Reduce Motion support. See `LiteAPIDesign.md` section 22. Final booking confirmation always remains an explicit action.
+
+
+Hotel rates require dates, room-by-room occupancy, child ages, lead guest nationality and currency. Cards show test stay totals, and View rooms opens distinct meal/cancellation packages. Quote review separates included charges from fees due at the property. Prices expire after five minutes and refresh explicitly; no reservation or charge is created. The server uses the existing account pricing configuration, labels all rates as sandbox, and retains public selling-price restrictions for the later checkout stage.
+
+Sandbox hotel checkout now includes guest details, provider prebook/repricing, explicit test confirmation, saved attempts and recovery. Open the clock control beside Search dates/guests for **Test bookings**. No real card or reservation is charged. The live sandbox returned inconsistent booking details; those attempts show needs attention instead of success. See `LiteAPISandboxQuestions.md` for the provider follow-up required before payment activation.
+
+
+Hotel results now include total-stay price sliders and filters for stars, guest scores, review counts, distance, photos, checked availability, breakfast and cancellation. Their loaded-results/checked-offer scope is stated in the filter page. Hotel and room photography is edge to edge; tapping a photo opens Individual mode, with a Gallery grid available. Provider average scores and review counts are shown explicitly. Room details and primary action bars use full-page, bottom-anchored layouts. The repeated country picker has been removed from the sandbox flow; a fixed US test nationality supplies the provider-required field until verified traveler nationality is wired for production. See `LiteAPIDesign.md` section 23.
+
+Global Search now supports Destinations and Hotels. Hotel-name autocomplete resolves the location automatically, then shows matching LiteAPI listings with addresses before opening the existing full-page booking flow. Direct Stays entry also offers Search a specific hotel.
+
+Travel → My bookings now lists recent account-owned sandbox checkouts with status/reference filters, full booking records, shareable test receipts and support summaries. It reuses the existing server ledger and does not enable payment, cancellation or refunds.
+
+City discovery now uses one integrated city page across Explore, Dining and Things to do. Categories, search, filters, See all and saved places update that page in place, with the city header, map and hotel booking entry retained.
+
+My bookings includes Upcoming and Past date filters for verified test confirmations, prioritizes unresolved records in All, and loads older records in batches of 30. Search and filters apply to loaded records until the complete history has been loaded.
+
+Saved travelers are available in Travel and Account for signed-in users. Add yourself or companions, choose a default, and reuse contact details at hotel checkout. Nationality is saved once and applied before checking rates; choosing a different nationality requires fresh prices. Profiles sync through the private account API, support edit/delete, and clear from memory on sign-out. Existing bookings are unaffected. This supplies hotel lead-guest details; flight/passport profiles are outside this release.
+
+Booking records now offer explicit LiteAPI status refresh, show the last provider check and distinguish provider-cancelled test bookings from confirmed stays. Refresh does not submit a cancellation or establish refund status. Live customer payment, production booking activation and native flights remain unfinished pending the LiteAPI setup described in `LiteAPIDesign.md`.
+
+Sandbox cancellation now has full-page review and explicit confirmation, durable pending recovery, and verified completion. The normal app only exposes it when the backend advertises `hotelSandboxCancellation`; travel-api v53 now advertises this sandbox capability following approved deployment and live route checks. See `LiteAPICancellationDeployment.md`.

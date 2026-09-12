@@ -114,3 +114,52 @@ Deno.test('listing and Auth failures are surfaced; unauthenticated deletion neve
     assert.equal(calls.some(c => c.path.startsWith('/storage/') || c.path.startsWith('/auth/')), false);
   });
 });
+Deno.test('hotel routes require an account and shared throttling before calling LiteAPI', async () => {
+  await mock(() => undefined, async calls => {
+    assert.equal((await request('/v1/hotels?latitude=1&longitude=2', 'GET', undefined, false)).status, 401);
+    assert(!calls.some(c => c.body?.k?.startsWith('hotels-')));
+  });
+  await mock(call => call.path === '/rest/v1/rpc/travel_limit' && call.body.k === 'hotels-global' ? Response.json(false) : undefined, async calls => {
+    assert.equal((await request('/v1/hotels?latitude=1&longitude=2')).status, 429);
+    assert(calls.some(c => c.body?.k === 'hotels-user:' + actor));
+    assert(calls.some(c => c.body?.k === 'hotels-global' && c.body.maximum === 2 && c.body.seconds === 1));
+  });
+});
+Deno.test('rate and quote routes authenticate before input handling and use the shared provider budget', async () => {
+  await mock(() => undefined, async calls => {
+    assert.equal((await request('/v1/hotel-rates', 'POST', {}, false)).status, 401);
+    assert.equal((await request('/v1/hotel-quotes/inspect', 'POST', {quote:'forged'}, false)).status, 401);
+    assert(!calls.some(c => c.body?.k?.startsWith('hotel-rates-')));
+  });
+  const start = new Date(Date.now()+86400000*10).toISOString().slice(0,10), end = new Date(Date.now()+86400000*13).toISOString().slice(0,10);
+  await mock(call => call.path === '/rest/v1/rpc/travel_limit' && call.body.k === 'hotels-global' ? Response.json(false) : undefined, async calls => {
+    assert.equal((await request('/v1/hotel-rates', 'POST', {hotelIds:['liteapi:lp123'],checkin:start,checkout:end,currency:'USD',guestNationality:'US',occupancies:[{adults:2,children:[]}]})).status, 429);
+    assert(calls.some(c => c.body?.k === 'hotel-rates-user:' + actor));
+    assert(calls.some(c => c.body?.k === 'hotels-global' && c.body.maximum === 2 && c.body.seconds === 1));
+  });
+});
+Deno.test('hotel checkout routes require app-session ownership and explicit final consent', async () => {
+  await mock(call => {
+    if(call.path === '/rest/v1/travel_hotel_checkouts') return Response.json([]);
+    if(call.path === '/rest/v1/rpc/travel_hotel_claim_job') return Response.json(false);
+  }, async calls => {
+    assert.equal((await request('/v1/hotel-checkouts','GET',undefined,false)).status,401);
+    assert.equal((await request('/v1/hotel-checkouts/'+journey)).status,404);
+    assert.equal((await request('/v1/hotel-checkouts/'+journey+'/confirm','POST',{quoteVersion:journey,paymentSucceeded:true})).status,400);
+    assert.equal((await request('/internal/hotel-checkouts','POST',{ticket:journey},false)).status,401);
+    assert(!calls.some(c=>c.path.includes('checkout_accept')));
+  });
+});
+
+Deno.test('saved traveler routes require app-session authentication and return private no-store responses',async()=>{
+  await mock(()=>undefined,async()=>{
+  for(const [method,path,body] of [['GET','/v1/travelers',undefined],['PUT','/v1/travelers/'+journey,{}],['DELETE','/v1/travelers/'+journey,{}]] as const) {
+    const response=await request(path,method,body,false);assert.equal(response.status,401);
+  }
+  });
+  await mock(call=>call.path==='/rest/v1/travel_traveler_profiles'?Response.json([]):undefined,async calls=>{
+    const response=await request('/v1/travelers');assert.equal(response.status,200);assert.equal(response.headers.get('Cache-Control'),'no-store');assert.deepEqual(await response.json(),{profiles:[]});
+    assert(calls.some(c=>c.path==='/rest/v1/travel_sessions'));
+    assert.equal((await request('/v1/travelers','POST',{})).status,404);
+  });
+});

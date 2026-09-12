@@ -17,13 +17,13 @@ struct DiscoverView: View {
         let activeTrip = TodayPlanner.activeTrip(library.documents, now: now)
         ScrollView {
                 VStack(alignment: .leading, spacing: 26) {
-                    if let activeTrip { DiscoverCurrentTripCard(trip: activeTrip, now: now) }
                     VStack(alignment: .leading, spacing: 12) {
                         startingPoint
                         browseShortcuts
                     }
+                    if let activeTrip { DiscoverCurrentTripCard(trip: activeTrip, now: now) }
+                    HotelDiscoverySection()
                     if latestTrip == nil || latestTrip?.id != activeTrip?.id { planningShortcut }
-                    inspiration
                     conciergeShortcut
                 }.padding(.horizontal, 22).padding(.top, 10).padding(.bottom, 32)
         }
@@ -34,7 +34,7 @@ struct DiscoverView: View {
                 clockDate = .now
             }
         }
-        .background(Color.canvas)
+        .background(StayStyle.background)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
@@ -53,31 +53,26 @@ struct DiscoverView: View {
         }
         .navigationDestination(isPresented: $showProfile) { ProfileView() }
         .navigationDestination(for: Hotel.self) { hotel in
-            HotelDetailView(hotel: hotel).navigationTransition(.zoom(sourceID: hotel.id, in: hotelTransition))
+            HotelDetailView(hotel: hotel)
         }
         .sheet(isPresented: $createTrip) { TripCreationView() }
     }
 
     private var startingPoint: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            NavigationLink { CityExplorerView() } label: {
-                HStack(spacing: 13) {
-                    Image(systemName: "magnifyingglass").font(.title3).foregroundStyle(Color.bronze)
-                    Text("Explore cities").font(.body.weight(.medium)).foregroundStyle(.primary)
-                    Spacer(minLength: 4)
-                }.padding(16).cardSurface(cornerRadius: 16, emphasized: true)
-            }.buttonStyle(PressStyle()).accessibilityIdentifier("explore-cities")
-                .accessibilityHint("Search any destination for restaurants, stays and things to do")
-        }
+        Button { store.searchPresented = true } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "magnifyingglass").font(.subheadline)
+                Text("Where to?").font(.subheadline.weight(.medium))
+                Spacer()
+                Image(systemName: "arrow.up.right").font(.caption)
+            }.foregroundStyle(.primary).padding(.horizontal, 18).frame(height: 54).background(StayStyle.surface, in: .capsule)
+        }.buttonStyle(StayPressStyle()).accessibilityIdentifier("discover-explore-search")
     }
 
     private var browseShortcuts: some View {
         VStack(alignment: .leading, spacing: 14) {
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: typeSize.isAccessibilitySize ? 2 : 4), spacing: 18) {
-                Button {
-                    store.query = ""; store.city = "Everywhere"; store.cuisine = "Any cuisine"; store.sort = .featured
-                    store.searchPresented = true
-                } label: { shortcutLabel("Stays", symbol: "bed.double") }
+                NavigationLink { HotelBookingFlow() } label: { shortcutLabel("Stays", symbol: "bed.double") }
                     .accessibilityIdentifier("category-Stays")
                 NavigationLink { CityExplorerView(initialInterest: .restaurants) } label: {
                     shortcutLabel("Dining", symbol: "fork.knife")
@@ -127,55 +122,6 @@ struct DiscoverView: View {
             }
             Spacer(minLength: 6)
         }.padding(.vertical, 18).frame(maxWidth: .infinity, alignment: .leading).contentShape(.rect)
-    }
-
-    private var inspiration: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            HStack(alignment: .firstTextBaseline) {
-                Editorial("A little inspiration", size: 26)
-                Spacer(minLength: 8)
-                NavigationLink("Travel guides") { GuideHubView() }.font(.subheadline).foregroundStyle(Color.bronze)
-            }
-            if let hotel = store.featured.first {
-                heroCard(hotel)
-                ForEach(store.featured.dropFirst().prefix(2)) { hotel in
-                    NavigationLink(value: hotel) {
-                        HStack(spacing: 14) {
-                            HotelPhoto(hotel: hotel).frame(width: 76, height: 76).clipShape(.rect(cornerRadius: 12))
-                            VStack(alignment: .leading, spacing: 5) {
-                                Text(hotel.city).font(.caption).foregroundStyle(Color.bronze)
-                                Text(hotel.shortName).font(.system(.headline, design: .serif)).foregroundStyle(.primary)
-                                Text("Stay & dine").font(.caption).foregroundStyle(.secondary)
-                            }
-                            Spacer(minLength: 4)
-                        }.contentShape(.rect)
-                    }.buttonStyle(PressStyle()).matchedTransitionSource(id: hotel.id, in: hotelTransition)
-                }
-            } else {
-                Text("Explore a city to find stays, restaurants and things to do.").font(.subheadline).foregroundStyle(.secondary)
-            }
-        }
-    }
-
-    private func heroCard(_ hotel: Hotel) -> some View {
-        NavigationLink(value: hotel) {
-            VStack(alignment: .leading, spacing: 12) {
-                HotelPhoto(hotel: hotel).frame(height: 200).clipShape(.rect(cornerRadius: 20))
-                    .overlay(alignment: .bottomLeading) {
-                        Text(hotel.city + ", " + hotel.country).font(.caption.weight(.medium))
-                            .foregroundStyle(.white).padding(.horizontal, 12).padding(.vertical, 8)
-                            .background(.black.opacity(0.65), in: .capsule).padding(14)
-                    }
-                HStack(alignment: .top, spacing: 10) {
-                    VStack(alignment: .leading, spacing: 5) {
-                        Text(hotel.name).font(.system(.title3, design: .serif)).foregroundStyle(.primary)
-                        Text("Discover the stay and its dining collection.").font(.caption).foregroundStyle(.secondary)
-                    }
-                    Spacer(minLength: 4)
-                }
-            }.contentShape(.rect)
-        }.buttonStyle(PressStyle()).matchedTransitionSource(id: hotel.id, in: hotelTransition)
-            .accessibilityIdentifier("hero-hotel")
     }
 
     private var conciergeShortcut: some View {
@@ -257,7 +203,7 @@ private struct DiscoverCurrentTripCard: View {
     }
 }
 
-struct SearchView: View {
+struct CollectionSearchView: View {
     @Environment(TravelStore.self) private var store
     @State private var filters = false
     @State private var comparing = false

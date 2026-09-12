@@ -106,6 +106,7 @@ struct FlightSearch {
     private(set) var savedExploreCities: [ExploreCity] = []
     private(set) var recentExploreCities: [ExploreCity] = []
     private(set) var restaurantVisits: [String: RestaurantVisit] = [:]
+    let hotelSearch = HotelSearchModel()
     let wishlist: WishlistLibrary
     let concierge = ConciergeConversation()
     var selectedTab = 0

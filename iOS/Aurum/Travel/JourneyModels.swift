@@ -365,6 +365,7 @@ struct JourneyLibraryArchive: Codable { var version = 1; var documents: [Journey
         self.url = url ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent(testing ? "AurumUITestTravel/library.json" : "AurumTravel/library.json")
         if url == nil && testing && !ProcessInfo.processInfo.arguments.contains("--preserve-state") { try? FileManager.default.removeItem(at: self.url) }
         #if DEBUG
+        if url == nil && HotelFixtures.enabled && ProcessInfo.processInfo.arguments.contains("--hotel-plan-testing") && !ProcessInfo.processInfo.arguments.contains("--preserve-state") { documents = [HotelFixtures.trip]; return }
         if url == nil && testing && ProcessInfo.processInfo.arguments.contains("--trip-card-testing") && !ProcessInfo.processInfo.arguments.contains("--preserve-state") { documents = TripCardFixtures.documents; return }
         if url == nil && testing && ProcessInfo.processInfo.arguments.contains("--widget-testing") && !ProcessInfo.processInfo.arguments.contains("--preserve-state") { documents = [WidgetAppFixtures.trip]; return }
         if url == nil && testing && ProcessInfo.processInfo.arguments.contains("--seasonality-testing") && !ProcessInfo.processInfo.arguments.contains("--preserve-state") { documents = [SeasonalityFixtures.trip]; return }

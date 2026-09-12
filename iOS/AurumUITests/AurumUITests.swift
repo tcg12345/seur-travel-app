@@ -12,6 +12,461 @@ final class AurumUITests: XCTestCase {
         app.tabBars.buttons["Map"].firstMatch.tap()
         if app.buttons["map-saved"].waitForExistence(timeout: 2) { app.buttons["map-saved"].tap() }
     }
+    private func revealHotel(_ element: XCUIElement) {
+        for _ in 0..<12 {
+            if element.exists && element.isHittable && element.frame.minY > 130 && element.frame.maxY < app.frame.maxY - 100 { return }
+            let up = !element.exists || element.frame.minY >= 130
+            let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.025, dy: up ? 0.78 : 0.25))
+            let end = app.coordinate(withNormalizedOffset: CGVector(dx: 0.025, dy: up ? 0.25 : 0.78))
+            start.press(forDuration: 0.05, thenDragTo: end)
+        }
+    }
+    /// Global search explores a city first. Booking is always a deliberate second action.
+    private func beginHotelFromExplore() {
+        let query = app.textFields["explore-city-query"]
+        XCTAssertTrue(query.waitForExistence(timeout: 5)); query.tap(); query.typeText("Rome")
+        let city = app.buttons["explore-city-Rome"]
+        XCTAssertTrue(city.waitForExistence(timeout: 5)); city.tap()
+        let booking = app.buttons["city-book-hotel"]; XCTAssertTrue(booking.waitForExistence(timeout: 5))
+        XCTAssertTrue(booking.waitForExistence(timeout: 5)); booking.tap()
+    }
+    func testSavedTravelerCreateEditDeleteAndCheckoutPrefill() {
+        app.terminate(); app.launchArguments = ["--ui-testing", "--hotel-testing", "--city-testing", "--location-testing"]; app.launch()
+        app.tabBars.buttons["Travel"].tap()
+        let travelers = app.buttons["travel-saved-travelers"]; revealHotel(travelers); XCTAssertTrue(travelers.waitForExistence(timeout: 5)); travelers.tap()
+        let add = app.buttons["traveler-add"]; XCTAssertTrue(add.waitForExistence(timeout: 5)); add.tap()
+        let save = app.buttons["traveler-save"]; XCTAssertFalse(save.isEnabled)
+        for (field, value) in [("first", "Alex"), ("last", "Traveler"), ("email", "alex@example.test"), ("phone", "+14165550123")] {
+            let input = app.textFields["traveler-" + field]; revealHotel(input); input.tap(); input.typeText(value)
+        }
+        if app.toolbars.buttons["Done"].exists { app.toolbars.buttons["Done"].tap() }
+        app.buttons["traveler-nationality"].tap()
+        let query = app.textFields["traveler-country-query"]; XCTAssertTrue(query.waitForExistence(timeout: 5)); query.tap(); query.typeText("Canada")
+        app.buttons["traveler-country-CA"].tap(); XCTAssertTrue(save.isEnabled); capture("Travelers — new profile"); save.tap()
+        let profile = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "traveler-select-")).firstMatch
+        XCTAssertTrue(profile.waitForExistence(timeout: 5)); XCTAssertTrue(profile.label.contains("Default")); capture("Travelers — saved profiles")
+        profile.tap()
+        let first = app.textFields["traveler-first"]; first.tap(); first.typeText("andra")
+        if app.toolbars.buttons["Done"].exists { app.toolbars.buttons["Done"].tap() }; save.tap()
+        XCTAssertTrue(profile.waitForExistence(timeout: 5)); XCTAssertTrue(profile.label.contains("Alexandra"))
+        // A second profile can be removed without altering the first/default traveler.
+        add.tap()
+        for (field, value) in [("first", "Sam"), ("last", "Companion"), ("email", "sam@example.test"), ("phone", "+14165550124")] {
+            let input = app.textFields["traveler-" + field]; revealHotel(input); input.tap(); input.typeText(value)
+        }
+        if app.toolbars.buttons["Done"].exists { app.toolbars.buttons["Done"].tap() }
+        app.buttons["traveler-nationality"].tap(); query.tap(); query.typeText("Canada"); app.buttons["traveler-country-CA"].tap(); save.tap()
+        let companion = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@", "traveler-select-", "Sam Companion")).firstMatch
+        XCTAssertTrue(companion.waitForExistence(timeout: 5)); companion.tap(); revealHotel(app.buttons["traveler-delete"]); app.buttons["traveler-delete"].tap()
+        app.buttons.matching(identifier: "Delete traveler").firstMatch.tap()
+        XCTAssertTrue(add.waitForExistence(timeout: 5)); XCTAssertEqual(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "traveler-select-")).count, 1)
+        app.buttons["hotel-step-back"].firstMatch.tap()
+        app.tabBars.buttons["Discover"].tap()
+        app.buttons["global-search"].tap(); beginHotelFromExplore()
+        finishHotelSearchSteps(selectDates: true) { XCTAssertTrue(self.app.buttons["hotel-saved-traveler"].label.contains("Alexandra Traveler")) }
+        let hotel = app.buttons["hotel-open-liteapi:lpfixture0"]; XCTAssertTrue(hotel.waitForExistence(timeout: 8)); hotel.tap()
+        app.buttons["hotel-view-rooms"].tap()
+        let offer = app.buttons["hotel-room-offer-rate-liteapi-lpfixture0-0"]; revealHotel(offer); offer.tap()
+        let checkout = app.buttons["hotel-checkout-start"]; XCTAssertTrue(checkout.waitForExistence(timeout: 8)); checkout.tap()
+        XCTAssertTrue(app.staticTexts["checkout-traveler-message"].waitForExistence(timeout: 8))
+        XCTAssertEqual(app.textFields["hotel-checkout-first"].value as? String, "Alexandra")
+        XCTAssertEqual(app.textFields["hotel-checkout-email"].value as? String, "alex@example.test")
+        XCTAssertTrue(app.buttons["hotel-checkout-review"].isEnabled); capture("Travelers — checkout prefill")
+    }
+    func testSandboxCancellationRequiresIntentAndUpdatesBookingRecord() {
+        app.terminate(); app.launchArguments = ["--ui-testing", "--hotel-testing", "--hotel-bookings-testing"]; app.launch()
+        app.tabBars.buttons["Travel"].tap()
+        let bookings = app.buttons["travel-hotel-bookings"]; revealHotel(bookings); bookings.tap()
+        let upcoming = app.buttons["hotel-bookings-filter-Upcoming"]; XCTAssertTrue(upcoming.waitForExistence(timeout: 8)); upcoming.tap()
+        app.buttons["hotel-saved-checkout-10000000-0000-4000-8000-000000000001"].tap()
+        let cancel = app.buttons["hotel-cancel-open"]; revealHotel(cancel); cancel.tap()
+        let confirm = app.buttons["hotel-cancel-confirm"]; XCTAssertTrue(confirm.waitForExistence(timeout: 8)); XCTAssertTrue(confirm.isEnabled)
+        XCTAssertFalse(app.staticTexts["hotel-cancel-success"].exists); capture("Cancellation — final review")
+        confirm.tap(); XCTAssertTrue(app.staticTexts["hotel-cancel-success"].waitForExistence(timeout: 8)); capture("Cancellation — verified result")
+        app.buttons["hotel-cancel-done"].tap()
+        let status = app.staticTexts["hotel-record-status"]
+        expectation(for: NSPredicate(format: "label == %@", "Test booking cancelled"), evaluatedWith: status); waitForExpectations(timeout: 5)
+        XCTAssertFalse(app.buttons["hotel-cancel-open"].exists)
+    }
+    func testPendingCancellationReopensAfterAppRestartWithoutSecondSubmission() {
+        app.terminate(); app.launchArguments = ["--ui-testing", "--hotel-testing", "--hotel-bookings-testing", "--hotel-cancel-pending"]; app.launch()
+        app.tabBars.buttons["Travel"].tap()
+        let bookings = app.buttons["travel-hotel-bookings"]; revealHotel(bookings); bookings.tap()
+        let upcoming = app.buttons["hotel-bookings-filter-Upcoming"]; XCTAssertTrue(upcoming.waitForExistence(timeout: 8)); upcoming.tap()
+        let record = app.buttons["hotel-saved-checkout-10000000-0000-4000-8000-000000000001"]; record.tap()
+        let cancel = app.buttons["hotel-cancel-open"]; revealHotel(cancel); cancel.tap()
+        let confirm = app.buttons["hotel-cancel-confirm"]; XCTAssertTrue(confirm.waitForExistence(timeout: 8)); confirm.tap()
+        XCTAssertTrue(app.staticTexts["You can leave this page. We’ll keep checking the original cancellation request."].waitForExistence(timeout: 5))
+        app.terminate(); app.launchArguments = ["--ui-testing", "--hotel-testing", "--hotel-cancel-pending"]; app.launch()
+        app.tabBars.buttons["Travel"].tap(); revealHotel(bookings); bookings.tap()
+        XCTAssertTrue(record.waitForExistence(timeout: 8)); record.tap(); revealHotel(cancel); cancel.tap()
+        XCTAssertTrue(app.staticTexts["You can leave this page. We’ll keep checking the original cancellation request."].waitForExistence(timeout: 5))
+        XCTAssertFalse(confirm.exists); capture("Cancellation — resumed pending request")
+    }
+    func testBookingRefreshShowsProviderCancellation() {
+        app.terminate(); app.launchArguments = ["--ui-testing", "--hotel-testing", "--hotel-bookings-testing", "--hotel-sync-cancelled"]; app.launch()
+        app.tabBars.buttons["Travel"].tap()
+        let bookings = app.buttons["travel-hotel-bookings"]; revealHotel(bookings); bookings.tap()
+        let confirmed = app.buttons["hotel-bookings-filter-Upcoming"]; XCTAssertTrue(confirmed.waitForExistence(timeout: 8)); confirmed.tap()
+        let record = app.buttons["hotel-saved-checkout-10000000-0000-4000-8000-000000000001"]; XCTAssertTrue(record.waitForExistence(timeout: 5)); record.tap()
+        let refresh = app.buttons["Refresh booking"]; XCTAssertTrue(refresh.waitForExistence(timeout: 5)); refresh.tap()
+        let status = app.staticTexts["hotel-record-status"]
+        expectation(for: NSPredicate(format: "label == %@", "Test booking cancelled"), evaluatedWith: status)
+        waitForExpectations(timeout: 5)
+        XCTAssertTrue(app.staticTexts["hotel-provider-checked"].exists)
+        XCTAssertEqual(app.buttons["hotel-record-share"].label, "Share support summary")
+        capture("Bookings — provider cancellation")
+    }
+    func testTravelBookingsFiltersDetailsAndSupportSummary() {
+        app.terminate(); app.launchArguments = ["--ui-testing", "--hotel-testing", "--hotel-bookings-testing"]; app.launch()
+        app.tabBars.buttons["Travel"].tap()
+        let bookings = app.buttons["travel-hotel-bookings"]; revealHotel(bookings); XCTAssertTrue(bookings.waitForExistence(timeout: 8)); bookings.tap()
+        let confirmed = app.buttons["hotel-saved-checkout-10000000-0000-4000-8000-000000000001"]
+        let upcoming = app.buttons["hotel-bookings-filter-Upcoming"]
+        XCTAssertTrue(upcoming.waitForExistence(timeout: 8)); capture("Bookings — attention first")
+        upcoming.tap()
+        XCTAssertTrue(confirmed.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["hotel-saved-checkout-10000000-0000-4000-8000-000000000003"].exists)
+        capture("Bookings — upcoming stays")
+        app.buttons["hotel-bookings-filter-Past"].tap()
+        let past = app.buttons["hotel-saved-checkout-10000000-0000-4000-8000-000000000005"]
+        XCTAssertTrue(past.waitForExistence(timeout: 5)); XCTAssertFalse(confirmed.exists)
+        capture("Bookings — past stays")
+        past.tap(); XCTAssertTrue(app.staticTexts["TEST-SEUR-PAST"].waitForExistence(timeout: 5)); app.buttons["hotel-step-back"].tap()
+        upcoming.tap(); XCTAssertTrue(confirmed.waitForExistence(timeout: 5))
+        confirmed.tap(); XCTAssertTrue(app.buttons["hotel-record-share"].waitForExistence(timeout: 8)); XCTAssertTrue(app.staticTexts["TEST-SEUR-001"].exists); capture("Bookings — test receipt")
+        let support = app.buttons["hotel-record-support"]; revealHotel(support); support.tap()
+        XCTAssertTrue(app.staticTexts["hotel-support-summary"].waitForExistence(timeout: 5)); XCTAssertTrue(app.buttons["hotel-support-share"].exists); capture("Bookings — shareable summary")
+        app.buttons["hotel-step-back"].tap(); app.buttons["hotel-step-back"].tap()
+        let filter = app.buttons["hotel-bookings-filter-Needs attention"]
+        if !filter.isHittable { app.scrollViews.containing(.button, identifier: "hotel-bookings-filter-All").firstMatch.swipeLeft() }
+        filter.tap()
+        let attention = app.buttons["hotel-saved-checkout-10000000-0000-4000-8000-000000000003"]; XCTAssertTrue(attention.waitForExistence(timeout: 5)); attention.tap()
+        XCTAssertTrue(app.staticTexts["hotel-record-status"].waitForExistence(timeout: 5)); XCTAssertTrue(app.staticTexts["hotel-record-status"].label.contains("attention")); XCTAssertFalse(app.staticTexts["TEST-SEUR-001"].exists)
+        XCTAssertTrue(app.buttons["hotel-record-share"].label.contains("support")); capture("Bookings — needs attention")
+    }
+    func testBookingHistoryLoadsOlderMatchesRetriesAndPreservesDetailReturn() {
+        app.terminate(); app.launchArguments = ["--ui-testing", "--hotel-testing", "--hotel-history-testing", "--hotel-history-retry"]; app.launch()
+        app.tabBars.buttons["Travel"].tap()
+        let bookings = app.buttons["travel-hotel-bookings"]; revealHotel(bookings); bookings.tap()
+        let past = app.buttons["hotel-bookings-filter-Past"]; XCTAssertTrue(past.waitForExistence(timeout: 8)); past.tap()
+        let older = app.buttons["hotel-bookings-load-more"]; XCTAssertTrue(older.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["hotel-bookings-loaded-count"].label.contains("30")); capture("Bookings — load older matches")
+        older.tap(); XCTAssertTrue(app.staticTexts["hotel-bookings-more-error"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["hotel-bookings-loaded-count"].label.contains("30")); capture("Bookings — retry older page")
+        older.tap(); XCTAssertTrue(app.staticTexts["hotel-bookings-loaded-count"].label.contains("60"))
+        older.tap()
+        let record = app.buttons["hotel-saved-checkout-20000000-0000-4000-8000-000000000064"]
+        revealHotel(record); XCTAssertTrue(record.isHittable); XCTAssertFalse(older.exists)
+        record.tap(); XCTAssertTrue(app.staticTexts["TEST-HISTORY-64"].waitForExistence(timeout: 5))
+        app.buttons["hotel-step-back"].tap(); XCTAssertTrue(record.waitForExistence(timeout: 5))
+        let count = app.staticTexts["hotel-bookings-loaded-count"]; revealHotel(count)
+        XCTAssertTrue(count.label.contains("All 65")); XCTAssertFalse(older.exists); capture("Bookings — complete history")
+    }
+    func testSpecificHotelSearchOpensProviderDetailWithoutDestinationStep() {
+        app.terminate(); app.launchArguments = ["--ui-testing", "--hotel-testing", "--city-testing", "--location-testing"]; app.launch()
+        XCTAssertTrue(app.buttons["global-search"].waitForExistence(timeout: 8)); app.buttons["global-search"].tap()
+        XCTAssertTrue(app.textFields["explore-city-query"].waitForExistence(timeout: 5))
+        app.segmentedControls["explore-search-scope"].buttons["Hotels"].tap()
+        let input = app.textFields["hotel-name-query"]; XCTAssertTrue(input.waitForExistence(timeout: 5)); input.tap(); input.typeText("Palazzo")
+        let suggestion = app.buttons["hotel-name-query-suggestion-0"]; XCTAssertTrue(suggestion.waitForExistence(timeout: 5)); capture("Search — hotel suggestions"); suggestion.tap()
+        let result = app.buttons["hotel-name-result-liteapi:lpfixture0"]; XCTAssertTrue(result.waitForExistence(timeout: 8))
+        XCTAssertFalse(app.buttons["hotel-name-result-liteapi:lpfixture1"].exists)
+        XCTAssertFalse(app.buttons["hotel-dates-apply"].exists); capture("Search — named hotel matches"); result.tap()
+        XCTAssertTrue(app.staticTexts["hotel-detail-title"].waitForExistence(timeout: 5))
+        let rooms = app.buttons["hotel-view-rooms"]; XCTAssertTrue(rooms.exists); rooms.tap()
+        finishHotelSearchSteps(selectDates: true)
+        let offer = app.buttons["hotel-room-offer-rate-liteapi-lpfixture0-0"]; revealHotel(offer); XCTAssertTrue(offer.waitForExistence(timeout: 8))
+    }
+    func testExplicitStaysShortcutUsesFullPageDestinationAndBack() {
+        app.terminate(); app.launchArguments = ["--ui-testing", "--hotel-testing"]; app.launch()
+        let stays = app.buttons["category-Stays"]; XCTAssertTrue(stays.waitForExistence(timeout: 8)); stays.tap()
+        XCTAssertTrue(app.textFields["hotel-destination"].waitForExistence(timeout: 5))
+        let rome = app.buttons["hotel-city-Rome"]; revealHotel(rome); rome.tap()
+        XCTAssertTrue(app.buttons["hotel-dates-apply"].waitForExistence(timeout: 5)); app.buttons["hotel-step-back"].tap()
+        XCTAssertTrue(app.textFields["hotel-destination"].waitForExistence(timeout: 5)); app.buttons["hotel-step-back"].tap()
+        XCTAssertTrue(stays.waitForExistence(timeout: 5)); XCTAssertTrue(app.tabBars.buttons["Discover"].exists)
+    }
+    func testExploreSearchOpensCityBeforeFullPageHotelFlow() {
+        app.terminate(); app.launchArguments = ["--ui-testing", "--hotel-testing", "--city-testing", "--location-testing"]; app.launch()
+        XCTAssertTrue(app.buttons["global-search"].waitForExistence(timeout: 8)); app.buttons["global-search"].tap()
+        XCTAssertTrue(app.textFields["explore-city-query"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["explore-dining"].exists); XCTAssertTrue(app.buttons["explore-experiences"].exists)
+        XCTAssertFalse(app.buttons["hotel-dates"].exists); XCTAssertFalse(app.buttons["hotel-guests"].exists)
+        capture("Explore — destinations first")
+        let query = app.textFields["explore-city-query"]; query.tap(); query.typeText("Rome")
+        let city = app.buttons["explore-city-Rome"]; XCTAssertTrue(city.waitForExistence(timeout: 5)); city.tap()
+        let booking = app.buttons["city-book-hotel"]; XCTAssertTrue(booking.waitForExistence(timeout: 5)); XCTAssertTrue(booking.isHittable)
+        XCTAssertFalse(app.buttons["hotel-room-offer-rate-liteapi-lpfixture0-0"].exists)
+        capture("Explore — Rome city guide")
+        let bookingFrame = booking.frame
+        XCTAssertLessThan(bookingFrame.width, app.frame.width * 0.6)
+        XCTAssertGreaterThan(bookingFrame.midX, app.frame.midX)
+        app.swipeUp()
+        XCTAssertTrue(booking.isHittable)
+        XCTAssertEqual(booking.frame.minY, bookingFrame.minY, accuracy: 2)
+        capture("Explore — floating hotel shortcut")
+        booking.tap()
+        XCTAssertTrue(app.buttons["hotel-dates-apply"].waitForExistence(timeout: 5)); XCTAssertTrue(app.sheets.allElementsBoundByIndex.isEmpty)
+        XCTAssertFalse(app.buttons["Close Your dates"].exists)
+        finishHotelSearchSteps(selectDates: true)
+        XCTAssertTrue(app.buttons["hotel-search-bar"].waitForExistence(timeout: 8)); XCTAssertTrue(app.buttons["hotel-search-bar"].label.contains("Rome"))
+        XCTAssertTrue(app.sheets.allElementsBoundByIndex.isEmpty)
+        app.buttons["hotel-search-close"].tap()
+        XCTAssertTrue(booking.waitForExistence(timeout: 5)); XCTAssertTrue(app.textFields["explore-city-query"].exists == false)
+        app.navigationBars.buttons.firstMatch.tap()
+        XCTAssertTrue(query.waitForExistence(timeout: 5)); XCTAssertFalse(app.buttons["hotel-dates"].exists)
+    }
+    private func finishHotelSearchSteps(selectDates: Bool = false, configureGuests: () -> Void = {}) {
+        XCTAssertTrue(app.staticTexts["Your dates"].waitForExistence(timeout: 5))
+        if selectDates {
+            let formatter = DateFormatter(); formatter.dateFormat = "yyyy-MM-dd"; formatter.locale = Locale(identifier: "en_US_POSIX")
+            let arrival = Calendar.current.date(byAdding: .day, value: 2, to: Date())!
+            let departure = Calendar.current.date(byAdding: .day, value: 5, to: Date())!
+            let start = app.buttons["hotel-date-" + formatter.string(from: arrival)]
+            revealHotel(start); start.tap(); capture("Stays — range calendar")
+            let end = app.buttons["hotel-date-" + formatter.string(from: departure)]
+            revealHotel(end); end.tap()
+        } else { app.buttons["hotel-dates-apply"].tap() }
+        XCTAssertTrue(app.staticTexts["Who's coming?"].waitForExistence(timeout: 5))
+        configureGuests()
+        capture("Stays — full-page guests")
+        app.buttons["hotel-guests-apply"].tap()
+    }
+    private func openHotelCheckout(flags: [String] = []) {
+        app.terminate(); app.launchArguments = ["--ui-testing", "--hotel-testing", "--city-testing", "--location-testing"] + flags; app.launch()
+        XCTAssertTrue(app.buttons["global-search"].waitForExistence(timeout: 8)); app.buttons["global-search"].tap()
+        beginHotelFromExplore(); finishHotelSearchSteps(selectDates: true)
+        let hotel = app.buttons["hotel-open-liteapi:lpfixture0"]; XCTAssertTrue(hotel.waitForExistence(timeout: 8)); hotel.tap()
+        let rooms = app.buttons["hotel-view-rooms"]; XCTAssertTrue(rooms.waitForExistence(timeout: 8)); rooms.tap()
+        let offer = app.buttons["hotel-room-offer-rate-liteapi-lpfixture0-0"]; revealHotel(offer); XCTAssertTrue(offer.waitForExistence(timeout: 8)); offer.tap()
+        let start = app.buttons["hotel-checkout-start"]; XCTAssertTrue(start.waitForExistence(timeout: 8)); start.tap()
+        let submit = app.buttons["hotel-checkout-review"]; XCTAssertTrue(submit.waitForExistence(timeout: 8)); XCTAssertFalse(submit.isEnabled)
+        for (name, value) in [("first", "Test"), ("last", "Traveler"), ("email", "test@example.test"), ("phone", "+12125550123")] {
+            let input = app.textFields["hotel-checkout-" + name]; revealHotel(input); input.tap(); input.typeText(value)
+        }
+        if app.toolbars.buttons["Done"].exists { app.toolbars.buttons["Done"].tap() }
+        XCTAssertTrue(submit.isEnabled); capture("Checkout — guest details"); submit.tap()
+        XCTAssertTrue(app.buttons["hotel-checkout-confirm"].waitForExistence(timeout: 8))
+    }
+    func testHotelRichFiltersPhotoModesAndPinnedRoomAction() {
+        app.terminate(); app.launchArguments = ["--ui-testing", "--hotel-testing", "--city-testing", "--location-testing"]; app.launch()
+        XCTAssertTrue(app.buttons["global-search"].waitForExistence(timeout: 8)); app.buttons["global-search"].tap()
+        beginHotelFromExplore(); finishHotelSearchSteps(selectDates: true) { XCTAssertFalse(self.app.buttons["hotel-nationality"].exists) }
+        let hotel = app.buttons["hotel-open-liteapi:lpfixture0"]; XCTAssertTrue(hotel.waitForExistence(timeout: 8))
+        app.buttons["hotel-filters"].tap()
+        let maximum = app.sliders["hotel-price-max"]; XCTAssertTrue(maximum.waitForExistence(timeout: 5))
+        capture("Hotels — expanded filters")
+        maximum.adjust(toNormalizedSliderPosition: 0)
+        app.buttons["hotel-filters-apply"].tap()
+        XCTAssertTrue(app.staticTexts["No stays match these filters"].waitForExistence(timeout: 5))
+        app.buttons["hotel-filters"].tap(); app.buttons["hotel-filters-reset"].tap(); app.buttons["hotel-filters-apply"].tap()
+        XCTAssertTrue(hotel.waitForExistence(timeout: 5)); hotel.tap()
+        let hero = app.buttons["hotel-gallery"]; XCTAssertTrue(hero.waitForExistence(timeout: 5)); capture("Hotels — edge-to-edge detail")
+        XCTAssertEqual(hero.frame.minX, app.frame.minX, accuracy: 2); XCTAssertEqual(hero.frame.maxX, app.frame.maxX, accuracy: 2)
+        let rating = app.descendants(matching: .any).matching(identifier: "hotel-average-rating").firstMatch
+        XCTAssertTrue(rating.label.contains("9.4/10")); XCTAssertTrue(rating.label.contains("826"))
+        hero.tap()
+        XCTAssertTrue(app.buttons["hotel-photo-next"].waitForExistence(timeout: 5)); XCTAssertEqual(app.staticTexts["hotel-photo-count"].label, "1 / 12")
+        app.buttons["hotel-photo-next"].tap(); XCTAssertEqual(app.staticTexts["hotel-photo-count"].label, "2 / 12")
+        capture("Hotels — individual photo")
+        app.segmentedControls.buttons["Gallery"].tap()
+        let thumbnail = app.buttons["hotel-photo-thumb-3"]; XCTAssertTrue(thumbnail.waitForExistence(timeout: 5)); capture("Hotels — gallery grid"); thumbnail.tap()
+        XCTAssertTrue(app.buttons["hotel-photo-next"].waitForExistence(timeout: 5)); XCTAssertEqual(app.staticTexts["hotel-photo-count"].label, "4 / 12")
+        app.buttons["hotel-gallery-done"].tap()
+        let room = app.buttons["hotel-room-details-room1"]; revealHotel(room); XCTAssertTrue(room.waitForExistence(timeout: 5)); room.tap()
+        let plan = app.buttons["hotel-plan-room"]; XCTAssertTrue(plan.waitForExistence(timeout: 5)); XCTAssertTrue(app.sheets.allElementsBoundByIndex.isEmpty)
+        let roomHero = app.buttons["hotel-room-photos"]
+        XCTAssertTrue(roomHero.exists)
+        XCTAssertEqual(roomHero.frame.minY, app.frame.minY, accuracy: 2)
+        XCTAssertEqual(roomHero.frame.width, app.frame.width, accuracy: 2)
+        XCTAssertFalse(app.staticTexts["Room details"].exists)
+        let roomBack = app.buttons["hotel-room-back"]
+        XCTAssertTrue(roomBack.isHittable)
+        XCTAssertTrue(roomHero.frame.contains(roomBack.frame))
+        capture("Hotels — full-bleed room header")
+        roomHero.tap()
+        XCTAssertTrue(app.buttons["hotel-photo-next"].waitForExistence(timeout: 5))
+        app.buttons["hotel-gallery-done"].tap()
+        XCTAssertGreaterThan(plan.frame.minY, app.frame.height * 0.80)
+        let before = plan.frame; app.swipeUp(); XCTAssertEqual(plan.frame.minY, before.minY, accuracy: 2)
+        capture("Hotels — pinned room action")
+        roomBack.tap()
+        XCTAssertTrue(app.buttons["hotel-view-rooms"].waitForExistence(timeout: 5))
+    }
+    func testHotelSandboxCheckoutRequiresFinalIntentAndShowsProviderReceipt() {
+        openHotelCheckout()
+        XCTAssertFalse(app.otherElements["hotel-booking-receipt"].exists)
+        capture("Checkout — final review")
+        app.buttons["hotel-checkout-confirm"].tap()
+        XCTAssertTrue(app.staticTexts["Test booking confirmed"].waitForExistence(timeout: 8))
+        XCTAssertTrue(app.staticTexts["TEST-SEUR-001"].exists)
+        XCTAssertTrue(app.staticTexts["Nothing · Sandbox"].exists)
+        XCTAssertTrue(app.buttons["hotel-checkout-done"].isHittable)
+        capture("Checkout — test confirmation")
+        XCTAssertTrue(app.buttons["hotel-checkout-done"].isHittable)
+    }
+    func testHotelChangedQuotePendingAttemptCanBeReopenedAfterAppTermination() {
+        openHotelCheckout(flags: ["--hotel-checkout-changed", "--hotel-checkout-pending"])
+        XCTAssertTrue(app.staticTexts["The price or terms changed. Review the updated details below."].exists)
+        capture("Checkout — changed price")
+        app.buttons["hotel-checkout-confirm"].tap()
+        XCTAssertTrue(app.staticTexts["Confirming your test stay"].waitForExistence(timeout: 8)); capture("Checkout — pending confirmation")
+        app.terminate(); app.launchArguments = ["--ui-testing", "--hotel-testing", "--city-testing", "--location-testing", "--hotel-checkout-pending"]; app.launch()
+        XCTAssertTrue(app.buttons["global-search"].waitForExistence(timeout: 8)); app.buttons["global-search"].tap()
+        beginHotelFromExplore(); finishHotelSearchSteps()
+        app.buttons["hotel-checkouts"].tap()
+        let saved = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "hotel-saved-checkout-")).firstMatch
+        XCTAssertTrue(saved.waitForExistence(timeout: 8)); saved.tap()
+        XCTAssertTrue(app.staticTexts["Confirming your test stay"].waitForExistence(timeout: 8))
+        XCTAssertFalse(app.buttons["hotel-checkout-confirm"].exists); capture("Checkout — resumed attempt")
+    }
+    func testHotelViewRoomsCollectsMissingDatesAndMovesToOptions() {
+        app.terminate(); app.launchArguments = ["--ui-testing", "--hotel-testing", "--city-testing", "--location-testing"]; app.launch()
+        XCTAssertTrue(app.buttons["global-search"].waitForExistence(timeout: 8)); app.buttons["global-search"].tap()
+        beginHotelFromExplore(); finishHotelSearchSteps()
+        let hotel = app.buttons["hotel-open-liteapi:lpfixture0"]; XCTAssertTrue(hotel.waitForExistence(timeout: 8)); hotel.tap()
+        let rooms = app.buttons["hotel-view-rooms"]; XCTAssertTrue(rooms.waitForExistence(timeout: 8)); rooms.tap()
+        XCTAssertTrue(app.staticTexts["Your dates"].waitForExistence(timeout: 5))
+        let formatter = DateFormatter(); formatter.dateFormat = "yyyy-MM-dd"; formatter.locale = Locale(identifier: "en_US_POSIX")
+        for offset in [2, 5] {
+            let day = app.buttons["hotel-date-" + formatter.string(from: Calendar.current.date(byAdding: .day, value: offset, to: Date())!)]
+            revealHotel(day); day.tap()
+        }
+        XCTAssertTrue(app.buttons["hotel-guests-apply"].waitForExistence(timeout: 5)); app.buttons["hotel-guests-apply"].tap()
+        let offer = app.buttons["hotel-room-offer-rate-liteapi-lpfixture0-0"]
+        XCTAssertTrue(offer.waitForExistence(timeout: 8)); XCTAssertTrue(offer.isHittable)
+    }
+    func testHotelFamilyOccupancyNationalityAndRoomRemoval() {
+        app.terminate(); app.launchArguments = ["--ui-testing", "--hotel-testing", "--city-testing", "--location-testing", "--hotel-nationality-empty"]; app.launch()
+        XCTAssertTrue(app.buttons["global-search"].waitForExistence(timeout: 8)); app.buttons["global-search"].tap()
+        beginHotelFromExplore()
+        finishHotelSearchSteps(selectDates: true) {
+            XCTAssertTrue(app.buttons["hotel-guests-apply"].isEnabled)
+            XCTAssertFalse(app.buttons["hotel-nationality"].exists)
+            let addRoom = app.buttons["hotel-add-room"]; XCTAssertTrue(addRoom.waitForExistence(timeout: 5)); addRoom.tap()
+            let remove = app.buttons["hotel-remove-room-1"]; revealHotel(remove); remove.tap()
+            revealHotel(addRoom); addRoom.tap()
+            let adults = app.buttons["hotel-adults-1-minus"]; revealHotel(adults); adults.tap()
+            let child = app.buttons["hotel-children-0-plus"]; revealHotel(child); child.tap()
+            XCTAssertFalse(app.buttons["hotel-guests-apply"].isEnabled)
+            let age = app.buttons["hotel-child-age-0-0"]; revealHotel(age); age.tap()
+            let six = app.buttons["hotel-child-age-option-6"]; XCTAssertTrue(six.waitForExistence(timeout: 5)); revealHotel(six); XCTAssertTrue(app.sheets.allElementsBoundByIndex.isEmpty); capture("Stays — full-page child age"); six.tap()
+            XCTAssertTrue(app.buttons["hotel-guests-apply"].isEnabled); capture("Rates — family occupancy")
+        }
+        XCTAssertTrue(app.buttons["hotel-guests"].label.contains("4 guests")); XCTAssertTrue(app.buttons["hotel-guests"].label.contains("2 rooms"))
+    }
+    func testHotelRatesRoomOptionsAndQuoteBreakdown() {
+        app.terminate(); app.launchArguments = ["--ui-testing", "--hotel-testing", "--city-testing", "--location-testing"]; app.launch()
+        XCTAssertTrue(app.buttons["global-search"].waitForExistence(timeout: 8)); app.buttons["global-search"].tap()
+        beginHotelFromExplore(); finishHotelSearchSteps(selectDates: true)
+        let hotel = app.buttons["hotel-open-liteapi:lpfixture0"]; XCTAssertTrue(hotel.waitForExistence(timeout: 8)); capture("Rates — total stay results"); hotel.tap()
+        let rooms = app.buttons["hotel-view-rooms"]; XCTAssertTrue(rooms.waitForExistence(timeout: 8)); rooms.tap()
+        let offer = app.buttons["hotel-room-offer-rate-liteapi-lpfixture0-0"]; revealHotel(offer); XCTAssertTrue(offer.waitForExistence(timeout: 8)); capture("Rates — room packages"); offer.tap()
+        XCTAssertTrue(app.staticTexts["Your room option"].waitForExistence(timeout: 8)); XCTAssertTrue(app.staticTexts["City tax"].exists)
+        capture("Rates — quote and hotel charges")
+        XCTAssertFalse(app.buttons["Pay & book"].exists)
+    }
+    func testHotelRatesEmptyAndErrorRemainDistinct() {
+        for flag in ["--hotel-rates-empty", "--hotel-rates-error"] {
+            app.terminate(); app.launchArguments = ["--ui-testing", "--hotel-testing", "--city-testing", "--location-testing", flag]; app.launch()
+            XCTAssertTrue(app.buttons["global-search"].waitForExistence(timeout: 8)); app.buttons["global-search"].tap()
+            beginHotelFromExplore(); finishHotelSearchSteps(selectDates: true)
+            let hotel = app.buttons["hotel-open-liteapi:lpfixture0"]; XCTAssertTrue(hotel.waitForExistence(timeout: 8)); hotel.tap()
+            let rooms = app.buttons["hotel-view-rooms"]; XCTAssertTrue(rooms.waitForExistence(timeout: 8)); rooms.tap()
+            let message = app.staticTexts[flag == "--hotel-rates-empty" ? "No rooms available for these dates." : "Prices are temporarily unavailable. Try again."]
+            revealHotel(message); XCTAssertTrue(message.exists); capture(flag == "--hotel-rates-empty" ? "Rates — unavailable" : "Rates — retry")
+        }
+    }
+    func testHotelRatesExpiredOptionsRequireRefresh() {
+        app.terminate(); app.launchArguments = ["--ui-testing", "--hotel-testing", "--city-testing", "--location-testing", "--hotel-rates-expired"]; app.launch()
+        XCTAssertTrue(app.buttons["global-search"].waitForExistence(timeout: 8)); app.buttons["global-search"].tap()
+        beginHotelFromExplore(); finishHotelSearchSteps(selectDates: true)
+        let hotel = app.buttons["hotel-open-liteapi:lpfixture0"]; XCTAssertTrue(hotel.waitForExistence(timeout: 8)); hotel.tap()
+        let rooms = app.buttons["hotel-view-rooms"]; XCTAssertTrue(rooms.waitForExistence(timeout: 8)); rooms.tap()
+        XCTAssertFalse(app.buttons["hotel-room-offer-rate-liteapi-lpfixture0-0"].exists)
+        XCTAssertTrue(app.buttons["hotel-rates-refresh"].exists)
+    }
+    func testHotelDiscoverySearchDetailsReviewsAndSavedPersistence() {
+        app.terminate(); app.launchArguments = ["--ui-testing", "--hotel-testing", "--city-testing", "--location-testing"]; app.launch()
+        let search = app.buttons["global-search"]; XCTAssertTrue(search.waitForExistence(timeout: 8)); search.tap()
+        XCTAssertFalse(app.staticTexts["Find your next stay"].exists)
+        beginHotelFromExplore()
+        finishHotelSearchSteps(selectDates: true)
+        let first = app.buttons["hotel-open-liteapi:lpfixture0"]
+        XCTAssertTrue(first.waitForExistence(timeout: 5)); capture("Stays — minimal results")
+        XCTAssertLessThan(app.buttons["hotel-search-bar"].frame.minY, 150)
+        app.buttons["hotel-map-toggle"].tap()
+        let more = app.buttons["hotel-map-more"]; XCTAssertTrue(more.waitForExistence(timeout: 5)); more.tap()
+        XCTAssertTrue(app.staticTexts["hotel-result-count"].label.contains("23"))
+        app.buttons["hotel-map-toggle"].tap()
+        revealHotel(first); first.tap()
+        XCTAssertTrue(app.staticTexts["hotel-detail-title"].waitForExistence(timeout: 5)); capture("Stays — hotel details")
+        app.buttons["hotel-detail-save"].tap(); XCTAssertEqual(app.buttons["hotel-detail-save"].label, "Unsave hotel")
+        app.buttons["hotel-gallery"].tap(); XCTAssertTrue(app.buttons["hotel-gallery-done"].waitForExistence(timeout: 5)); capture("Stays — photo gallery"); app.buttons["hotel-gallery-done"].tap()
+        app.buttons["Reviews"].tap()
+        let reviews = app.buttons["hotel-load-reviews"]; revealHotel(reviews); reviews.tap()
+        XCTAssertTrue(app.staticTexts["Thoughtful service and a peaceful room."].firstMatch.waitForExistence(timeout: 5)); capture("Stays — guest reviews")
+        app.terminate(); app.launchArguments = ["--ui-testing", "--hotel-testing", "--city-testing", "--location-testing", "--preserve-state"]; app.launch()
+        XCTAssertTrue(search.waitForExistence(timeout: 8)); search.tap(); beginHotelFromExplore(); finishHotelSearchSteps()
+        let saved = app.buttons["hotel-save-liteapi:lpfixture0"]; XCTAssertTrue(saved.waitForExistence(timeout: 5)); XCTAssertTrue(saved.label.hasPrefix("Unsave"))
+    }
+    func testHotelSearchEmptyAndProviderFailure() {
+        app.terminate(); app.launchArguments = ["--ui-testing", "--hotel-testing", "--city-testing", "--location-testing"]; app.launch()
+        XCTAssertTrue(app.buttons["global-search"].waitForExistence(timeout: 8)); app.buttons["global-search"].tap()
+        beginHotelFromExplore(); finishHotelSearchSteps()
+        app.buttons["hotel-filters"].tap()
+        let name = app.textFields["hotel-name"]; XCTAssertTrue(name.waitForExistence(timeout: 5)); name.tap(); name.typeText("empty")
+        app.buttons["hotel-filters-apply"].tap()
+        XCTAssertTrue(app.staticTexts["No matches this time"].waitForExistence(timeout: 5)); capture("Stays — minimal empty state")
+        app.terminate(); app.launchArguments = ["--ui-testing", "--hotel-testing", "--city-testing", "--location-testing", "--hotel-error"]; app.launch()
+        XCTAssertTrue(app.buttons["global-search"].waitForExistence(timeout: 8)); app.buttons["global-search"].tap(); beginHotelFromExplore(); finishHotelSearchSteps()
+        XCTAssertTrue(app.staticTexts["Couldn't load hotels"].waitForExistence(timeout: 5)); capture("Stays — retry state")
+    }
+    func testHotelStepBackAndCancelledDateEditPreserveSelection() {
+        app.terminate(); app.launchArguments = ["--ui-testing", "--hotel-testing", "--city-testing", "--location-testing"]; app.launch()
+        XCTAssertTrue(app.buttons["global-search"].waitForExistence(timeout: 8)); app.buttons["global-search"].tap()
+        beginHotelFromExplore()
+        XCTAssertTrue(app.staticTexts["Your dates"].waitForExistence(timeout: 5)); app.buttons["hotel-dates-apply"].tap()
+        XCTAssertTrue(app.buttons["hotel-step-back"].waitForExistence(timeout: 5)); app.buttons["hotel-adults-plus"].tap(); app.buttons["hotel-step-back"].tap()
+        XCTAssertTrue(app.staticTexts["Your dates"].waitForExistence(timeout: 5)); app.buttons["hotel-step-back"].tap()
+        XCTAssertTrue(app.buttons["city-book-hotel"].waitForExistence(timeout: 5)); app.buttons["city-book-hotel"].tap()
+        finishHotelSearchSteps()
+        XCTAssertTrue(app.buttons["hotel-guests"].waitForExistence(timeout: 5)); XCTAssertTrue(app.buttons["hotel-guests"].label.contains("2 adults"))
+        app.buttons["hotel-dates"].tap()
+        let formatter = DateFormatter(); formatter.dateFormat = "yyyy-MM-dd"; formatter.locale = Locale(identifier: "en_US_POSIX")
+        let day = app.buttons["hotel-date-" + formatter.string(from: Calendar.current.date(byAdding: .day, value: 2, to: Date())!)]
+        XCTAssertTrue(day.waitForExistence(timeout: 5)); day.tap(); app.buttons["hotel-step-back"].tap()
+        XCTAssertTrue(app.buttons["hotel-dates"].waitForExistence(timeout: 5)); XCTAssertTrue(app.buttons["hotel-dates"].label.contains("Add dates"))
+    }
+    func testHotelPlanReviewUsesSearchDatesAndDoesNotBook() {
+        app.terminate(); app.launchArguments = ["--ui-testing", "--hotel-testing", "--city-testing", "--location-testing", "--hotel-plan-testing"]; app.launch()
+        XCTAssertTrue(app.buttons["global-search"].waitForExistence(timeout: 8)); app.buttons["global-search"].tap()
+        beginHotelFromExplore(); finishHotelSearchSteps(selectDates: true)
+        let hotel = app.buttons["hotel-open-liteapi:lpfixture0"]; XCTAssertTrue(hotel.waitForExistence(timeout: 5)); hotel.tap()
+        let plan = app.buttons["hotel-plan-stay"]; XCTAssertTrue(plan.waitForExistence(timeout: 5)); plan.tap()
+        let trip = app.buttons["hotel-plan-trip-EEEE0000-0000-4000-8000-000000000099"]
+        XCTAssertTrue(trip.waitForExistence(timeout: 8)); trip.tap()
+        let save = app.buttons["hotel-plan-save"]; XCTAssertTrue(save.waitForExistence(timeout: 5)); XCTAssertTrue(save.isEnabled)
+        capture("Stays — plan review"); save.tap()
+        XCTAssertTrue(plan.waitForExistence(timeout: 5))
+        plan.tap(); XCTAssertTrue(trip.waitForExistence(timeout: 5)); trip.tap(); XCTAssertTrue(save.waitForExistence(timeout: 5)); save.tap()
+        XCTAssertTrue(app.staticTexts["This hotel is already in your trip."].waitForExistence(timeout: 5))
+    }
+    func testHotelSheetsSupportLargeTextAndDarkMode() {
+        app.terminate(); app.launchArguments = ["--ui-testing", "--hotel-testing", "--city-testing", "--location-testing", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL", "-aurum.appearance", "Dark"]; app.launch()
+        XCTAssertTrue(app.buttons["global-search"].waitForExistence(timeout: 8)); app.buttons["global-search"].tap()
+        beginHotelFromExplore()
+        XCTAssertTrue(app.buttons["hotel-dates-apply"].waitForExistence(timeout: 5)); app.buttons["hotel-dates-apply"].tap()
+        XCTAssertTrue(app.buttons["hotel-adults-plus"].waitForExistence(timeout: 5)); app.buttons["hotel-adults-plus"].tap()
+        let apply = app.buttons["hotel-guests-apply"]
+        let close = app.buttons["hotel-step-back"]
+        XCTAssertTrue(close.isHittable); XCTAssertGreaterThanOrEqual(close.frame.minX, app.frame.minX); XCTAssertLessThanOrEqual(close.frame.maxX, app.frame.maxX)
+        XCTAssertTrue(apply.isHittable); XCTAssertGreaterThan(apply.frame.minX, app.frame.minX); XCTAssertLessThan(apply.frame.maxX, app.frame.maxX)
+        capture("Stays — accessible guests"); apply.tap()
+        app.buttons["hotel-dates"].tap(); XCTAssertTrue(app.staticTexts["Your dates"].waitForExistence(timeout: 5)); capture("Stays — accessible calendar")
+        XCTAssertTrue(app.buttons["hotel-dates-apply"].isHittable)
+    }
     func testGuideCreateDraftPreviewPublishAndOfflinePersistence() {
         app.terminate(); app.launchArguments = ["--ui-testing", "--guide-publishing-testing"]; app.launch()
         let travel = app.tabBars.buttons["Travel"]; XCTAssertTrue(travel.waitForExistence(timeout: 8)); travel.tap()
@@ -1024,6 +1479,8 @@ final class AurumUITests: XCTestCase {
     }
     func testSearchCatalogAndEmptyState() {
         app.tabBars.buttons["Discover"].tap(); app.buttons["global-search"].tap()
+        let offline = app.buttons["hotel-offline-collection"]
+        revealHotel(offline); offline.tap()
         let field = app.searchFields.firstMatch
         XCTAssertTrue(field.waitForExistence(timeout: 5)); field.tap(); field.typeText("Savoy")
         XCTAssertTrue(app.staticTexts["The Savoy"].waitForExistence(timeout: 5))
@@ -1081,59 +1538,46 @@ final class AurumUITests: XCTestCase {
         XCTAssertEqual(app.textViews["visit-note"].value as? String, "Ask for a quiet table.")
         app.buttons["Cancel"].tap()
     }
-    func testCityDirectoryAndSeparateCategorySearch() {
+    func testCityDirectoryUsesOnePageForCategoriesSavedAndSearch() {
         app.terminate()
-        app.launchArguments = ["--ui-testing", "--location-testing", "--city-testing", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryL"]
-        app.launch()
-        app.buttons["explore-cities"].tap()
+        app.launchArguments = ["--ui-testing", "--location-testing", "--city-testing", "--hotel-testing"]
+        app.launch(); XCTAssertTrue(app.buttons["global-search"].waitForExistence(timeout: 8)); app.buttons["global-search"].tap()
         XCTAssertTrue(app.textFields["explore-city-query"].waitForExistence(timeout: 5))
-        XCTAssertFalse(app.staticTexts["Choose a city"].exists)
-        XCTAssertFalse(app.staticTexts["Featured destinations"].exists)
-        app.buttons["explore-city-region"].tap()
-        app.buttons["Oceania"].tap()
-        let sydney = app.buttons["explore-city-Sydney"]
-        XCTAssertTrue(sydney.waitForExistence(timeout: 5)); sydney.tap()
-        XCTAssertTrue(app.buttons["city-open-search"].waitForExistence(timeout: 5))
-        XCTAssertFalse(app.textFields["city-place-query"].exists)
-
-        // A category pushes its own results screen, with restaurant filters.
-        chooseCityInterest("restaurants")
-        XCTAssertTrue(app.navigationBars["Restaurants"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.textFields["city-place-query"].exists)
-        XCTAssertFalse(app.buttons["city-open-search"].exists)
-        app.buttons["city-filters"].tap()
-        XCTAssertTrue(app.navigationBars["Filters"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["Cuisine"].exists || app.buttons["Any cuisine"].exists)
-        app.buttons["Done"].tap()
-        let result = firstCityResult()
-        XCTAssertTrue(result.waitForExistence(timeout: 5)); result.tap()
-        XCTAssertTrue(app.buttons["explore-place-save"].waitForExistence(timeout: 5))
-        app.buttons["explore-place-save"].tap()
-        app.navigationBars.buttons.element(boundBy: 0).tap()
-        app.buttons["city-saved-places"].tap()
-        XCTAssertTrue(app.navigationBars["Saved places"].waitForExistence(timeout: 5))
-        XCTAssertTrue(firstCityResult().exists)
-        app.navigationBars.buttons.element(boundBy: 0).tap()
-        XCTAssertTrue(app.buttons["city-open-search"].waitForExistence(timeout: 5))
-
-        // General search also gets a separate page; going back preserves the guide.
-        app.buttons["city-open-search"].tap()
-        let query = app.textFields["city-place-query"]
-        XCTAssertTrue(query.waitForExistence(timeout: 5)); query.tap(); query.typeText("gardens")
-        XCTAssertEqual(query.value as? String, "gardens")
-        app.navigationBars.buttons.element(boundBy: 0).tap()
-        XCTAssertTrue(app.buttons["city-open-search"].waitForExistence(timeout: 5))
-        XCTAssertFalse(app.textFields["city-place-query"].exists)
-        app.navigationBars.buttons.element(boundBy: 0).tap()
-        XCTAssertTrue(app.buttons["explore-city-Sydney"].waitForExistence(timeout: 5))
-
-        // Worldwide autocomplete still handles destinations beyond the visible region.
-        let city = app.textFields["explore-city-query"]
-        city.tap(); city.typeText("Lis")
-        let suggestion = app.buttons["explore-city-query-suggestion-0"]
-        XCTAssertTrue(suggestion.waitForExistence(timeout: 5)); suggestion.tap()
-        XCTAssertTrue(app.buttons["city-open-search"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["Lisbon"].exists)
+        app.buttons["explore-city-region"].tap(); app.buttons["Oceania"].tap()
+        let sydney = app.buttons["explore-city-Sydney"]; XCTAssertTrue(sydney.waitForExistence(timeout: 5)); sydney.tap()
+        XCTAssertTrue(app.navigationBars["City guide"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["city-book-hotel"].exists); capture("City — unified overview")
+        let seeAll = app.buttons["city-see-restaurants"]; revealHotel(seeAll); seeAll.tap()
+        XCTAssertTrue(app.navigationBars["City guide"].exists); XCTAssertTrue(app.buttons["city-save"].exists)
+        let filters = app.buttons["city-filters"]; revealHotel(filters); filters.tap()
+        XCTAssertTrue(app.navigationBars["Filters"].waitForExistence(timeout: 5)); XCTAssertTrue(app.staticTexts["Cuisine"].exists || app.buttons["Any cuisine"].exists); app.buttons["Done"].tap()
+        let result = firstCityResult(); revealHotel(result); XCTAssertTrue(result.waitForExistence(timeout: 5)); capture("City — restaurants in place"); result.tap()
+        XCTAssertTrue(app.buttons["explore-place-save"].waitForExistence(timeout: 5)); app.buttons["explore-place-save"].tap(); app.navigationBars.buttons.firstMatch.tap()
+        XCTAssertTrue(app.navigationBars["City guide"].exists)
+        let saved = app.buttons["city-saved-places"]; revealHotel(saved); saved.tap()
+        XCTAssertEqual(saved.value as? String, "Selected"); XCTAssertTrue(app.navigationBars["City guide"].exists)
+        let query = app.textFields["city-place-query"]; revealHotel(query); query.tap(); query.typeText("noresults\n")
+        let empty = app.staticTexts["No saved places match this search. Try another interest or reset your filters."]; revealHotel(empty); XCTAssertTrue(empty.waitForExistence(timeout: 5))
+        let clear = app.buttons["Clear city search"]; revealHotel(clear); clear.tap()
+        revealHotel(saved); saved.tap(); chooseCityInterest("attractions")
+        XCTAssertTrue(app.navigationBars["City guide"].exists); XCTAssertTrue(app.buttons["city-all-interests"].label.contains("Things to do")); capture("City — things to do in place")
+        // One back action leaves the city, rather than exposing another city page.
+        app.navigationBars.buttons.firstMatch.tap()
+        XCTAssertTrue(sydney.waitForExistence(timeout: 5))
+    }
+    func testDiningAndExperiencesEnterTheSameCityPage() {
+        app.terminate(); app.launchArguments = ["--ui-testing", "--location-testing", "--city-testing", "--hotel-testing"]; app.launch()
+        for (category, label) in [("Dining", "Restaurants"), ("Experiences", "Things to do")] {
+            app.buttons["category-" + category].tap()
+            let query = app.textFields["explore-city-query"]; XCTAssertTrue(query.waitForExistence(timeout: 5)); query.tap(); query.typeText("Lis")
+            let city = app.buttons["explore-city-query-suggestion-0"]; XCTAssertTrue(city.waitForExistence(timeout: 5)); city.tap()
+            XCTAssertTrue(app.navigationBars["City guide"].waitForExistence(timeout: 5)); XCTAssertTrue(app.buttons["city-save"].exists)
+            let booking = app.buttons["city-book-hotel"]; XCTAssertTrue(booking.waitForExistence(timeout: 5)); XCTAssertTrue(booking.isHittable)
+            let chooser = app.buttons["city-all-interests"]; revealHotel(chooser); XCTAssertTrue(chooser.label.contains(label))
+            chooseCityInterest("highlights"); XCTAssertTrue(app.navigationBars["City guide"].exists)
+            app.navigationBars.buttons.firstMatch.tap(); XCTAssertTrue(query.waitForExistence(timeout: 5))
+            app.navigationBars.buttons.firstMatch.tap()
+        }
     }
     private func openCityExplorer(fixtures: Bool, createTrip: Bool = false) {
         app.terminate(); app.launchArguments = ["--ui-testing"] + (fixtures ? ["--location-testing", "--city-testing"] : ["--live-apple-places"]); app.launch()
@@ -1143,11 +1587,11 @@ final class AurumUITests: XCTestCase {
             XCTAssertTrue(app.buttons["trip-destination-suggestion-0"].waitForExistence(timeout: 5)); app.buttons["trip-destination-suggestion-0"].tap(); app.buttons["journey-save"].tap()
             XCTAssertTrue(app.staticTexts["Trip to Lisbon, Portugal"].waitForExistence(timeout: 5)); app.tabBars.buttons["Discover"].tap()
         }
-        let explore = app.buttons["explore-cities"]; XCTAssertTrue(explore.waitForExistence(timeout: 5)); explore.tap()
+        let explore = app.buttons["global-search"]; XCTAssertTrue(explore.waitForExistence(timeout: 8)); explore.tap()
         XCTAssertTrue(app.textFields["explore-city-query"].waitForExistence(timeout: 5))
     }
     private func chooseCityInterest(_ interest: String) {
-        let chooser = app.buttons["city-all-interests"]; reveal(chooser); chooser.tap()
+        let chooser = app.buttons["city-all-interests"]; revealHotel(chooser); chooser.tap()
         let item = app.buttons["city-choose-" + interest]; reveal(item); item.tap()
     }
     private func firstCityResult() -> XCUIElement { app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "explore-place-")).firstMatch }
@@ -1225,11 +1669,11 @@ final class AurumUITests: XCTestCase {
         reveal(shortlist); shortlist.tap()
         XCTAssertEqual(shortlist.value as? String, "Selected")
         XCTAssertTrue(app.staticTexts["Lisbon Museum 1"].exists)
-        let query = app.textFields["city-place-query"]; query.tap(); query.typeText("noresults\n")
+        let query = app.textFields["city-place-query"]; revealHotel(query); query.tap(); query.typeText("noresults\n")
         let empty = app.staticTexts["No saved places match this search. Try another interest or reset your filters."]
         XCTAssertTrue(empty.waitForExistence(timeout: 5))
         app.buttons["Clear city search"].tap()
-        let openMap = app.buttons["city-open-map"]; XCTAssertTrue(openMap.isHittable); openMap.tap()
+        let openMap = app.buttons["city-open-map"]; revealHotel(openMap); XCTAssertTrue(openMap.isHittable); openMap.tap()
         XCTAssertTrue(app.buttons["map-section-Explore"].waitForExistence(timeout: 5))
         XCTAssertEqual(app.textFields["world-city-search"].value as? String, "Lisbon")
         XCTAssertTrue(app.staticTexts["Lisbon Museum 1"].exists)
