@@ -1,14 +1,22 @@
 # Destination trip cards
 
-The supplied `Travel_Destinations_300_16x9` collection is now the first choice for destination cards. The user wrote “33” but attached 300 entries; after asking for clarification, implementation proceeded with the stated assumption that the complete folder was intended. The explicit selection is recorded in `scripts/destination_cover_selection.json`.
+The supplied `Travel_Destinations_300_ALL_REFRESHED` collection supplies all 300 bundled destination covers, including Tokyo. The explicit selection is recorded in `scripts/destination_cover_selection.json`. The former separate Tokyo override has been removed.
 
-All 300 files passed source SHA-256 and exact 16:9 dimension checks. `scripts/import_16x9_covers.swift` resizes them proportionally to 1280×720 JPEGs without cropping, stretching or upscaling. Bundled JPEGs total 76,567,105 bytes, down from 401,302,998 source bytes. Original Desktop files are untouched. `DestinationCoverCatalog` retains city/country aliases, source checksum, photographer, license and source URLs; full supplied credits are in `DestinationCoverCredits.txt`.
+All 300 files passed source SHA-256 and manifest dimension checks. `scripts/import_16x9_covers.swift` reads the refreshed `manifest.json` (or the older `index.json` format), downsampling to 1280×720 JPEGs. There is no upscaling or color styling. The two nearly 16:9 sources, Phu Quoc (2560×1441) and Xian (3554×1999), receive less than one output pixel of centered edge trimming; the other 298 retain their full framing. Bundled JPEGs total 87,028,573 bytes. Original Desktop files are untouched.
 
-Tokyo keeps the separately requested `tokyo.avif` image (Tokyo Tower/Mount Fuji), bundled at its original 1008×567 size. This wins over the new collection's Tokyo image. Other supplied images are used exactly as selected in the folder, including any evening scenes; the daytime-only rule remains on the Pexels fallback.
+`DestinationCoverCatalog` retains city/country aliases, source checksum, photographer, supplied license and source URLs. Full source credits and supplied restrictions are in `DestinationCoverCredits.txt`. The refreshed collection includes sources whose metadata says reuse rights are unverified; those statements are preserved, and no Creative Commons license is inferred. The source metadata is not proof of a redistribution license.
+
+To regenerate the assets and credits:
+
+```sh
+swift iOS/scripts/import_16x9_covers.swift /path/to/Travel_Destinations_300_ALL_REFRESHED iOS/Aurum/Assets.xcassets iOS/scripts/destination_cover_selection.json iOS/DestinationCoverCredits.txt
+```
+
+Supplied images are used as selected, including evening scenes; the daytime-only rule remains on the Pexels fallback.
 
 `BundledDestinationCover` resolves available images synchronously before any retained Pexels photo. Both the visible-card gate and API client skip Pexels when an actual local image is available. Missing, unreadable or unmatched assets allow the existing Pexels fallback. Normalized names handle common aliases, accents, punctuation, country names and ISO codes; country qualifiers distinguish Paris, Texas from Paris, France and London, Canada from London, England. Merely containing a catalog city name is not enough to match.
 
-Bundled cards display linked photographer/Wikimedia Commons credit and the correct individual license in the photo sheet. The custom Tokyo image remains labeled “Supplied photo.” Pexels results retain their own photographer/Pexels credit.
+Bundled cards display the photographer and actual source (Bing, Windows Spotlight, Wikimedia Commons or the source hostname). The photo sheet preserves the supplied license text even when there is no license URL. Pexels results retain their own photographer/Pexels credit.
 
 ## Layout and image selection
 

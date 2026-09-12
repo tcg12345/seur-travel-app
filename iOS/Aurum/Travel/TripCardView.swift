@@ -12,6 +12,15 @@ struct CityPhoto: Codable {
     var provider: String? = nil
     var isGoogle: Bool { provider == "google" }
     var isPexels: Bool { provider == "pexels" }
+    var sourceName: String {
+        if isPexels { return "Pexels" }
+        switch sourceURL?.host {
+        case "commons.wikimedia.org": return "Wikimedia Commons"
+        case "windows10spotlight.com": return "Windows Spotlight"
+        case "bingwallpaper.anerg.com": return "Bing"
+        default: return sourceURL?.host?.replacingOccurrences(of: "www.", with: "") ?? "Photo source"
+        }
+    }
     var imageURL: URL
     var sourceURL: URL?
     var authors: [Author]
@@ -95,22 +104,6 @@ enum CityPhotoImage {
     }
 }
 
-/// The user's Tokyo photograph is an intentional exception to daytime Pexels covers.
-enum SuppliedTokyoCover {
-    static func matches(_ city: String) -> Bool {
-        let parts = city.folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive], locale: Locale(identifier: "en_US_POSIX"))
-            .split(separator: ",").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-        guard let name = parts.first, ["tokyo", "tokyo prefecture", "tokyo metropolis", "東京都", "東京"].contains(name) else { return false }
-        return parts.count == 1 || ["japan", "jp", "日本"].contains(parts.last!)
-    }
-    static let cover: (image: UIImage, photo: CityPhoto)? = {
-        guard let image = UIImage(named: "TripCoverTokyo") else { return nil }
-        return (image, CityPhoto(provider: "supplied", imageURL: URL(string: "seur://trip-cover/tokyo")!,
-            sourceURL: nil, authors: [], license: "", licenseURL: nil,
-            title: "Tokyo skyline", attribution: "Supplied photo"))
-    }()
-}
-
 /// Supplied catalog assets take priority; missing/invalid images permit the Pexels fallback.
 enum BundledDestinationCover {
     private struct Entry: Decodable {
@@ -133,8 +126,6 @@ enum BundledDestinationCover {
     }()
     static var destinations: [String] { catalog.compactMap { $0.cities.first } }
     static func cover(city: String) -> (image: UIImage, photo: CityPhoto)? {
-        // Preserve the separately requested Tokyo Tower/Mount Fuji photograph.
-        if SuppliedTokyoCover.matches(city), let cover = SuppliedTokyoCover.cover { return cover }
         let parts = city.split(separator: ",").map(String.init)
         for count in stride(from: parts.count, through: 1, by: -1) {
             guard let entries = byName[normalized(parts.prefix(count).joined(separator: ","))] else { continue }
@@ -234,7 +225,7 @@ struct JourneyCard: View {
             }.contentShape(Rectangle()).buttonStyle(.plain).accessibilityIdentifier("trip-card-" + document.id.uuidString)
             if let cover = displayedCover, let source = cover.photo.sourceURL {
                 Link(destination: source) {
-                    Text("Photo by \(cover.photo.authors.first?.name ?? "Photographer") · \(cover.photo.isPexels ? "Pexels" : "Wikimedia Commons")")
+                    Text("Photo by \(cover.photo.authors.first?.name ?? "Photographer") · \(cover.photo.sourceName)")
                         .font(.caption2).foregroundStyle(.secondary).lineLimit(2)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, compact ? 15 : 18).padding(.bottom, 14)
@@ -248,7 +239,7 @@ struct JourneyCard: View {
                         Image(systemName: "info.circle").font(.system(size: 15, weight: .medium))
                             .foregroundStyle(.white).padding(8).background(.black.opacity(0.65), in: .circle)
                             .frame(minWidth: 44, minHeight: 44).contentShape(Rectangle())
-                    }.buttonStyle(.plain).padding(10).accessibilityLabel(displayedCover?.photo.provider == "supplied" ? "Photo information" : "Photo credits, " + (displayedCover?.photo.isPexels == true ? "Pexels" : "Wikimedia Commons")).accessibilityIdentifier("trip-photo-credits")
+                    }.buttonStyle(.plain).padding(10).accessibilityLabel("Photo credits, " + (displayedCover?.photo.sourceName ?? "Photo source")).accessibilityIdentifier("trip-photo-credits")
                 }
             }
             .onScrollVisibilityChange(threshold: 0.1) { isVisible = $0 }
@@ -287,9 +278,12 @@ private struct TripPhotoCredits: View {
                             }.font(.subheadline)
                         }
                         if !photo.attribution.isEmpty { Text(photo.attribution).font(.system(size: photo.isGoogle ? 14 : 12)).foregroundStyle(.primary) }
-                        if let url = photo.licenseURL, !photo.license.isEmpty { Link(photo.license, destination: url).font(.subheadline) }
+                        if !photo.license.isEmpty {
+                            if let url = photo.licenseURL { Link(photo.license, destination: url).font(.subheadline) }
+                            else { Text(photo.license).font(.subheadline) }
+                        }
                         Text("Landscape cover prepared in 16:9 for Seur.").font(.caption).foregroundStyle(.secondary)
-                        if let url = photo.sourceURL { Link(photo.isPexels ? "View photo on Pexels" : "View photo on Wikimedia Commons", destination: url).font(.subheadline) }
+                        if let url = photo.sourceURL { Link("View photo on " + photo.sourceName, destination: url).font(.subheadline) }
                     }.padding(.horizontal, 20)
                 }.padding(.bottom, 24)
             }.background(Color.canvas).navigationTitle("Destination photo").navigationBarTitleDisplayMode(.inline)

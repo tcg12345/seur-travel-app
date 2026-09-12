@@ -892,3 +892,11 @@ This revision supersedes the Google photo-loading behavior in the preceding trip
 - Deployment and live route smoke verification await user approval. Actual sandbox happy-path acceptance, approved native payments, production booking/refunds and the original provider terms mismatch remain unresolved pending LiteAPI guidance.
 
 - Follow-up deployment: the user explicitly approved the reviewed shared API update. Deployed **travel-api v53**, preserving existing authentication; retrieved the deployed bundle and verified all 23 files match the reviewed bundle. Live smoke passed sandbox cancellation enabled, production booking disabled, unauthenticated denial on both routes, owner-scoped missing-record rejection and explicit-intent validation. Deleted the disposable QA account. No existing owned booking was available for live cross-owner testing; the SQL acceptance suite covers that boundary. No supplier requests, reservations, payments or cancellations were submitted. Report: ignored `work/cancellation-deployment-validation.json`.
+
+## Refreshed destination covers — 2026-09-12
+
+Started from current origin/main (`d553741`). Replaced all 300 bundled covers using `Travel_Destinations_300_ALL_REFRESHED`, including Tokyo; the old standalone Tokyo override is removed. Every source SHA-256 and manifest dimension matched. All 300 catalog source hashes differ from the prior main catalog, and each new entry preserves the supplied source and license metadata. Output: 300 JPEGs, 1280×720, 87,028,573 bytes total; source files untouched. The two source aspect-ratio rounding differences are normalized with less than one output pixel of edge trimming.
+
+Simulator build and 10 focused tests passed on iPhone 17 Pro / iOS 26.5: nine unit tests covering all 300 bundled images, city/country aliases, the refreshed Tokyo source, no-lookup gating, Pexels host restrictions, persistent cache behavior, failed attempts and concurrent requests; plus `testTripPhotoCardsListGridCreditsAndNavigation`. No live photo-provider calls. Paris and Tokyo output images were visually inspected. `git diff --check` passed.
+
+Test result: `/tmp/seur-cutover-build/Logs/Test/Test-Seur-2026.09.12_10-31-49--0400.xcresult`. Log: `/tmp/seur-refreshed-photos-tests.log`.
