@@ -12,6 +12,8 @@ See [iOS validation](iOS/Validation.md) for build and test evidence. The earlier
 
 The root website now presents the native Seur app, with responsive editorial sections, current app captures and a coming-soon iPhone download placeholder. See [landing-page notes](docs/SeurLanding.md). The previous web discovery tool remains at `/collection`. Run `npx tsc --project tsconfig.web.json --noEmit` to check website code separately from the Deno backend.
 
+For Vercel deployment, import `main` with root directory `./` and application preset **Other**. The committed `vercel.json` sets `npm ci`, `npm run build:vercel`, and output `dist/client`. No environment variables are required for the website. See [Vercel setup](docs/VercelDeployment.md).
+
 ## Earlier web app
 
 A responsive luxury travel discovery app centered on hotel dining. Built with React, Vinext, TypeScript, and the Sites runtime.

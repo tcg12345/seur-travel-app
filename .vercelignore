@@ -1,0 +1,12 @@
+# Deploy the website only. The native app uses the existing Supabase API.
+iOS/
+backend/
+supabase/
+recap-site/
+.agents/
+.codex/
+.env*
+work/
+outputs/
+dist/
+out/
