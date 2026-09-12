@@ -62,6 +62,7 @@ struct TravelAccountPage: View {
                         }
                     }
                     Section {
+                        NavigationLink { TravelerProfilesPage().hotelFlowPage() } label: { Label("Saved travelers", systemImage: "person.crop.rectangle.stack") }.accessibilityIdentifier("account-travelers")
                         NavigationLink("Connected services") { TravelServicesSettingsView() }
                         Button("Sign out") { Task { loading = true; defer { loading = false }; do { try await api.logout(); cloud = []; justAuthenticated = false; register = false; message = nil } catch { message = "Couldn’t turn off this device’s flight alerts. Reconnect and try signing out again." } } }.disabled(loading)
                     }

@@ -1,10 +1,30 @@
 import SwiftUI
 import MapKit
 
+/// Global search begins with destinations and discovery, never rate criteria.
+struct SearchView: View {
+    @State private var hotels = false
+    var body: some View {
+        Group {
+            if hotels { HotelNameSearchView(isGlobalSearch: true) }
+            else { CityExplorerView(isGlobalSearch: true) }
+        }.safeAreaInset(edge: .top, spacing: 0) {
+            Picker("Search for", selection: $hotels) {
+                Text("Destinations").tag(false)
+                Text("Hotels").tag(true)
+            }.pickerStyle(.segmented).padding(.horizontal, 22).padding(.top, 6).padding(.bottom, 10)
+                .background(StayStyle.background).accessibilityIdentifier("explore-search-scope")
+        }.sensoryFeedback(.selection, trigger: hotels)
+    }
+}
+
 struct CityExplorerView: View {
     var initialQuery = ""
     var initialInterest: ExploreInterest = .highlights
+    var isGlobalSearch = false
     @Environment(TravelStore.self) private var store
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var typeSize
     @State private var query = ""
     @State private var region = "All regions"
     @State private var selected: ExploreCity?
@@ -12,97 +32,134 @@ struct CityExplorerView: View {
     private var destinations: [CityBrowseRegion] {
         CityBrowseRegion.all.filter { query.isEmpty ? region == "All regions" || region == $0.name : true }
     }
+    private var inspiration: [ExploreCity] { ["Tokyo", "Lisbon", "Rome"].compactMap { name in DestinationSuggestions.cities.first { $0.name == name } } }
     private func matches(_ city: ExploreCity) -> Bool {
         query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || (city.name + " " + city.country).foldedCityText.contains(query.foldedCityText)
     }
     var body: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: 24) {
-                LocationAutocompleteField("Search any city", text: $query, kind: .city, identifier: "explore-city-query", onSelect: { selection in
-                    if let city = ExploreCity(selection) { selected = city; error = nil }
-                    else { error = "Choose a city suggestion to see places nearby." }
-                }).padding(15).cardSurface(cornerRadius: 17)
+            LazyVStack(alignment: .leading, spacing: 28) {
                 if let error { Text(error).font(.caption).foregroundStyle(.red) }
-                if query.isEmpty && !store.recentExploreCities.isEmpty {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("Recent").font(.subheadline.weight(.semibold)).foregroundStyle(.secondary)
-                        ScrollView(.horizontal) {
-                            HStack(spacing: 24) {
-                                ForEach(store.recentExploreCities.prefix(8)) { city in
-                                    Button { selected = city } label: {
-                                        VStack(alignment: .leading, spacing: 4) {
-                                            Text(city.name).font(.subheadline.weight(.semibold)).foregroundStyle(.primary)
-                                            Text(city.country).font(.caption).foregroundStyle(.secondary)
-                                        }.padding(.vertical, 6)
-                                    }.buttonStyle(.plain)
+                if query.isEmpty {
+                    if isGlobalSearch { discoveryLinks }
+                    if !store.recentExploreCities.isEmpty {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Pick up where you left off").font(.subheadline.weight(.semibold))
+                            ScrollView(.horizontal) {
+                                HStack(spacing: 10) {
+                                    ForEach(store.recentExploreCities.prefix(6)) { city in
+                                        Button { selected = city } label: { Label(city.name, systemImage: "clock").font(.subheadline).padding(.horizontal, 15).padding(.vertical, 12).background(StayStyle.surface, in: .capsule) }.buttonStyle(StayPressStyle()).tint(.primary)
+                                    }
                                 }
-                            }
-                        }.scrollIndicators(.hidden)
+                            }.scrollIndicators(.hidden)
+                        }
+                    }
+                    if region == "All regions" {
+                        VStack(alignment: .leading, spacing: 14) {
+                            Text("Somewhere new").font(.title3.weight(.semibold))
+                            ScrollView(.horizontal) {
+                                HStack(alignment: .top, spacing: 14) {
+                                    ForEach(inspiration) { city in
+                                        VStack(alignment: .leading, spacing: 8) {
+                                        Button { selected = city } label: {
+                                            VStack(alignment: .leading, spacing: 10) {
+                                                ExploreDestinationImage(city: city).frame(width: 218, height: 168).clipShape(.rect(cornerRadius: 18))
+                                                HStack { VStack(alignment: .leading, spacing: 4) { Text(city.name).font(.headline); Text(city.country).font(.caption).foregroundStyle(.secondary) }; Spacer(); Image(systemName: "arrow.up.right").font(.caption).foregroundStyle(.secondary) }
+                                            }.frame(width: 218)
+                                        }.buttonStyle(StayPressStyle()).tint(.primary).accessibilityIdentifier("explore-inspiration-" + city.name)
+                                        ExplorePhotoCredit(city: city).frame(width: 218, alignment: .leading)
+                                        }
+                                    }
+                                }
+                            }.scrollIndicators(.hidden)
+                        }
                     }
                 }
                 HStack {
-                    Text(query.isEmpty ? "Browse cities" : "Matching cities").font(.headline)
+                    Text(query.isEmpty ? "Explore cities" : "Destinations").font(.title3.weight(.semibold))
                     Spacer()
                     if query.isEmpty {
-                        Menu {
-                            Picker("Region", selection: $region) {
-                                Text("All regions").tag("All regions")
-                                ForEach(CityBrowseRegion.all) { Text($0.name).tag($0.name) }
-                            }
-                        } label: {
-                            HStack(spacing: 5) { Text(region); Image(systemName: "chevron.down").font(.caption2) }
-                                .font(.subheadline)
-                        }.accessibilityIdentifier("explore-city-region")
+                        Menu { Picker("Region", selection: $region) { Text("All regions").tag("All regions"); ForEach(CityBrowseRegion.all) { Text($0.name).tag($0.name) } } } label: { HStack(spacing: 5) { Text(region); Image(systemName: "chevron.down").font(.caption2) }.font(.caption) }.tint(.secondary).accessibilityIdentifier("explore-city-region")
                     }
+                }
+                if !query.isEmpty && !destinations.flatMap(\.cities).contains(where: matches) {
+                    Text("Choose a suggestion above to explore any city.").font(.subheadline).foregroundStyle(.secondary)
                 }
                 ForEach(destinations) { group in
                     let cities = group.cities.filter(matches)
                     if !cities.isEmpty {
                         VStack(alignment: .leading, spacing: 8) {
-                            Text(group.name).font(.caption.weight(.medium)).foregroundStyle(Color.bronze)
-                            LazyVGrid(columns: [GridItem(.flexible(), alignment: .leading), GridItem(.flexible(), alignment: .leading)], spacing: 0) {
+                            Text(group.name).font(.caption.weight(.medium)).foregroundStyle(.secondary)
+                            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), alignment: .leading), count: typeSize.isAccessibilitySize ? 1 : 2), spacing: 0) {
                                 ForEach(cities) { city in
                                     Button { selected = city } label: {
-                                        VStack(alignment: .leading, spacing: 5) {
-                                            Text(city.name).font(.system(.title3, design: .serif)).foregroundStyle(.primary)
-                                            Text(city.country).font(.caption).foregroundStyle(.secondary)
-                                        }.frame(maxWidth: .infinity, minHeight: 64, alignment: .leading)
-                                            .padding(.vertical, 8).contentShape(Rectangle())
-                                            .overlay(alignment: .bottom) { Divider().opacity(0.6) }
-                                    }.buttonStyle(.plain).accessibilityIdentifier("explore-city-" + city.name)
+                                        HStack { VStack(alignment: .leading, spacing: 5) { Text(city.name).font(.subheadline.weight(.semibold)); Text(city.country).font(.caption).foregroundStyle(.secondary) }; Spacer(minLength: 5); Image(systemName: "arrow.up.right").font(.caption2).foregroundStyle(.tertiary) }
+                                            .frame(maxWidth: .infinity, minHeight: 72, alignment: .leading).contentShape(.rect).overlay(alignment: .bottom) { Divider().opacity(0.5) }
+                                    }.buttonStyle(StayPressStyle()).tint(.primary).accessibilityIdentifier("explore-city-" + city.name)
                                 }
                             }
                         }
                     }
                 }
-            }.padding(.horizontal, 22).padding(.top, 12).padding(.bottom, 25)
-        }.scrollDismissesKeyboard(.interactively).background(Color.canvas)
-            .navigationTitle(initialInterest == .highlights ? "Explore cities" : initialInterest.title).navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .topBarTrailing) { NavigationLink { SavedExplorePlacesView() } label: { Image(systemName: "bookmark") }.accessibilityLabel("Saved city discoveries") } }
+            }.padding(.horizontal, 22).padding(.top, 16).padding(.bottom, 30)
+        }.scrollDismissesKeyboard(.interactively).background(StayStyle.background)
+            .safeAreaInset(edge: .top, spacing: 0) { searchBar }
+            .navigationTitle(isGlobalSearch ? "Explore" : initialInterest == .highlights ? "Explore cities" : initialInterest.title).navigationBarTitleDisplayMode(.inline)
+            .toolbar(.visible, for: .navigationBar)
+            .toolbar {
+                if isGlobalSearch { ToolbarItem(placement: .topBarLeading) { Button { dismiss() } label: { Image(systemName: "arrow.left") }.accessibilityLabel("Close search").accessibilityIdentifier("explore-search-close") } }
+                ToolbarItem(placement: .topBarTrailing) { NavigationLink { SavedExplorePlacesView() } label: { Image(systemName: "bookmark") }.accessibilityLabel("Saved city discoveries") }
+            }
             .navigationDestination(item: $selected) { city in
-                if initialInterest == .highlights { CityGuideView(city: city) }
-                else { CityPlaceSearchView(city: city, interest: initialInterest) }
+                CityGuideView(city: city, initialInterest: initialInterest)
             }
             .onAppear { if query.isEmpty { query = initialQuery } }
+            .sensoryFeedback(.selection, trigger: selected?.id)
+    }
+    private var searchBar: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "magnifyingglass").font(.body).foregroundStyle(.secondary).padding(.top, 2)
+            LocationAutocompleteField("Search cities and destinations", text: $query, kind: .city, identifier: "explore-city-query", onSelect: { selection in
+                if let city = ExploreCity(selection) { selected = city; error = nil }
+                else { error = "Choose a city suggestion to explore nearby places." }
+            })
+        }.padding(17).background(StayStyle.surface, in: .rect(cornerRadius: 19)).padding(.horizontal, 22).padding(.top, 6).padding(.bottom, 12).background(StayStyle.background)
+    }
+    private var discoveryLinks: some View {
+        ScrollView(.horizontal) {
+            HStack(spacing: 10) {
+                NavigationLink { CityExplorerView(initialInterest: .restaurants) } label: { Label("Dining", systemImage: "fork.knife") }.accessibilityIdentifier("explore-dining")
+                NavigationLink { CityExplorerView(initialInterest: .attractions) } label: { Label("Things to do", systemImage: "sparkles") }.accessibilityIdentifier("explore-experiences")
+                NavigationLink { GuideHubView() } label: { Label("Guides", systemImage: "book.closed") }.accessibilityIdentifier("explore-guides")
+            }.font(.caption.weight(.medium)).buttonStyle(ExploreShortcutStyle())
+        }.scrollIndicators(.hidden)
+    }
+}
+private struct ExploreShortcutStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View { configuration.label.padding(.horizontal, 15).padding(.vertical, 12).foregroundStyle(.primary).background(StayStyle.surface.opacity(configuration.isPressed ? 0.5 : 1), in: .capsule) }
+}
+struct ExploreDestinationImage: View {
+    let city: ExploreCity
+    var body: some View {
+        GeometryReader { geometry in
+            if let cover = BundledDestinationCover.cover(city: city.name + ", " + city.country) {
+                Image(uiImage: cover.image).resizable().scaledToFill().frame(width: geometry.size.width, height: geometry.size.height).clipped().accessibilityLabel(city.name + ". " + cover.photo.attribution)
+            } else {
+                ZStack { StayStyle.surface; Image(systemName: "building.2.crop.circle").font(.system(size: 42, weight: .ultraLight)).foregroundStyle(.secondary) }.frame(maxWidth: .infinity, maxHeight: .infinity).accessibilityLabel(city.name)
+            }
+        }
     }
 }
 
-private struct CityPlaceSearchRoute: Identifiable, Hashable {
-    var interest: ExploreInterest = .highlights
-    var savedOnly = false
-    var focusSearch = false
-    var id: String { interest.id + "\(savedOnly)-\(focusSearch)" }
-}
-
-/// A navigation destination of its own; the guide remains unchanged when returning.
-struct CityPlaceSearchView: View {
+private struct ExplorePhotoCredit: View {
     let city: ExploreCity
-    var interest: ExploreInterest = .highlights
-    var savedOnly = false
-    var focusSearch = false
-    var initialSections: [ExploreSection] = []
     var body: some View {
-        CityGuideView(city: city, initialInterest: interest, isSearchPage: true, savedOnly: savedOnly, focusSearch: focusSearch, initialSections: initialSections)
+        if let photo = BundledDestinationCover.cover(city: city.name + ", " + city.country)?.photo, let source = photo.sourceURL {
+            Link(destination: source) {
+                Text("Photo: " + (photo.authors.first?.name ?? "Photographer") + " · " + (photo.isPexels ? "Pexels" : "Wikimedia Commons"))
+                    .font(.caption2).foregroundStyle(.secondary).lineLimit(2)
+            }.accessibilityLabel(photo.attribution)
+        }
     }
 }
 
@@ -110,19 +167,11 @@ struct CityGuideView: View {
     @Environment(TravelStore.self) private var store
     let city: ExploreCity
     @State private var model = CityExploreModel()
-    private let isSearchPage: Bool
-    private let focusSearch: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @FocusState private var searchFocused: Bool
-    @State private var searchRoute: CityPlaceSearchRoute?
-    init(city: ExploreCity, initialInterest: ExploreInterest = .highlights, isSearchPage: Bool = false, savedOnly: Bool = false, focusSearch: Bool = false, initialSections: [ExploreSection] = []) {
+    init(city: ExploreCity, initialInterest: ExploreInterest = .highlights) {
         self.city = city
-        self.isSearchPage = isSearchPage || initialInterest != .highlights
-        self.focusSearch = focusSearch
         self._interest = State(initialValue: initialInterest)
-        self._savedOnly = State(initialValue: savedOnly)
-        let initialModel = CityExploreModel()
-        initialModel.seed(city: city, sections: initialSections)
-        self._model = State(initialValue: initialModel)
     }
     @State private var interest: ExploreInterest = .highlights
     @State private var query = ""
@@ -130,6 +179,7 @@ struct CityGuideView: View {
     @State private var wider = false
     @State private var savedOnly = false
     @State private var websiteOnly = false
+    @State private var bookingHotel = false
     @State private var showInterests = false
     @State private var showFilters = false
     @State private var diningFilters = DiningSearchPreferences()
@@ -149,14 +199,14 @@ struct CityGuideView: View {
         }
     }
     private var loadID: String { city.id + interest.id + diningFilters.searchTerm(query, interest: interest) + "\(wider)" }
-    private var overview: Bool { !isSearchPage }
+    private var overview: Bool { interest == .highlights && query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !savedOnly && !filtersActive }
     private var filtersActive: Bool { websiteOnly || wider || sort != .suggested || (interest == .restaurants && diningFilters.active) }
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 22) {
-                if isSearchPage { resultsHeader } else { cityHeader }
+                cityHeader
                 searchControls
-                if !isSearchPage && !collection.isEmpty && !diningFilters.active && query.isEmpty && [.highlights, .restaurants].contains(interest) && !savedOnly { diningCollection }
+                if !collection.isEmpty && !diningFilters.active && query.isEmpty && [.highlights, .restaurants].contains(interest) && !savedOnly { diningCollection }
                 if model.loading && (!savedOnly || (interest == .restaurants && diningFilters.active)) {
                     ProgressView("Finding places…").font(.subheadline).frame(maxWidth: .infinity).padding(.vertical, 30).accessibilityIdentifier("city-loading")
                 } else if overview {
@@ -165,7 +215,7 @@ struct CityGuideView: View {
                             HStack {
                                 Text(section.interest.title).font(.headline)
                                 Spacer()
-                                Button("See all") { searchRoute = CityPlaceSearchRoute(interest: section.interest) }.font(.subheadline).accessibilityIdentifier("city-see-" + section.id)
+                                Button("See all") { selectInterest(section.interest) }.font(.subheadline).accessibilityIdentifier("city-see-" + section.id)
                             }.padding(.bottom, 6)
                             if let error = section.error { retryRow(error) }
                             else if section.places.isEmpty { Text("No matches nearby. Try another category or a wider area.").font(.subheadline).foregroundStyle(.secondary).padding(.vertical, 12) }
@@ -186,21 +236,42 @@ struct CityGuideView: View {
                 }
                 Text("Places from Apple Maps. Confirm hours and availability with the venue.").font(.caption2).foregroundStyle(.secondary).padding(.top, 8)
             }.padding(.horizontal, 22).padding(.top, 12).padding(.bottom, 30)
-        }.scrollDismissesKeyboard(.interactively).background(Color.canvas).navigationTitle(isSearchPage ? (savedOnly ? "Saved places" : interest == .highlights ? "Search places" : interest.title) : "City guide").navigationBarTitleDisplayMode(.inline).toolbar(.hidden, for: .tabBar)
-            .toolbar { if !isSearchPage { ToolbarItem(placement: .topBarTrailing) { Button { store.toggleExploreCity(city) } label: { Image(systemName: store.isExploreCitySaved(city) ? "bookmark.fill" : "bookmark") }.accessibilityLabel(store.isExploreCitySaved(city) ? "Unsave city" : "Save city").accessibilityIdentifier("city-save") } } }
+        }.scrollDismissesKeyboard(.interactively).background(StayStyle.background).navigationTitle("City guide").navigationBarTitleDisplayMode(.inline).toolbar(.hidden, for: .tabBar)
+            .safeAreaInset(edge: .bottom, alignment: .trailing, spacing: 0) {
+                if !searchFocused {
+                    hotelBookingLink.padding(.trailing, 22).padding(.top, 10).padding(.bottom, 12)
+                }
+            }
+            .toolbar { ToolbarItem(placement: .topBarTrailing) { Button { store.toggleExploreCity(city) } label: { Image(systemName: store.isExploreCitySaved(city) ? "bookmark.fill" : "bookmark") }.accessibilityLabel(store.isExploreCitySaved(city) ? "Unsave city" : "Save city").accessibilityIdentifier("city-save") } }
             .task(id: loadID) { await load() }
             .onAppear { store.rememberExploreCity(city) }
-            .task { if focusSearch { searchFocused = true } }
-            .navigationDestination(item: $searchRoute) { route in
-                CityPlaceSearchView(city: city, interest: route.interest, savedOnly: route.savedOnly, focusSearch: route.focusSearch, initialSections: model.sections)
-            }
             .refreshable { await load(refresh: true) }
+            .navigationDestination(isPresented: $bookingHotel) { HotelBookingFlow(city: city) }
+            .sensoryFeedback(.selection, trigger: bookingHotel)
+            .sensoryFeedback(.selection, trigger: interest)
+            .sensoryFeedback(.selection, trigger: savedOnly)
             .sheet(item: $adding) { ExploreAddToTripView(place: $0) }
             .sheet(isPresented: $showInterests) { interestsSheet }
             .sheet(isPresented: $showFilters) { filtersSheet }
     }
+    private var hotelBookingLink: some View {
+        Button { bookingHotel = true } label: {
+            Label("Hotels", systemImage: "bed.double")
+                .font(.subheadline.weight(.semibold))
+                .padding(.horizontal, 20).padding(.vertical, 17)
+                .foregroundStyle(StayStyle.background)
+                .background(Color.primary, in: .capsule)
+                .shadow(color: .black.opacity(0.14), radius: 14, y: 5)
+        }.buttonStyle(StayPressStyle())
+            .accessibilityLabel("Find a hotel in " + city.name)
+            .accessibilityIdentifier("city-book-hotel")
+    }
     private var cityHeader: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: 8) {
+                ExploreDestinationImage(city: city).frame(height: 190).clipShape(.rect(cornerRadius: 22))
+                ExplorePhotoCredit(city: city)
+            }
             VStack(alignment: .leading, spacing: 5) {
                 Eyebrow(text: city.country.isEmpty ? "Explore" : city.country)
                 Editorial(city.name, size: 32)
@@ -208,75 +279,55 @@ struct CityGuideView: View {
             HStack(spacing: 10) {
                 Button {
                     store.cityMapRequest = CityMapRequest(city: city, interest: interest, term: query, dining: diningFilters, sort: sort, wider: wider, savedOnly: savedOnly, websiteOnly: websiteOnly, places: visible)
+                    store.searchPresented = false
                     store.selectedTab = 1
                 } label: { Label("Open map", systemImage: "map").font(.subheadline.weight(.medium)).padding(.vertical, 6) }
                     .buttonStyle(.glass).disabled(model.loading && !savedOnly).accessibilityIdentifier("city-open-map")
-                Button { searchRoute = CityPlaceSearchRoute(savedOnly: true) } label: { Label("Saved (\(savedPlaces.count))", systemImage: savedOnly ? "bookmark.fill" : "bookmark").font(.subheadline.weight(.medium)).padding(.vertical, 6) }
+                Button { withAnimation(StayStyle.motion(reduceMotion)) { savedOnly.toggle() } } label: { Label("Saved (\(savedPlaces.count))", systemImage: savedOnly ? "bookmark.fill" : "bookmark").font(.subheadline.weight(.medium)).padding(.vertical, 6) }
                     .buttonStyle(.glass).accessibilityIdentifier("city-saved-places").accessibilityValue(savedOnly ? "Selected" : "Not selected")
             }
             CityTemplateLink(city: city.name)
         }
     }
-    private var resultsHeader: some View {
-        HStack {
-            Text(city.name).font(.subheadline.weight(.medium)).foregroundStyle(.secondary)
-            Spacer()
-            Button { savedOnly.toggle() } label: { Label("Saved", systemImage: savedOnly ? "bookmark.fill" : "bookmark").font(.caption) }
-                .accessibilityLabel("Saved places").accessibilityIdentifier("city-saved-places")
-                .accessibilityValue(savedOnly ? "Selected" : "Not selected")
-            Button {
-                store.cityMapRequest = CityMapRequest(city: city, interest: interest, term: query, dining: diningFilters, sort: sort, wider: wider, savedOnly: savedOnly, websiteOnly: websiteOnly, places: visible)
-                store.selectedTab = 1
-            } label: { Label("Map", systemImage: "map").font(.caption) }.padding(.leading, 12)
-                .accessibilityLabel("Open map").accessibilityIdentifier("city-open-map")
-        }.frame(minHeight: 28)
-    }
     private var searchControls: some View {
         VStack(alignment: .leading, spacing: 12) {
-            if isSearchPage {
-                HStack(spacing: 10) {
-                    Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-                    TextField("Search places in \(city.name)", text: $query).submitLabel(.search).autocorrectionDisabled().accessibilityIdentifier("city-place-query").focused($searchFocused)
-                    if !query.isEmpty { Button { query = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary) }.accessibilityLabel("Clear city search") }
-                }.padding(15).cardSurface(cornerRadius: 18)
-            } else {
-                Button { searchRoute = CityPlaceSearchRoute(focusSearch: true) } label: {
-                    HStack(spacing: 10) {
-                        Image(systemName: "magnifyingglass")
-                        Text("Search places in \(city.name)")
-                        Spacer()
-                    }.font(.subheadline).foregroundStyle(.secondary).padding(15).cardSurface(cornerRadius: 18)
-                }.buttonStyle(.plain).accessibilityIdentifier("city-open-search")
-                ScrollView(.horizontal) {
-                    HStack(spacing: 20) {
-                        categoryPicker
-                        ForEach([ExploreInterest.restaurants, .attractions, .hotels]) { category in
-                            Button { searchRoute = CityPlaceSearchRoute(interest: category) } label: {
-                                Label(category.title, systemImage: category.symbol).font(.subheadline.weight(.medium)).fixedSize()
-                            }.accessibilityIdentifier("city-category-" + category.id)
-                        }
-                    }.frame(minHeight: 44)
-                }.scrollIndicators(.hidden)
-            }
-            if isSearchPage {
-                HStack {
-                    categoryPicker
-                    Spacer()
-                    Button { showFilters = true } label: { Label(filtersActive ? "Filters •" : "Filters", systemImage: "slider.horizontal.3") }.font(.subheadline).accessibilityIdentifier("city-filters")
-                }.frame(minHeight: 36)
-            }
+            HStack(spacing: 10) {
+                Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+                TextField("Search places in \(city.name)", text: $query).submitLabel(.search).autocorrectionDisabled().accessibilityIdentifier("city-place-query").focused($searchFocused)
+                if !query.isEmpty { Button { query = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary) }.accessibilityLabel("Clear city search") }
+            }.padding(15).background(StayStyle.surface, in: .rect(cornerRadius: 16))
+            ScrollView(.horizontal) {
+                HStack(spacing: 8) {
+                    ForEach([ExploreInterest.highlights, .restaurants, .attractions, .hotels]) { category in
+                        Button { selectInterest(category) } label: {
+                            Label(category.title, systemImage: category.symbol).font(.caption.weight(.medium)).fixedSize().padding(.horizontal, 14).frame(minHeight: 44)
+                                .foregroundStyle(interest == category ? StayStyle.background : Color.primary)
+                                .background(interest == category ? Color.primary : StayStyle.surface, in: .capsule)
+                        }.buttonStyle(StayPressStyle()).accessibilityIdentifier("city-category-" + category.id).accessibilityAddTraits(interest == category ? .isSelected : [])
+                    }
+                }
+            }.scrollIndicators(.hidden)
+            HStack {
+                categoryPicker
+                Spacer()
+                Button { showFilters = true } label: { Label(filtersActive ? "Filters •" : "Filters", systemImage: "slider.horizontal.3") }.font(.subheadline).accessibilityIdentifier("city-filters")
+            }.frame(minHeight: 36).tint(.primary)
             if filtersActive {
                 HStack(alignment: .top) {
                     Text([websiteOnly ? "Has website" : nil, wider ? "Wider city" : nil, sort != .suggested ? sort.rawValue : nil, interest == .restaurants && diningFilters.active ? diningFilters.summary : nil].compactMap { $0 }.joined(separator: " · ")).font(.caption).foregroundStyle(.secondary)
                     Spacer()
-                    Button("Reset") { websiteOnly = false; wider = false; sort = .suggested; diningFilters = DiningSearchPreferences() }.font(.caption)
+                    Button("Reset") { websiteOnly = false; wider = false; sort = .suggested; diningFilters = DiningSearchPreferences() }.font(.caption).tint(.primary)
                 }
             }
         }
     }
+    private func selectInterest(_ value: ExploreInterest) {
+        searchFocused = false
+        withAnimation(StayStyle.motion(reduceMotion)) { interest = value }
+    }
     private var categoryPicker: some View {
         Button { showInterests = true } label: {
-            Label(isSearchPage ? interest.title : "All categories", systemImage: isSearchPage ? interest.symbol : "square.grid.2x2")
+            Label(interest == .highlights ? "All categories" : interest.title, systemImage: interest == .highlights ? "square.grid.2x2" : interest.symbol)
             Image(systemName: "chevron.down").font(.caption2)
         }.font(.subheadline.weight(.medium)).fixedSize().accessibilityIdentifier("city-all-interests")
     }
@@ -318,8 +369,7 @@ struct CityGuideView: View {
         NavigationStack {
             List { ForEach(ExploreInterest.allCases) { value in
                 Button {
-                    if isSearchPage { interest = value }
-                    else { searchRoute = CityPlaceSearchRoute(interest: value) }
+                    selectInterest(value)
                     showInterests = false
                 } label: {
                     HStack { Label(value.title, systemImage: value.symbol).foregroundStyle(.primary); Spacer(); if interest == value { Image(systemName: "checkmark").foregroundStyle(Color.bronze) } }.padding(.vertical, 6)

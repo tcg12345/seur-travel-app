@@ -4,7 +4,7 @@ import Security
 
 struct TravelAccount: Codable, Identifiable, Hashable { var id: String; var handle: String; var name: String }
 struct TravelAuthResponse: Codable { var token: String; var user: TravelAccount }
-struct TravelServiceStatus: Codable { var tripadvisor: Bool; var ai: Bool; var publicSharing: Bool; var googlePlaces: Bool?; var flightTracking: Bool?; var flightHistory: Bool?; var cityPhotos: Bool?; var googleCityPhotos: Bool?; var pexelsCityPhotos: Bool?; var travelGuides: Bool? }
+struct TravelServiceStatus: Codable { var tripadvisor: Bool; var ai: Bool; var publicSharing: Bool; var googlePlaces: Bool?; var flightTracking: Bool?; var flightHistory: Bool?; var cityPhotos: Bool?; var googleCityPhotos: Bool?; var pexelsCityPhotos: Bool?; var travelGuides: Bool?; var hotels: Bool?; var hotelEnvironment: String?; var hotelBooking: Bool?; var hotelSandboxCancellation: Bool? }
 struct GooglePlaceSuggestion: Codable, Identifiable { var id: String; var title: String; var subtitle: String }
 struct TravelFriend: Codable, Identifiable { var id: String; var handle: String; var name: String; var status: String; var incoming: Bool }
 struct RemoteJourney: Codable, Identifiable { var id: String; var owner: TravelAccount; var document: JourneyDocument; var revision: Int; var isSummary: Bool? }
@@ -33,12 +33,13 @@ private struct EmptyReply: Codable { var ok: Bool }
 }
 
 @MainActor @Observable final class TravelAPI {
-    var baseURL: String { didSet { if oldValue != baseURL { defaults.set(baseURL, forKey: "aurum.backendURL"); account = nil; token = nil; savedFlights = [] } } }
-    private(set) var account: TravelAccount?
+    var baseURL: String { didSet { if oldValue != baseURL { defaults.set(baseURL, forKey: "aurum.backendURL"); account = nil; token = nil; savedFlights = []; travelers.clear() } } }
+    private(set) var account: TravelAccount? { didSet { if oldValue?.id != account?.id { travelers.clear() } } }
     private(set) var status: TravelServiceStatus?
     private(set) var savedFlights: [FlightReservation] = []
     var savedFlightsError: String?
     private var token: String?
+    let travelers = TravelerProfilesStore()
     private let googleAutocomplete = GoogleAutocompleteRequests()
     private let defaults: UserDefaults
     private let session: URLSession
@@ -301,6 +302,133 @@ private struct EmptyReply: Codable { var ok: Bool }
             "text": note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? intent.prompt : note,
             "tripRequest": ["city": intent.city, "month": intent.month]
         ])
+    }
+    var hotelCancellationAccess: Bool { HotelFixtures.enabled || (status?.hotelSandboxCancellation == true && status?.hotelEnvironment == "sandbox") }
+    var hotelAccess: Bool { isSignedIn || HotelFixtures.enabled }
+    func hotelSearch(city: ExploreCity, name: String = "", stars: String = "", score: String = "", offset: Int = 0) async throws -> LodgingPage {
+        if HotelFixtures.enabled {
+            if ProcessInfo.processInfo.arguments.contains("--hotel-error") { throw JourneyError.message("Hotel information is temporarily unavailable. Please try again.") }
+            if name.lowercased() == "empty" { return .init(hotels: [], nextOffset: nil, environment: "sandbox") }
+            let matches = (0..<23).map(HotelFixtures.hotel).filter { name.isEmpty || $0.name.localizedCaseInsensitiveContains(name) }
+            return .init(hotels: Array(matches.dropFirst(offset).prefix(20)), nextOffset: offset + 20 < matches.count ? offset + 20 : nil, environment: "sandbox")
+        }
+        try hotelRequestAllowed()
+        return try await request("/v1/hotels", query: ["latitude": String(city.latitude), "longitude": String(city.longitude), "name": name, "stars": stars, "score": score, "offset": String(offset)])
+    }
+    func hotelDetail(_ id: String) async throws -> LodgingDetail {
+        if HotelFixtures.enabled { var detail = HotelFixtures.detail; detail.hotel.id = id; return detail }
+        try hotelRequestAllowed()
+        guard id.range(of: "^liteapi:lp[a-zA-Z0-9]{1,60}$", options: .regularExpression) != nil else { throw JourneyError.message("Invalid hotel identifier.") }
+        return try await request("/v1/hotels/" + id)
+    }
+    func hotelReviews(_ id: String, offset: Int) async throws -> LodgingReviewPage {
+        if HotelFixtures.enabled { return .init(reviews: (offset..<offset+2).map { .init(id: "review\($0)", name: "Guest", date: "2026-08-01T00:00:00Z", rating: 9, headline: "A lovely stay", pros: "Thoughtful service and a peaceful room.", cons: "The terrace was busy at breakfast.", source: "Test fixture", travelerType: "couple") }, nextOffset: offset == 0 ? 20 : nil, totalRecords: 826) }
+        try hotelRequestAllowed()
+        guard id.range(of: "^liteapi:lp[a-zA-Z0-9]{1,60}$", options: .regularExpression) != nil else { throw JourneyError.message("Invalid hotel identifier.") }
+        return try await request("/v1/hotels/" + id + "/reviews", query: ["offset": String(offset)])
+    }
+    func hotelRates(hotelIDs: [String], criteria: HotelRateCriteria, detail: Bool) async throws -> HotelRatePage {
+        if HotelFixtures.enabled { return try HotelRateFixtures.page(ids: hotelIDs, criteria: criteria, detail: detail) }
+        try hotelRequestAllowed()
+        return try await request("/v1/hotel-rates", method: "POST", encodable: HotelRatesRequest(hotelIds: hotelIDs, detail: detail, criteria: criteria))
+    }
+    func hotelQuote(_ offer: HotelRateOffer) async throws -> HotelQuoteReview {
+        if HotelFixtures.enabled {
+            guard !offer.expired, let criteria = HotelRateFixtures.lastCriteria else { throw JourneyError.message("This rate has expired. Refresh room options.") }
+            return .init(offer: offer, criteria: criteria, environment: "sandbox", checkoutEnabled: criteria.occupancies.count == 1 && offer.total != nil)
+        }
+        try hotelRequestAllowed()
+        guard let quote = offer.quote else { throw JourneyError.message("Refresh room options.") }
+        var review: HotelQuoteReview = try await request("/v1/hotel-quotes/inspect", method: "POST", body: ["quote": quote])
+        review.offer.quote = quote
+        return review
+    }
+    func createHotelCheckout(_ input: HotelCheckoutRequest, original: HotelQuoteReview) async throws -> HotelCheckout {
+        if HotelFixtures.enabled { return try HotelCheckoutFixtures.create(input, original: original) }
+        try hotelRequestAllowed()
+        return try await request("/v1/hotel-checkouts", method: "POST", encodable: input)
+    }
+    func hotelCheckout(_ id: String) async throws -> HotelCheckout {
+        if HotelFixtures.enabled { return try HotelCheckoutFixtures.get(id) }
+        try hotelRequestAllowed()
+        guard UUID(uuidString: id) != nil else { throw JourneyError.message("Invalid checkout.") }
+        return try await request("/v1/hotel-checkouts/" + id)
+    }
+    func prepareHotelCancellation(_ id: String) async throws -> HotelCheckout {
+        #if DEBUG
+        if HotelFixtures.enabled { return try HotelCheckoutFixtures.prepareCancellation(id) }
+        #endif
+        try hotelRequestAllowed()
+        guard UUID(uuidString: id) != nil else { throw JourneyError.message("Invalid checkout.") }
+        return try await request("/v1/hotel-checkouts/" + id + "/cancellation", method: "POST", body: [:])
+    }
+    func confirmHotelCancellation(_ value: HotelCheckout) async throws -> HotelCheckout {
+        guard let cancellation = value.cancellation, cancellation.canConfirm else { throw JourneyError.message("Check the cancellation terms again.") }
+        #if DEBUG
+        if HotelFixtures.enabled { return try HotelCheckoutFixtures.confirmCancellation(value) }
+        #endif
+        try hotelRequestAllowed()
+        return try await request("/v1/hotel-checkouts/" + value.id + "/cancellation/confirm", method: "POST", body: ["version": cancellation.version, "acceptTestCancellation": true])
+    }
+    func syncHotelCheckout(_ id: String) async throws -> HotelCheckout {
+        if HotelFixtures.enabled {
+            var value = try HotelCheckoutFixtures.get(id)
+            value.review.providerCheckedAt = Date().ISO8601Format()
+            if ProcessInfo.processInfo.arguments.contains("--hotel-sync-cancelled") {
+                value.state = "cancelled"; value.review.providerStatus = "CANCELLED"
+            } else { value.review.providerStatus = value.confirmed ? "CONFIRMED" : nil }
+            return value
+        }
+        try hotelRequestAllowed()
+        guard UUID(uuidString: id) != nil else { throw JourneyError.message("Invalid checkout.") }
+        return try await request("/v1/hotel-checkouts/" + id + "/sync", method: "POST", body: [:])
+    }
+    var travelerAccess: Bool {
+        #if DEBUG
+        if HotelFixtures.enabled { return true }
+        #endif
+        return isSignedIn
+    }
+    func loadTravelers() async {
+        guard travelerAccess else { travelers.clear(); return }
+        await travelers.load {
+            #if DEBUG
+            if HotelFixtures.enabled { return .init(profiles: TravelerFixtures.profiles) }
+            #endif
+            return try await self.request("/v1/travelers")
+        }
+    }
+    func saveTraveler(_ profile: SavedTravelerProfile) async throws {
+        guard profile.valid else { throw JourneyError.message("Complete the traveler’s name, contact details and nationality.") }
+        let result: TravelerProfileList
+        #if DEBUG
+        if HotelFixtures.enabled { travelers.replace(TravelerFixtures.save(profile).profiles); return }
+        #endif
+        result = try await request("/v1/travelers/" + profile.id, method: "PUT", encodable: TravelerProfileWrite(profile))
+        travelers.replace(result.profiles)
+    }
+    func deleteTraveler(_ profile: SavedTravelerProfile) async throws {
+        #if DEBUG
+        if HotelFixtures.enabled { travelers.replace(TravelerFixtures.delete(profile).profiles); return }
+        #endif
+        let result: TravelerProfileList = try await request("/v1/travelers/" + profile.id, method: "DELETE", body: ["expectedVersion": profile.version])
+        travelers.replace(result.profiles)
+    }
+    func hotelCheckouts(cursor: String? = nil) async throws -> HotelCheckoutList {
+        if HotelFixtures.enabled { return try HotelCheckoutFixtures.historyPage(cursor: cursor) }
+        try hotelRequestAllowed()
+        var components = URLComponents(); components.queryItems = cursor.map { [URLQueryItem(name: "cursor", value: $0)] }
+        return try await request("/v1/hotel-checkouts" + (components.percentEncodedQuery.map { "?" + $0.replacingOccurrences(of: "+", with: "%2B") } ?? ""))
+    }
+    func confirmHotelCheckout(_ value: HotelCheckout) async throws -> HotelCheckout {
+        if HotelFixtures.enabled { return HotelCheckoutFixtures.confirm(value) }
+        try hotelRequestAllowed()
+        guard UUID(uuidString: value.id) != nil, value.environment == "sandbox" else { throw JourneyError.message("Invalid checkout.") }
+        return try await request("/v1/hotel-checkouts/" + value.id + "/confirm", method: "POST", body: ["quoteVersion": value.quoteVersion, "acceptTestBooking": true])
+    }
+    private func hotelRequestAllowed() throws {
+        guard !PlaceSearchTestPolicy.blocksPaidRequests else { throw JourneyError.message("Live hotel requests are disabled during tests.") }
+        guard isSignedIn else { throw JourneyError.message("Sign in to explore the live hotel collection.") }
     }
     private func request<T: Decodable, Body: Encodable>(_ path: String, method: String, encodable: Body) async throws -> T {
         try await perform(path, method: method, data: JSONEncoder().encode(encodable))

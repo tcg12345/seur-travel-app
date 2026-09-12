@@ -1,6 +1,16 @@
 import SwiftUI
 
 struct HotelDetailView: View {
+    let hotel: Hotel
+    @Environment(TravelAPI.self) private var api
+    var body: some View {
+        if api.hotelAccess, let id = LodgingHotel.collectionLinks[hotel.id] {
+            LiveHotelDetailView(hotel: LodgingHotel(id: id, name: hotel.name, city: hotel.city, country: hotel.country, address: hotel.address), legacy: hotel)
+        } else { CollectionHotelDetailView(hotel: hotel) }
+    }
+}
+
+struct CollectionHotelDetailView: View {
     @Environment(TravelStore.self) private var store
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let hotel: Hotel

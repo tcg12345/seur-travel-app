@@ -124,3 +124,40 @@ Updated iOS cards use guest `GET /v1/cities/google-photo?city=Paris` and the `go
 ## Pexels destination covers
 
 The updated iOS app uses `/v1/cities/pexels-photo` for all destination cards. Configure `PEXELS_API_KEY` in Edge secrets; status exposes `pexelsCityPhotos`. Landmark-oriented landscape selection returns a 1200×675 rendition and linked photographer/Pexels attribution. Service-only 24-hour `travel_provider_cache` entries share city results and retain candidates for editorial review. Provider cache misses are capped at 180/hour and 500/day; endpoint reads at 30/network/minute. No migration is needed. Existing Google/Commons routes remain for older clients. Tests: `supabase/tests/pexels_city_photos_test.ts`.
+
+
+## Sandbox hotel rates
+
+`POST /v1/hotel-rates` uses the existing opaque app session and server-only `LITEAPI_SANDBOX_KEY`. It validates date-only stay criteria, room occupancy and child ages, guest nationality, currency and up to 20 hotel IDs. Requests share the existing two-per-second hotel provider cap and an additional ten-per-minute per-account cap. Only explicitly sandbox-marked rate responses are accepted. No new markup, schema or authentication configuration is introduced.
+
+`POST /v1/hotel-quotes/inspect` validates a short-lived owner-bound encrypted quote without contacting the provider. It cannot create a reservation, initialize payment or reprice an offer. Quote expiry is five minutes; AES-GCM keys are domain-separated from the existing server credential. No provider offer tokens are written into public tables, saved trips or logs. Actual checkout must add its durable ledger and provider revalidation before payment.
+
+Run the ordinary Deno suite for deterministic coverage. The separate explicit `python3 supabase/tests/hotel_rates_live.py --sandbox-rates` run creates two temporary accounts, makes five bounded rate searches, verifies quote isolation and removes its accounts. It never calls booking, prebook or payment endpoints. Aggregate results are stored under ignored `work/hotel-rates-validation.json`.
+
+Hotel sandbox checkout adds owned `/v1/hotel-checkouts` create/list/detail/confirm routes, encrypted guest payloads, explicit versioned final intent and a minute cron worker. Only the `sand_` LiteAPI key and documented no-charge `ACC_CREDIT_CARD` simulation are permitted. The existing app-session middleware and gateway settings are unchanged. Tables/RPCs are server-only. Deploy migration `20260910172548_hotel_sandbox_checkouts.sql` before the function; the migration provisions the worker's one-use tickets and schedule.
+
+Run `hotel_checkout_schema.sql` as a rolled-back administrative check. `python3 supabase/tests/hotel_checkout_live.py --sandbox-booking` explicitly requests one synthetic sandbox booking; it must not be used as routine CI. The September 10 live attempt exposed differing supplier room/meal/cancellation data and remains `needs_support`, so the complete live happy-path acceptance is unresolved. See `iOS/LiteAPISandboxQuestions.md`. Never bypass product matching to make a sandbox test appear successful.
+
+### Hotel checkout history pagination
+
+`GET /v1/hotel-checkouts` returns `{ checkouts, nextCursor }` with at most 30 records. Pass the returned opaque cursor as the URL-encoded `cursor` query parameter for the next page; null means the end. Each request is authenticated and owner-filtered. The cursor binds the precise creation timestamp and UUID tie-breaker to the account. Invalid, altered and cross-account cursors return 400 before the database query. Refresh without a cursor to see newly created records. The response is backward-compatible with clients that read only `checkouts`.
+
+The native app preserves loaded pages on detail return and offers a retry for page failures. It displays that search/status/date filters apply to loaded records, until all retained history is loaded. The v50 deployment adds this read-only behavior without database migrations or changes to booking/payment capabilities.
+
+### Saved traveler profiles
+
+Migration `20260911120559_saved_traveler_profiles.sql` and travel-api v51 add private account profiles. Authenticated GET `/v1/travelers`, PUT `/v1/travelers/{uuid}` and DELETE `/v1/travelers/{uuid}` return `{profiles}`. Writes contain `expectedVersion` (0 for new), `isDefault`, `firstName`, `lastName`, `email`, international `phone` and ISO nationality; delete contains `expectedVersion`. Conflicting edits/deletes return 409. Up to 20 profiles per account; the first is default, changing default is serialized per account, and deleting it selects a remaining profile. Account deletion cascades profiles.
+
+PII is stored only in AES-GCM ciphertext bound to the owner/profile with a traveler-specific authenticated context. The table/RPCs revoke anon/authenticated access and retain RLS; the API derives the actor from its existing app session. No provider credentials reach the client. Profile payloads reuse the checkout encryption helper: credential rotation must retain the old key long enough to re-encrypt existing profiles and checkout payloads. Responses use no-store, with per-account read/write limits of 60/20 per minute.
+
+Tests: `travelers_test.ts`, the traveler routing regression in `cutover_test.ts`, and rolled-back `travelers_schema.sql`. Opt-in `python3 supabase/tests/travelers_live.py --saved-travelers` creates/deletes two temporary accounts and validates profile CRUD, defaults, conflicts and isolation. It makes no supplier, booking or payment requests.
+
+### Explicit provider booking refresh
+
+travel-api v52 adds POST `/v1/hotel-checkouts/{id}/sync`, backed by migration `20260912103919_hotel_booking_sync.sql`. It retrieves an already submitted sandbox booking by its stored provider ID; it never submits book/prebook/cancel. It verifies complete identity and, for confirmation, the accepted product. Conditional owner/state/updated_at writes reject stale results. Cancelled is terminal and distinct from refunded. Existing worker leases remain authoritative for in-progress attempts. Ordinary GET stays provider-free. The new refresh action is limited to once per record per 15 seconds, in addition to existing account/provider limits.
+
+### Sandbox cancellation (v53)
+
+Migration `20260912104954_hotel_sandbox_cancellation.sql` adds durable cancellation review/accept/claim operations to the existing sandbox ledger and worker wakeup. The new `hotel-cancellations.ts` handles fresh booking verification, versioned explicit intent, one PUT submission, GET-only recovery and charged-cancellation status. App routes are POST `/v1/hotel-checkouts/{id}/cancellation` and POST `/v1/hotel-checkouts/{id}/cancellation/confirm`. Confirmation accepts `{version, acceptTestCancellation:true}`. No real refund operation is implemented.
+
+The migration and approved API bundle are deployed as `travel-api` v53. The `hotelSandboxCancellation` status flag controls the native entry point. Live route smoke checks passed; the temporary account was deleted. See `iOS/LiteAPICancellationDeployment.md` for deployment scope and verification. Tests: `hotel_cancellations_test.ts`, `hotel_cancellation_schema.sql`, native cancellation intent tests and two UI scenarios. The implementation did not submit actual supplier cancellations or bookings.

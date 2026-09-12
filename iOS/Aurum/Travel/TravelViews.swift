@@ -45,6 +45,16 @@ struct TravelHubView: View {
                     Spacer(minLength: 0)
                     Button { browsingGuides = true } label: { Label("Guides", systemImage: "book.closed").font(.subheadline).foregroundStyle(Color.bronze) }.accessibilityIdentifier("travel-guides")
                 }
+                if section == "Trips" && query.isEmpty {
+                    NavigationLink { HotelCheckoutsSheet().hotelFlowPage() } label: {
+                        HStack(spacing: 14) {
+                            Image(systemName: "ticket").font(.title3).frame(width: 44, height: 44).background(StayStyle.surface, in: .rect(cornerRadius: 12))
+                            VStack(alignment: .leading, spacing: 4) { Text("My bookings").font(.subheadline.weight(.semibold)); Text("Hotel confirmations and saved checkouts").font(.caption).foregroundStyle(.secondary) }
+                            Spacer(); Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
+                        }.padding(.vertical, 8).contentShape(.rect)
+                    }.buttonStyle(StayPressStyle()).tint(.primary).accessibilityIdentifier("travel-hotel-bookings")
+                    if api.travelerAccess { NavigationLink { TravelerProfilesPage().hotelFlowPage() } label: { Label("Saved travelers", systemImage: "person.crop.rectangle.stack").font(.subheadline.weight(.medium)).padding(.vertical, 10) }.tint(.primary).accessibilityIdentifier("travel-saved-travelers") }
+                }
                 if section == "Wishlist" { WishlistContent(query: $query) }
                 else { Group {
                     if query.isEmpty { TravelStatsPreview(compact: true) }

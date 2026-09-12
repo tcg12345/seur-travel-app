@@ -7,6 +7,12 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		117EA1000000000000000005 = {isa = PBXBuildFile; fileRef = 117EA2000000000000000005; };
+		117EA1000000000000000004 = {isa = PBXBuildFile; fileRef = 117EA2000000000000000004; };
+		117EA1000000000000000003 = {isa = PBXBuildFile; fileRef = 117EA2000000000000000003; };
+		117EA1000000000000000002 = {isa = PBXBuildFile; fileRef = 117EA2000000000000000002; };
+		117EA1000000000000000001 = {isa = PBXBuildFile; fileRef = 117EA2000000000000000001; };
+		117EA1000000000000000000 = {isa = PBXBuildFile; fileRef = 117EA2000000000000000000; };
 		C19F00000000000000000003 /* GuideViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = C19F00000000000000000006; };
 		C19F00000000000000000002 /* GuideEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C19F00000000000000000005; };
 		C19F00000000000000000001 /* TravelGuides.swift in Sources */ = {isa = PBXBuildFile; fileRef = C19F00000000000000000004; };
@@ -102,6 +108,12 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		117EA2000000000000000005 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Travel/TravelerProfiles.swift; sourceTree = "<group>"; };
+		117EA2000000000000000004 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotelCheckout.swift; sourceTree = "<group>"; };
+		117EA2000000000000000003 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotelRates.swift; sourceTree = "<group>"; };
+		117EA2000000000000000002 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotelSearchSheets.swift; sourceTree = "<group>"; };
+		117EA2000000000000000001 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotelDiscoveryViews.swift; sourceTree = "<group>"; };
+		117EA2000000000000000000 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Hotels.swift; sourceTree = "<group>"; };
 		C19F00000000000000000006 /* GuideViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Travel/GuideViews.swift; sourceTree = "<group>"; };
 		C19F00000000000000000005 /* GuideEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Travel/GuideEditorView.swift; sourceTree = "<group>"; };
 		C19F00000000000000000004 /* TravelGuides.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Travel/TravelGuides.swift; sourceTree = "<group>"; };
@@ -227,6 +239,12 @@
 				F6A6ABC622C8A615B5E97F17 /* DesignSystem.swift */,
 				AA7700000000000000000001 /* Travel/WishlistModels.swift */,
 				AA7700000000000000000002 /* Travel/WishlistViews.swift */,
+				117EA2000000000000000000,
+				117EA2000000000000000001,
+				117EA2000000000000000002,
+				117EA2000000000000000003,
+				117EA2000000000000000004,
+				117EA2000000000000000005,
 				B941FFDDBFA04FFC50847F9C /* DiscoverView.swift */,
 				3B3E0A51725C543883C8532C /* HotelDetailView.swift */,
 				BAE6B937772308D1F0321F01 /* JourneysView.swift */,
@@ -445,6 +463,12 @@
 				8C6C64A5FA7FCD1367ADBDCB /* DesignSystem.swift in Sources */,
 				AA7700000000000000000003 /* Travel/WishlistModels.swift in Sources */,
 				AA7700000000000000000004 /* Travel/WishlistViews.swift in Sources */,
+				117EA1000000000000000000,
+				117EA1000000000000000001,
+				117EA1000000000000000002,
+				117EA1000000000000000003,
+				117EA1000000000000000004,
+				117EA1000000000000000005,
 				D85A7146F885996C903E05C6 /* DiscoverView.swift in Sources */,
 				5662376140F9D0F8AAB8A7A4 /* HotelDetailView.swift in Sources */,
 				9BA7778106424EA359EA9DC8 /* JourneysView.swift in Sources */,

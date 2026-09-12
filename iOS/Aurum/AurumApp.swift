@@ -11,6 +11,10 @@ import SwiftUI
     @State private var widgetDiscovery: WidgetDiscovery
     init() {
         if ProcessInfo.processInfo.arguments.contains("--ui-testing") {
+            #if DEBUG
+            if HotelFixtures.enabled && ProcessInfo.processInfo.arguments.contains("--hotel-bookings-testing") { HotelCheckoutFixtures.rows = (try? HotelCheckoutFixtures.servicingExamples()) ?? [] }
+            if HotelFixtures.enabled && ProcessInfo.processInfo.arguments.contains("--hotel-history-testing") { HotelCheckoutFixtures.rows = (try? HotelCheckoutFixtures.paginatedExamples()) ?? [] }
+            #endif
             let defaults = UserDefaults(suiteName: "com.aurum.travel.uitests")!
             if !ProcessInfo.processInfo.arguments.contains("--preserve-state") { defaults.removePersistentDomain(forName: "com.aurum.travel.uitests") }
             _store = State(initialValue: TravelStore(defaults: defaults))
@@ -55,9 +59,8 @@ struct RootView: View {
             Tab("Concierge", systemImage: "sparkles", value: 4) { NavigationStack { ConciergeView() } }
         }
         .tabBarMinimizeBehavior(.never)
-        .sheet(isPresented: $store.searchPresented) {
-            NavigationStack { SearchView().toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { store.searchPresented = false } } } }
-                .presentationDetents([.large])
+        .fullScreenCover(isPresented: $store.searchPresented) {
+            NavigationStack { SearchView() }
         }
         .task { try? await api.refresh() }
         .task(id: api.account?.id) { await FlightNotifications.shared.restore(api: api) }

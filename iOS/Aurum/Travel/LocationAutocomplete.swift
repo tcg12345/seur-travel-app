@@ -14,9 +14,9 @@ enum PlaceSearchTestPolicy {
 }
 
 enum LocationSearchKind: Equatable {
-    case destination, city, airport, place, address, country, timeZone
+    case destination, city, airport, place, hotel, address, country, timeZone
     var symbol: String {
-        switch self { case .airport: "airplane"; case .place: "mappin.and.ellipse"; case .address: "location"; case .country: "globe.europe.africa"; case .timeZone: "clock"; default: "building.2" }
+        switch self { case .airport: "airplane"; case .place: "mappin.and.ellipse"; case .hotel: "bed.double"; case .address: "location"; case .country: "globe.europe.africa"; case .timeZone: "clock"; default: "building.2" }
     }
     var isLocal: Bool { self == .country || self == .timeZone }
 }
@@ -137,7 +137,7 @@ enum DestinationSuggestions {
     private var kind: LocationSearchKind = .destination
     private var context = ""
     private var requestedGoogle = false
-    var canRequestGoogle: Bool { (kind == .place || kind == .address) && query.count >= 3 && !loading && !resolving && !requestedGoogle }
+    var canRequestGoogle: Bool { (kind == .place || kind == .hotel || kind == .address) && query.count >= 3 && !loading && !resolving && !requestedGoogle }
     init(fixtures: Bool = false, appleSearch: ((String, LocationSearchKind) async throws -> [LocationSuggestion])? = nil) {
         self.fixtures = fixtures; self.appleSearch = appleSearch; super.init()
     }
@@ -189,6 +189,9 @@ enum DestinationSuggestions {
                 engine.resultTypes = [.address, .pointOfInterest]
                 engine.addressFilter = MKAddressFilter(including: .locality)
                 engine.pointOfInterestFilter = MKPointOfInterestFilter(including: [.airport])
+            case .hotel:
+                engine.resultTypes = .pointOfInterest
+                engine.pointOfInterestFilter = MKPointOfInterestFilter(including: [.hotel])
             case .address: engine.resultTypes = .address
             default: engine.resultTypes = [.pointOfInterest, .address]
             }
@@ -286,6 +289,11 @@ enum DestinationSuggestions {
     }
     #if DEBUG
     private static func testSuggestions(_ query: String, kind: LocationSearchKind) -> [LocationSuggestion] {
+        if kind == .hotel {
+            guard query.localizedCaseInsensitiveContains("pal") else { return [] }
+            let hotel = HotelFixtures.hotel()
+            return [LocationSuggestion(title: hotel.name, subtitle: hotel.address, fixture: LocationSelection(text: hotel.name, place: hotel.place, country: "Italy"))]
+        }
         if query.localizedCaseInsensitiveContains("lis") {
             let place = PlaceRecord(id: "ui-test-lisbon", name: "Lisbon", category: .other, city: "Lisbon", address: "Lisbon, Portugal", latitude: 38.7223, longitude: -9.1393, source: "UI test fixture")
             return [LocationSuggestion(title: "Lisbon", subtitle: "Portugal · UI test fixture", fixture: LocationSelection(text: kind == .destination ? "Lisbon, Portugal" : "Lisbon", place: place, country: "Portugal", timeZone: "Europe/Lisbon"))]

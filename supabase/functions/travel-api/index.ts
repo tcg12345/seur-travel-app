@@ -1,3 +1,8 @@
+import {prepareHotelCancellation, acceptHotelCancellation} from "./hotel-cancellations.ts";
+import { listTravelers, saveTraveler, deleteTraveler } from "./travelers.ts";
+import { rateRequest, searchHotelRates, openQuote } from "./hotel-rates.ts";
+import { hotelCheckoutConfigured, createHotelCheckout, getHotelCheckout, syncHotelCheckout, listHotelCheckouts, confirmHotelCheckout, hotelCheckoutWorker } from "./hotel-checkouts.ts";
+import { hotelsConfigured, hotelSearchParams, hotelID, searchHotels, hotelDetails, hotelReviews } from "./hotels.ts";
 import { sanitizedGuide, guidePDF, guideTags } from "./guides.ts";
 import { cityPhoto, cityPhotoQuery } from "./city-photos.ts";
 import { pexelsCityPhoto } from "./pexels-city-photos.ts";
@@ -243,6 +248,12 @@ export async function handler(req: Request): Promise<Response> {
     if (path === "/v1/status" && method === "GET") {
       return json({
         backend: "supabase",
+        hotels: hotelsConfigured(),
+        hotelEnvironment: "sandbox",
+        hotelBooking: false,
+        hotelSandboxCheckout: hotelCheckoutConfigured(),
+        hotelSandboxCancellation: hotelCheckoutConfigured(),
+        hotelRates: hotelsConfigured(),
         flightTracking: configured("FLIGHTAWARE_API_KEY"),
         flightHistory: historyEnabled(),
         googlePlaces: configured("GOOGLE_PLACES_API_KEY"),
@@ -318,6 +329,7 @@ export async function handler(req: Request): Promise<Response> {
       return json(await auth(body, path.endsWith("/register")));
     }
     if (path === "/internal/flight-notifications" && method === "POST") return json(await notificationWorker(body.ticket));
+    if (path === "/internal/hotel-checkouts" && method === "POST") return json(await hotelCheckoutWorker(body.ticket));
     if (path === "/v1/auth/logout" && method === "POST") {
       const bearer = req.headers.get("Authorization")?.match(/^Bearer ([a-f0-9]{80})$/)?.[1];
       requireValue(bearer, "Invalid session.", 401);
@@ -327,6 +339,49 @@ export async function handler(req: Request): Promise<Response> {
       return json({ ok: true });
     }
     const uid = await account(req);
+    const travelerRoute = path.match(/^\/v1\/travelers(?:\/([a-fA-F0-9-]{36}))?$/);
+    if (travelerRoute) {
+      await limit("travelers-user:"+uid+":"+method, method === "GET" ? 60 : 20);
+      if (method === "GET" && !travelerRoute[1]) return json(await listTravelers(uid));
+      if (method === "PUT" && travelerRoute[1]) return json(await saveTraveler(uid,travelerRoute[1],body));
+      if (method === "DELETE" && travelerRoute[1]) return json(await deleteTraveler(uid,travelerRoute[1],body));
+      throw new Problem("Traveler route unavailable.",404);
+    }
+    const cancellationRoute = path.match(/^\/v1\/hotel-checkouts\/([a-fA-F0-9-]{36})\/cancellation(\/confirm)?$/);
+    if (cancellationRoute) {
+      requireValue(method === "POST", "Cancellation route unavailable.", 404);
+      await limit("hotel-cancellation-user:"+uid, 5);
+      return json(cancellationRoute[2] ? await acceptHotelCancellation(uid,cancellationRoute[1],body) : await prepareHotelCancellation(uid,cancellationRoute[1]));
+    }
+    const checkoutRoute = path.match(/^\/v1\/hotel-checkouts(?:\/([a-fA-F0-9-]{36})(\/confirm|\/sync)?)?$/);
+    if (checkoutRoute) {
+      await limit("hotel-checkouts-user:" + uid + ":" + method, method === "GET" ? 60 : 5);
+      if (method === "GET" && !checkoutRoute[2]) return json(checkoutRoute[1] ? await getHotelCheckout(uid, checkoutRoute[1]) : await listHotelCheckouts(uid, url.searchParams.get("cursor")));
+      if (method === "POST" && !checkoutRoute[1]) return json(await createHotelCheckout(uid, body));
+      if (method === "POST" && checkoutRoute[2] === "/sync") return json(await syncHotelCheckout(uid, checkoutRoute[1]));
+      if (method === "POST" && checkoutRoute[2] === "/confirm") return json(await confirmHotelCheckout(uid, checkoutRoute[1], body));
+      throw new Problem("Checkout route unavailable.",404);
+    }
+    if (path === "/v1/hotel-rates" && method === "POST") {
+      const request = rateRequest(body);
+      await limit("hotel-rates-user:" + uid, 10);
+      await limit("hotels-global", 2, 1);
+      return json(await searchHotelRates(request, uid));
+    }
+    if (path === "/v1/hotel-quotes/inspect" && method === "POST") {
+      await limit("hotel-quotes-user:" + uid, 30);
+      const quote = await openQuote(body.quote, uid);
+      return json({offer: quote.offer, criteria: quote.criteria, environment: "sandbox", checkoutEnabled: hotelCheckoutConfigured() && quote.criteria.occupancies.length === 1 && !!quote.offer.total && quote.offer.rooms.every((r:any)=>r.paymentTypes.includes("NUITEE_PAY"))});
+    }
+    const hotelRoute = path.match(/^\/v1\/hotels(?:\/([^/]+)(\/reviews)?)?$/);
+    if (hotelRoute && method === "GET") {
+      const id = hotelRoute[1] ? decodeURIComponent(hotelRoute[1]) : null;
+      if (id) hotelID(id); else hotelSearchParams(q);
+      await limit("hotels-user:" + uid, 30);
+      // Shared database limiter across isolates. Two requests/second leaves sandbox headroom.
+      await limit("hotels-global", 2, 1);
+      return json(id ? (hotelRoute[2] ? await hotelReviews(id, q) : await hotelDetails(id)) : await searchHotels(q));
+    }
     const ownGuide = path.match(/^\/v1\/my-guides(?:\/([a-fA-F0-9-]{36}))?$/);
     if (ownGuide && method === "GET") {
       const skip=Number(q.get("offset") ?? 0);
