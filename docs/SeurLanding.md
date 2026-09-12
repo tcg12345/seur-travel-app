@@ -34,3 +34,9 @@ The two current-workspace native capture scenarios passed on September 12, 2026,
 ## Motion refinement — September 12, 2026
 
 The header now eases into a compact rounded glass bar over the first 180 pixels of scroll, with a subtle wordmark movement and a thin bronze reading-progress line. Its outer height stays constant to avoid shifting the page. The headline enters by line; supporting text follows with a short stagger. The outgoing hero fades into ivory only as its bottom leaves the viewport, preserving content visibility on long mobile layouts. Section reveals use smaller travel distances, coordinated text timing and calmer app-screen crossfades. Scroll updates share one animation frame, and size changes refresh the progress calculation. Reduced Motion exposes content immediately and removes the decorative transforms and fades.
+
+## iPhone presentation — September 12, 2026
+
+All product previews now use Apple’s official silver iPhone 17 Pro portrait bezel from [Apple Design Resources](https://developer.apple.com/design/resources/) ([source package](https://devimages-cdn.apple.com/design/resources/download/Bezel-iPhone-17.dmg)). The artwork supplies the actual hardware edges, side controls, camera and Dynamic Island. It is exported losslessly as `public/landing/iphone-17-pro-silver.webp`.
+
+The 1350 × 2760 device artwork has a 1206 × 2622 display at x=72, y=69, matching the current simulator capture dimensions. Percentage-based placement preserves that fit at every responsive size. The shared phone component reserves the actual device ratio, eliminating the previous extra bottom space in the stacked story. The screenshot content is unchanged; the frame is decorative and hidden from assistive technology. Existing entry motion and chapter crossfades remain.

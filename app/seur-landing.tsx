@@ -20,7 +20,10 @@ function GetApp({light=false,small=false}:{light?:boolean;small?:boolean}) {
   return <a href={APP_DOWNLOAD_URL||'#download'} className={`lp-button ${light?'lp-button-light':''} ${small?'lp-button-small':''}`}><span>{APP_DOWNLOAD_URL?'Download Seur':'Get the app'}</span><ArrowUpRight size={18} aria-hidden="true"/></a>;
 }
 function Phone({image,alt,className='',priority=false}:{image:string;alt:string;className?:string;priority?:boolean}) {
-  return <div className={`lp-phone ${className}`}><Image unoptimized src={`/landing/${image}.webp`} alt={alt} width="396" height="860" loading={priority?'eager':'lazy'} fetchPriority={priority?'high':'auto'}/></div>;
+  return <div className={`lp-phone ${className}`}>
+    <div className="lp-phone-screen"><Image unoptimized src={`/landing/${image}.webp`} alt={alt} width="1206" height="2622" loading={priority?'eager':'lazy'} fetchPriority={priority?'high':'auto'}/></div>
+    <Image unoptimized className="lp-phone-hardware" src="/landing/iphone-17-pro-silver.webp" alt="" aria-hidden="true" width="1350" height="2760" loading={priority?'eager':'lazy'}/>
+  </div>;
 }
 
 export default function SeurLanding() {
