@@ -67,8 +67,9 @@ import MapKit
             let available = try autoreleasepool {
                 let cover = try XCTUnwrap(BundledDestinationCover.cover(city: city), city)
                 XCTAssertEqual(cover.image.size.width / cover.image.size.height, 16.0 / 9.0, accuracy: 0.001, city)
-                XCTAssertEqual(cover.photo.provider, city == "Tokyo" ? "supplied" : "bundled", city)
-                if city != "Tokyo" { XCTAssertNotNil(cover.photo.sourceURL); XCTAssertFalse(cover.photo.license.isEmpty) }
+                XCTAssertEqual(cover.photo.provider, "bundled", city)
+                XCTAssertNotNil(cover.photo.sourceURL); XCTAssertFalse(cover.photo.license.isEmpty)
+                XCTAssertEqual(cover.photo.imageURL.scheme, "https", city)
                 return true
             }
             _ = await store.cover(for: UUID(), allowLookup: !available) { calls += 1; return nil }
@@ -76,19 +77,24 @@ import MapKit
         XCTAssertEqual(calls, 0)
         XCTAssertFalse(FileManager.default.fileExists(atPath: directory.path))
     }
-    func testSuppliedDestinationNamesRespectCountriesAndKeepTokyoOverride() throws {
+    func testSuppliedDestinationNamesRespectCountriesAndUseRefreshedTokyo() throws {
         for city in ["Paris, France", "London, England", "New York, NY, United States", "NYC, USA", "Rome, IT",
                      "Washington, D.C., United States", "Xi’an, CN", "Cairo, Egypt", "Giza, EG", "Honolulu, US",
-                     "Macao, MO", "Marrakech, Morocco", "Québec City, Canada", "Tokyo, Japan"] {
+                     "Macao, MO", "Marrakech, Morocco", "Québec City, Canada", "Tokyo, Japan", "東京, 日本", "Tokyo Prefecture, JP"] {
             XCTAssertNotNil(BundledDestinationCover.cover(city: city), city)
         }
         for city in ["Paris, TX, US", "London, ON, Canada", "Athens, GA, US", "Rome, Georgia, US", "Burlington, Vermont, US", ""] {
             XCTAssertNil(BundledDestinationCover.cover(city: city), city)
         }
         let tokyo = try XCTUnwrap(BundledDestinationCover.cover(city: "Tokyo, Japan"))
-        XCTAssertEqual(tokyo.photo.provider, "supplied")
-        XCTAssertEqual(tokyo.photo.title, "Tokyo skyline")
-        XCTAssertNil(tokyo.photo.sourceURL)
+        XCTAssertEqual(tokyo.photo.provider, "bundled")
+        XCTAssertTrue(tokyo.photo.title.contains("Tokyo Tower"))
+        XCTAssertEqual(tokyo.photo.sourceURL?.absoluteString, "https://bingwallpaper.anerg.com/detail/us/TokyoMetropolis")
+        XCTAssertEqual(tokyo.photo.sourceName, "Bing")
+        XCTAssertEqual(tokyo.photo.authors.first?.name, "Yukinori Hasumi/Getty Images")
+        let paris = try XCTUnwrap(BundledDestinationCover.cover(city: "Paris"))
+        XCTAssertEqual(paris.photo.sourceName, "Windows Spotlight")
+        XCTAssertNil(paris.photo.licenseURL)
     }
     func testPexelsOnlyPhotoHostsAndTestGuard() async throws {
         XCTAssertTrue(CityPhotoImage.allowed(URL(string: "https://images.pexels.com/photos/123/a.jpeg")!))
