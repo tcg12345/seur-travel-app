@@ -30,6 +30,48 @@ final class AurumUITests: XCTestCase {
         let booking = app.buttons["city-book-hotel"]; XCTAssertTrue(booking.waitForExistence(timeout: 5))
         XCTAssertTrue(booking.waitForExistence(timeout: 5)); booking.tap()
     }
+    /// Current-build marketing captures. Uses isolated synthetic app data only.
+    func testLandingPageCurrentAppCaptures() {
+        app.terminate()
+        app.launchArguments = ["--ui-testing", "--map-testing", "--location-testing", "--city-testing", "--hotel-testing", "-AppleInterfaceStyle", "Light", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryL"]
+        app.launch()
+        XCTAssertTrue(app.buttons["global-search"].waitForExistence(timeout: 10))
+        capture("Landing-current-home")
+        app.buttons["global-search"].tap()
+        let query = app.textFields["explore-city-query"]
+        XCTAssertTrue(query.waitForExistence(timeout: 5)); query.tap(); query.typeText("Rome")
+        let city = app.buttons["explore-city-Rome"]
+        XCTAssertTrue(city.waitForExistence(timeout: 5)); city.tap()
+        XCTAssertTrue(app.buttons["city-book-hotel"].waitForExistence(timeout: 5))
+        RunLoop.current.run(until: Date().addingTimeInterval(2))
+        capture("Landing-current-explore")
+        app.terminate(); app.launchArguments += ["--preserve-state"]; app.launch()
+        app.tabBars.buttons["Map"].firstMatch.tap()
+        XCTAssertTrue(app.buttons["map-section-Trips"].waitForExistence(timeout: 8))
+        RunLoop.current.run(until: Date().addingTimeInterval(3))
+        capture("Landing-current-globe")
+        app.tabBars.buttons["Travel"].firstMatch.tap()
+        RunLoop.current.run(until: Date().addingTimeInterval(1))
+        capture("Landing-current-travel")
+    }
+    func testLandingPageCurrentPlanCapture() {
+        app.terminate(); app.launchArguments = ["--ui-testing", "--location-testing", "-AppleInterfaceStyle", "Light", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryL"]; app.launch()
+        app.tabBars.buttons["Travel"].tap(); app.buttons["travel-create"].tap()
+        let destination = app.textFields["trip-destination"]
+        XCTAssertTrue(destination.waitForExistence(timeout: 5)); destination.tap(); destination.typeText("Par")
+        let suggestion = app.buttons["trip-destination-suggestion-0"]
+        XCTAssertTrue(suggestion.waitForExistence(timeout: 5)); suggestion.tap()
+        app.buttons["journey-save"].tap()
+        let trip = app.staticTexts["Trip to Paris, France"]
+        XCTAssertTrue(trip.waitForExistence(timeout: 5)); trip.tap()
+        XCTAssertTrue(app.buttons["journey-add"].waitForExistence(timeout: 5)); app.buttons["journey-add"].tap()
+        app.buttons["add-plan-place"].tap()
+        let name = app.textFields["place-name"]
+        XCTAssertTrue(name.waitForExistence(timeout: 5)); name.tap(); name.typeText("Dinner by the river\n")
+        app.buttons["event-save"].tap()
+        XCTAssertTrue(app.staticTexts["Dinner by the river"].waitForExistence(timeout: 5))
+        capture("Landing-current-plan")
+    }
     func testSavedTravelerCreateEditDeleteAndCheckoutPrefill() {
         app.terminate(); app.launchArguments = ["--ui-testing", "--hotel-testing", "--city-testing", "--location-testing"]; app.launch()
         app.tabBars.buttons["Travel"].tap()
