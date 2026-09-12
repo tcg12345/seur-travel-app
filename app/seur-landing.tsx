@@ -30,34 +30,53 @@ export default function SeurLanding() {
     const node=root.current;
     if(!node)return;
     const reduced=window.matchMedia('(prefers-reduced-motion: reduce)');
-    const updateMotion=()=>{node.dataset.motion=reduced.matches?'reduced':'full';};
-    updateMotion();reduced.addEventListener('change',updateMotion);
-    // Content is visible by default, including when JavaScript or observers are unavailable.
-    const reveals=Array.from(node.querySelectorAll<HTMLElement>('[data-reveal]'));
-    const observer=new IntersectionObserver(entries=>entries.forEach(entry=>{if(entry.isIntersecting){entry.target.classList.add('lp-seen');observer.unobserve(entry.target);}}),{threshold:.12});
-    reveals.forEach(el=>{if(el.getBoundingClientRect().top>innerHeight){el.classList.add('lp-will-reveal');observer.observe(el);}});
+    const hero=node.querySelector<HTMLElement>('.lp-hero');
     const steps=Array.from(node.querySelectorAll<HTMLElement>('[data-chapter]'));
     let frame=0;
+    const clamp=(value:number)=>Math.max(0,Math.min(1,value));
+    const smooth=(value:number)=>value*value*(3-2*value);
     const update=()=>{
       frame=0;
-      if(!reduced.matches)node.style.setProperty('--lp-scroll',String(Math.min(window.scrollY,1000)));
+      const y=Math.max(0,window.scrollY);
+      node.dataset.motion=reduced.matches?'reduced':'full';
+      node.style.setProperty('--lp-header-progress',String(reduced.matches?(y>40?1:0):smooth(clamp(y/180))));
+      node.style.setProperty('--lp-page-progress',String(clamp(y/Math.max(1,document.documentElement.scrollHeight-innerHeight))));
+      node.style.setProperty('--lp-scroll',String(reduced.matches?0:Math.min(y,1000)));
+      // Fade the hero only as it leaves the viewport, rather than hiding mobile content early.
+      const heroBounds=hero?.getBoundingClientRect();
+      const exit=heroBounds?smooth(clamp((innerHeight*.62-heroBounds.bottom)/(innerHeight*.62))):0;
+      node.style.setProperty('--lp-hero-exit',String(reduced.matches?0:exit));
       const anchor=innerHeight*.5;
       let nearest=0,distance=Infinity;
       steps.forEach((step,i)=>{const r=step.getBoundingClientRect();const d=Math.abs(r.top+r.height/2-anchor);if(d<distance){distance=d;nearest=i;}});
       setChapter(nearest);
     };
     const onScroll=()=>{if(!frame)frame=requestAnimationFrame(update);};
+    // Content remains visible without JS. Each reveal has its own short, deliberate cadence.
+    const reveals=Array.from(node.querySelectorAll<HTMLElement>('[data-reveal]'));
+    const observer=typeof IntersectionObserver==='undefined'?null:new IntersectionObserver(entries=>entries.forEach(entry=>{
+      if(entry.isIntersecting){entry.target.classList.add('lp-seen');observer?.unobserve(entry.target);}
+    }),{threshold:0,rootMargin:'0px 0px -7% 0px'});
+    reveals.forEach(el=>{if(observer&&el.getBoundingClientRect().top>innerHeight&&!reduced.matches){el.classList.add('lp-will-reveal');observer.observe(el);}});
+    const onMotionChange=()=>{
+      if(reduced.matches)reveals.forEach(el=>el.classList.add('lp-seen'));
+      onScroll();
+    };
+    const resize=typeof ResizeObserver==='undefined'?null:new ResizeObserver(onScroll);
+    resize?.observe(node);
+    reduced.addEventListener('change',onMotionChange);
     window.addEventListener('scroll',onScroll,{passive:true});window.addEventListener('resize',onScroll);update();
-    return()=>{observer.disconnect();window.removeEventListener('scroll',onScroll);window.removeEventListener('resize',onScroll);reduced.removeEventListener('change',updateMotion);cancelAnimationFrame(frame);};
+    return()=>{observer?.disconnect();resize?.disconnect();window.removeEventListener('scroll',onScroll);window.removeEventListener('resize',onScroll);reduced.removeEventListener('change',onMotionChange);cancelAnimationFrame(frame);};
   },[]);
 
   return <div className="lp" ref={root} id="top">
     <a className="lp-skip" href="#journey">Skip to app features</a>
-    <header className="lp-header">
+    <header className="lp-header"><div className="lp-header-surface">
       <Wordmark/>
       <nav aria-label="Main navigation"><a href="#journey">The experience</a><a href="#memories">Made for the memories</a></nav>
       <GetApp small/>
-    </header>
+      <span className="lp-reading-progress" aria-hidden="true"/>
+    </div></header>
     <main>
       <section className="lp-hero" aria-labelledby="hero-heading">
         <div className="lp-hero-photo"><picture><source media="(max-width: 600px)" srcSet="/landing/coast-mobile.webp"/><Image unoptimized src="/landing/coast.webp" alt="Sunlit Mediterranean-inspired coastline overlooking a calm blue sea" width="1536" height="1024" fetchPriority="high"/></picture></div>
@@ -65,7 +84,7 @@ export default function SeurLanding() {
         <div className="lp-hero-inner">
           <div className="lp-hero-copy">
             <p className="lp-eyebrow lp-hero-kicker"><span/> A little further from ordinary</p>
-            <h1 id="hero-heading">Go somewhere.<br/><em>Feel everything.</em></h1>
+            <h1 id="hero-heading"><span className="lp-title-line"><span>Go somewhere.</span></span><span className="lp-title-line"><em>Feel everything.</em></span></h1>
             <p className="lp-hero-description">Your places, plans, and favorite moments.<br className="lp-desktop-break"/> Together in one beautiful travel app.</p>
             <div className="lp-hero-actions"><GetApp light/><span>Coming soon for iPhone</span></div>
           </div>
@@ -95,7 +114,7 @@ export default function SeurLanding() {
         </div>
         <div className="lp-chapters">{chapters.map((item,i)=><article key={item.id} id={item.id} data-chapter={i} className="lp-chapter">
           <div className="lp-chapter-copy" data-reveal><p className="lp-eyebrow"><span className="lp-chapter-number">{item.number}</span>{item.label}</p><h2>{item.title}</h2><p className="lp-description">{item.text}</p><ul className="lp-tags">{item.tags.map(tag=><li key={tag}><Check size={14} aria-hidden="true"/>{tag}</li>)}</ul></div>
-          <div className="lp-mobile-device"><Phone image={item.image} alt={item.alt}/><p className="lp-preview-label">Inside Seur · Example app screen</p></div>
+          <div className="lp-mobile-device" data-reveal><Phone image={item.image} alt={item.alt}/><p className="lp-preview-label">Inside Seur · Example app screen</p></div>
           <span className="sr-only lp-desktop-description">{item.alt}</span>
         </article>)}</div>
       </section>

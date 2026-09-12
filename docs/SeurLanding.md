@@ -30,3 +30,7 @@ All navigation is real section links. Text remains present without JavaScript. K
 ## Validation
 
 The two current-workspace native capture scenarios passed on September 12, 2026, using the SeurHotelQA simulator. App images were inspected and exported as WebP without altering the interface. No older screenshot remains in the landing asset folder. The website passes its scoped TypeScript check, focused lint and production build. Layouts have explicit phone/tablet/desktop rules and reduced-motion fallbacks; interactive browser QA was not requested. The earlier root TypeScript command also scanned unrelated Deno sources, so `tsconfig.web.json` provides a website-only check.
+
+## Motion refinement — September 12, 2026
+
+The header now eases into a compact rounded glass bar over the first 180 pixels of scroll, with a subtle wordmark movement and a thin bronze reading-progress line. Its outer height stays constant to avoid shifting the page. The headline enters by line; supporting text follows with a short stagger. The outgoing hero fades into ivory only as its bottom leaves the viewport, preserving content visibility on long mobile layouts. Section reveals use smaller travel distances, coordinated text timing and calmer app-screen crossfades. Scroll updates share one animation frame, and size changes refresh the progress calculation. Reduced Motion exposes content immediately and removes the decorative transforms and fades.
