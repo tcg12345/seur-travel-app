@@ -8,9 +8,9 @@ import './landing.css';
 // Set this to the approved App Store or public TestFlight URL when Seur launches.
 const APP_DOWNLOAD_URL: string | null = null;
 const chapters = [
-  {id:'explore', number:'01', label:'Follow your curiosity', title:<>Find your kind<br/>of <em>somewhere.</em></>, text:'The little café. The incredible hotel. The neighborhood you’ll talk about for years. Explore cities, save what catches your eye, and make a place your own.', tags:['City guides', 'Hotels & dining', 'Saved places'], image:'explore', alt:'Seur city guide showing Rome, a city photograph, saved places and discovery categories', icon:Compass},
-  {id:'plan', number:'02', label:'Bring it all together', title:<>A place for<br/><em>every plan.</em></>, text:'Give flights, stays, dinner plans, and days with nothing planned a home. Move between your itinerary, calendar, and map without losing the thread.', tags:['Itineraries', 'Calendars', 'Trip budgets'], image:'plan', alt:'Seur itinerary with a Paris trip, current daily agenda and dinner plan', icon:CalendarDays},
-  {id:'world', number:'03', label:'See the bigger picture', title:<>Your world.<br/><em>Beautifully connected.</em></>, text:'See where you’ve been and where you’re going. Explore your places on the globe, follow your flights, and keep the next adventure in sight.', tags:['Interactive globe', 'Flight tracking', 'Trip routes'], image:'globe', alt:'Seur interactive globe showing Europe and Africa, with city discovery and travel navigation', icon:Globe2},
+  {id:'explore', number:'01', label:'Follow your curiosity', title:<>Find your kind<br/>of <span className="lp-heading-accent">somewhere.</span></>, text:'The little café. The incredible hotel. The neighborhood you’ll talk about for years. Explore cities, save what catches your eye, and make a place your own.', tags:['City guides', 'Hotels & dining', 'Saved places'], image:'explore', alt:'Seur city guide showing Rome, a city photograph, saved places and discovery categories', icon:Compass},
+  {id:'plan', number:'02', label:'Bring it all together', title:<>A place for<br/><span className="lp-heading-accent">every plan.</span></>, text:'Give flights, stays, dinner plans, and days with nothing planned a home. Move between your itinerary, calendar, and map without losing the thread.', tags:['Itineraries', 'Calendars', 'Trip budgets'], image:'plan', alt:'Seur itinerary with a Paris trip, current daily agenda and dinner plan', icon:CalendarDays},
+  {id:'world', number:'03', label:'See the bigger picture', title:<>Your world.<br/><span className="lp-heading-accent">Beautifully connected.</span></>, text:'See where you’ve been and where you’re going. Explore your places on the globe, follow your flights, and keep the next adventure in sight.', tags:['Interactive globe', 'Flight tracking', 'Trip routes'], image:'globe', alt:'Seur interactive globe showing Europe and Africa, with city discovery and travel navigation', icon:Globe2},
 ];
 
 function Wordmark({light=false}:{light?:boolean}) {
@@ -87,7 +87,7 @@ export default function SeurLanding() {
         <div className="lp-hero-inner">
           <div className="lp-hero-copy">
             <p className="lp-eyebrow lp-hero-kicker"><span/> A little further from ordinary</p>
-            <h1 id="hero-heading"><span className="lp-title-line"><span>Go somewhere.</span></span><span className="lp-title-line"><em>Feel everything.</em></span></h1>
+            <h1 id="hero-heading"><span className="lp-title-line"><span>Go somewhere.</span></span><span className="lp-title-line"><span className="lp-heading-accent">Feel everything.</span></span></h1>
             <p className="lp-hero-description">Your places, plans, and favorite moments.<br className="lp-desktop-break"/> Together in one beautiful travel app.</p>
             <div className="lp-hero-actions"><GetApp light/><span>Coming soon for iPhone</span></div>
           </div>
@@ -102,7 +102,7 @@ export default function SeurLanding() {
 
       <section className="lp-intro lp-wrap" id="journey">
         <p className="lp-eyebrow" data-reveal>From the first idea to the last postcard</p>
-        <h2 data-reveal>Less keeping track.<br/><em>More getting lost.</em></h2>
+        <h2 data-reveal>Less keeping track.<br/><span className="lp-heading-accent">More getting lost.</span></h2>
         <div className="lp-intro-bottom" data-reveal><p>Travel is more than getting there.<br/>Seur brings the whole journey together, so you can be a little more present for it.</p><a className="lp-text-link" href="#explore">Meet your travel companion <ArrowDown size={18} aria-hidden="true"/></a></div>
       </section>
 
@@ -124,7 +124,7 @@ export default function SeurLanding() {
 
       <section className="lp-memories" id="memories">
         <div className="lp-wrap">
-          <div className="lp-memories-heading" data-reveal><p className="lp-eyebrow">Some things deserve to stay with you</p><h2>The trip ends.<br/><em>The feeling doesn’t.</em></h2><p>For the places that become part of your story.<br/>And the people who make it worth telling.</p></div>
+          <div className="lp-memories-heading" data-reveal><p className="lp-eyebrow">Some things deserve to stay with you</p><h2>The trip ends.<br/><span className="lp-heading-accent">The feeling doesn’t.</span></h2><p>For the places that become part of your story.<br/>And the people who make it worth telling.</p></div>
           <div className="lp-memory-grid">
             <article className="lp-memory-card lp-journal-card" data-reveal>
               <div className="lp-memory-visual lp-journal-visual" aria-hidden="true">
@@ -144,13 +144,13 @@ export default function SeurLanding() {
       </section>
 
       <section className="lp-everything lp-wrap" aria-label="More ways to travel with Seur" data-reveal>
-        <p>All the little details.<br/><em>Already together.</em></p>
+        <p>All the little details.<br/><span className="lp-heading-accent">Already together.</span></p>
         <ul><li><Plane aria-hidden="true"/>Flight tracking</li><li><MapPin aria-hidden="true"/>Saved places</li><li><CalendarDays aria-hidden="true"/>Trip planning</li><li><Camera aria-hidden="true"/>Travel journals</li></ul>
       </section>
 
       <section className="lp-download" id="download" aria-labelledby="download-heading">
         <div className="lp-download-background" aria-hidden="true"><Image unoptimized src="/landing/coast.webp" alt="" width="1536" height="1024" loading="lazy"/></div>
-        <div className="lp-download-content" data-reveal><Image unoptimized className="lp-app-icon" src="/landing/app-icon.png" alt="Seur app icon" width="86" height="86"/><p className="lp-eyebrow">Take a little wonder with you</p><h2 id="download-heading">Your next chapter.<br/><em>In your pocket.</em></h2><p>A more thoughtful way to travel.<br/>Made for wherever life takes you.</p>{APP_DOWNLOAD_URL?<a className="lp-button lp-button-light" href={APP_DOWNLOAD_URL}><Smartphone size={20}/>Download Seur<ArrowUpRight size={18}/></a>:<div className="lp-availability"><Smartphone size={24} aria-hidden="true"/><div><strong>Coming soon for iPhone</strong><span>The journey is just beginning.</span></div></div>}<span className="lp-download-note">{APP_DOWNLOAD_URL?'Discover Seur on your iPhone.':'The download link will be here when Seur launches.'}</span></div>
+        <div className="lp-download-content" data-reveal><Image unoptimized className="lp-app-icon" src="/landing/app-icon.png" alt="Seur app icon" width="86" height="86"/><p className="lp-eyebrow">Take a little wonder with you</p><h2 id="download-heading">Your next chapter.<br/><span className="lp-heading-accent">In your pocket.</span></h2><p>A more thoughtful way to travel.<br/>Made for wherever life takes you.</p>{APP_DOWNLOAD_URL?<a className="lp-button lp-button-light" href={APP_DOWNLOAD_URL}><Smartphone size={20}/>Download Seur<ArrowUpRight size={18}/></a>:<div className="lp-availability"><Smartphone size={24} aria-hidden="true"/><div><strong>Coming soon for iPhone</strong><span>The journey is just beginning.</span></div></div>}<span className="lp-download-note">{APP_DOWNLOAD_URL?'Discover Seur on your iPhone.':'The download link will be here when Seur launches.'}</span></div>
       </section>
     </main>
     <footer className="lp-footer lp-wrap"><div className="lp-footer-top"><Wordmark/><span>Go well. Come back with stories.</span><a href="#top" className="lp-back-top">Back to top <ArrowUpRight size={17} aria-hidden="true"/></a></div><div className="lp-footer-bottom"><span>© {new Date().getFullYear()} Seur</span><span>Thoughtfully made for iPhone.</span><span className="lp-photo-note">Coastal artwork created for Seur.</span></div></footer>
