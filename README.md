@@ -8,6 +8,10 @@ The user wants to continue developing native flight booking with detailed cabin 
 
 See [iOS validation](iOS/Validation.md) for build and test evidence. The earlier web version is retained below as a separate implementation; the following features and boundaries describe that web version.
 
+## App landing page
+
+The root website now presents the native Seur app, with responsive editorial sections, current app captures and a coming-soon iPhone download placeholder. See [landing-page notes](docs/SeurLanding.md). The previous web discovery tool remains at `/collection`. Run `npx tsc --project tsconfig.web.json --noEmit` to check website code separately from the Deno backend.
+
 ## Earlier web app
 
 A responsive luxury travel discovery app centered on hotel dining. Built with React, Vinext, TypeScript, and the Sites runtime.
